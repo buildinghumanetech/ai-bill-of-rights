@@ -1,7 +1,23 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:15 Pacific
+## Progress Update as of 2026-05-18 14:06 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 3 complete: generated the initial Drizzle migration and created `.env.example`. Ran `pnpm db:generate` which produced `drizzle/0000_ambitious_rage.sql` (52 lines of DDL creating all four tables with proper indexes and foreign keys) plus `drizzle/meta/_journal.json`. Created `.env.example` at repo root with all 6 required env vars (DATABASE_URL, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, RESEND_API_KEY, RESEND_FROM_EMAIL, NEXT_PUBLIC_SITE_URL) and force-added it to git despite `.gitignore/*.env*` rules.
+
+### Detail of changes made:
+- Ran `pnpm db:generate` which invoked drizzle-kit against `src/lib/db/schema.ts`, generating `drizzle/0000_ambitious_rage.sql` with full DDL for all 4 tables: `versions` (11 cols, 1 unique index), `signers` (10 cols, 1 unique constraint on `clerk_user_id`), `consent_records` (6 cols, 1 FK to signers), `signatures` (6 cols, 3 FKs to signers/versions/consent_records, 1 unique index). All columns use `gen_random_uuid()` as default (Postgres 13+ builtin, matches pglite test helper DDL).
+- Generated `drizzle/meta/_journal.json` tracking the migration as entry 0 with tag `0000_ambitious_rage` at timestamp 1779138409813.
+- Created `.env.example` with all 6 env vars documented, including comments for Neon, Clerk, Resend APIs and site URL.
+- Staged and committed with `git add -f .env.example` to bypass `.gitignore/*.env*` pattern (`.env.example` is the template, not a real secret file).
+
+### Potential concerns to address:
+None. Migration DDL structure matches the pglite test helper DDL (modulo formatting). All env vars in `.env.example` are template placeholders as specified in the plan.
+
+---
+
+## Progress Update as of 2026-05-18 14:15 Pacific
 
 ### Summary of changes since last update
 Task 2 complete: added Drizzle schema for all four Phase 1 tables (`versions`, `signers`, `consent_records`, `signatures`), the Neon HTTP database client, the pglite in-memory test helper, and the drizzle-kit config. All 3 schema tests pass.
