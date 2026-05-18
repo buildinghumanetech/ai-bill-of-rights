@@ -1,5 +1,22 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 14:55 Pacific (Task 15)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 15 complete: account dashboard and revocation flow. Created 4 new files: `src/server/actions/revoke.ts`, `src/app/account/page.tsx`, `src/app/account/revoke/page.tsx`, and `tests/server/revoke.test.ts`. All 23 tests pass (1 new). TS is clean.
+
+### Detail of changes made:
+- Created `tests/server/revoke.test.ts`: TDD test for `anonymizeSigner`. Verifies that after calling `anonymizeSigner(db, signerId, 42)`, the signer's `displayName` becomes `"Anonymized signer #42"`, `affiliation` and `locationText` are null, consent records have `revokedAt` set and `capturedFields` null, and the `signatures` row is preserved (count remains 1).
+- Created `src/server/actions/revoke.ts`: exports `anonymizeSigner(dbClient, signerId, sequenceNumber)` which updates `signers` (anonymizes `displayName`, nulls `affiliation`/`locationText`) and `consentRecords` (sets `revokedAt`, nulls `capturedFields`) for the given signer. Also exports `submitRevokeAction()` (server action), which authenticates via Clerk, looks up the signer, computes the next anonymized sequence number by scanning existing `Anonymized signer #N` display names, calls `anonymizeSigner`, then redirects to `/account?revoked=1`. Uses the established lazy `getDb()` pattern.
+- Created `src/app/account/page.tsx`: `force-dynamic` server component. Authenticates via Clerk, looks up the signer by `clerkUserId`. If no signer row exists, renders a "no profile yet" message. Otherwise renders: public profile section (display name, location, affiliation, verification method), signature list (joined via `listSignaturesForSigner`), and a "Revoke my data" link. Shows a success banner if `?revoked=1` is present in `searchParams`.
+- Created `src/app/account/revoke/page.tsx`: server component that renders the revocation confirmation page. Lists exactly what revocation does (anonymize display name, clear location/affiliation, clear captured private fields, preserve signature row). Submits `submitRevokeAction` as a form action. Includes a Cancel link back to `/account`.
+
+### Potential concerns to address:
+None. Revocation is irreversible by design — no undo path exists in the codebase.
+
+---
+
 ## Progress Update as of 2026-05-18 16:00 Pacific (Task 14)
 *(Most recent updates at top)*
 
