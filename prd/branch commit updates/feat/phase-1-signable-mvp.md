@@ -1,7 +1,23 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:18 Pacific
+## Progress Update as of 2026-05-18 14:13 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 5 complete: implemented the anchor-aware markdown parser via strict TDD. Created `src/lib/markdown/parse.ts` (pure `parseDocument` function), `tests/lib/markdown.parse.test.ts` (4 tests, all passing), and `tests/_helpers/fixtures.ts` (sample document fixture). Sanity check against real `content/bill-of-rights/v1.0.0.md` confirmed: frontmatter version 1.0.0, 10 articles (including preamble), 30 sentence anchors.
+
+### Detail of changes made:
+- Created `tests/_helpers/fixtures.ts` with `SAMPLE_DOC` constant: a minimal 3-article markdown doc (preamble + article-1 + article-2) with YAML frontmatter, heading anchors, and sentence anchors.
+- Created `tests/lib/markdown.parse.test.ts` with 4 tests: frontmatter extraction, article list extraction, anchor-tagged sentence extraction, and `{#...}` marker stripping from emitted text. Ran against missing module first (FAIL), then wrote implementation (PASS).
+- Created `src/lib/markdown/parse.ts` exporting 4 interfaces (`Sentence`, `Paragraph`, `Article`, `ParsedDocument`) and the `parseDocument(raw) → ParsedDocument` function. Uses `gray-matter` for frontmatter, regex `/^(#{1,3})\s+(.+?)\s*\{#([a-z0-9-]+)\}\s*$/` for heading detection, and `/{#([a-z0-9-]+)}/g` for sentence anchor splitting. Line-by-line walk; blank lines flush paragraph buffers into the current article.
+- Sanity-checked parser logic against real `v1.0.0.md` using a Node one-liner (no TypeScript build required): article count = 10, sentence anchor count = 30, both match the Task 4 spec exactly.
+
+### Potential concerns to address:
+None. All 4 tests pass. Real content file counts match spec. No leftover `{#...}` markers in any sentence text. No unused imports.
+
+---
+
+## Progress Update as of 2026-05-18 14:18 Pacific
 
 ### Summary of changes since last update
 Task 4 complete: seeded v1.0.0 of the Bill of Rights and v1 consent text into the repo. Created 5 files: `content/bill-of-rights/v1.0.0.md` (9 articles, 30 sentence anchors), `content/bill-of-rights/v1.0.0.agents.md` (stub implementation guide), `content/bill-of-rights/v1.0.0.spec.json` (stub per-principle spec), `content/bill-of-rights/versions.json` (version index), and `content/consent/v1.md` (consent form template with 16 placeholder tokens). All files validated: JSON parses, sentence anchors present, placeholders match captured_fields shape.
