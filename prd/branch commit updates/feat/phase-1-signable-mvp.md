@@ -1,7 +1,23 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:13 Pacific
+## Progress Update as of 2026-05-18 14:20 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 6 complete: implemented `syncVersions(db, inputs)` idempotent version sync function via strict TDD. Created `src/lib/db/sync.ts` and `tests/lib/db.sync.test.ts` (4 tests, all passing). Also fixed the `tests/_helpers/pglite-db.ts` helper which had two latent bugs discovered on first actual use: (1) `db.execute(sql`...`)` goes through pglite's prepared-statement path which rejects multi-command strings — switched to `client.exec()` which handles them correctly; (2) `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"` is not available in pglite (which uses `gen_random_uuid()` as a Postgres 13+ builtin) — removed that line. All 11 tests across 3 test files pass.
+
+### Detail of changes made:
+- Created `src/lib/db/sync.ts` exporting `VersionInput` interface and `syncVersions(db, inputs): Promise<void>`. Uses `node:crypto` sha-256 for `markdownHash`, `agentsMdHash`, `specJsonHash`. Behavior: first-time inserts with `isCurrent: false` (set in single update pass below), no-op on hash match, throws "hash mismatch" on content change. Single `isCurrent` enforcement pass: if more than one input marked current → throw; if exactly one → flip all to false then set that one true; if none → flip all listed non-current versions to false. Uses a `Map` for O(n+m) lookup instead of O(n·m) queries.
+- Created `tests/lib/db.sync.test.ts` with 4 tests: insert with hashes/parsed_json, idempotency (run twice, still 1 row), hash mismatch throws, `is_current` flip across two versions.
+- Fixed `tests/_helpers/pglite-db.ts`: replaced `import { sql } from "drizzle-orm"` + `db.execute(sql`...`)` with `client.exec(...)` (bare template string, no tag); added `await client.ready` before DDL; removed `create extension if not exists "uuid-ossp"` (not available in pglite 0.2.17).
+
+### Potential concerns to address:
+- `syncVersions` does not use a Drizzle transaction (intentional — pglite transaction semantics with drizzle-orm are still maturing; documented in schema.ts comment). In production Neon, a partial failure between the loop and the `is_current` update pass could leave `is_current` inconsistent. Acceptable for MVP; Task 7 will be the only caller and runs in a controlled postbuild context.
+- `db: any` typing is intentional pragmatism to support both Neon HTTP and pglite backends without a generic type parameter.
+
+---
+
+## Progress Update as of 2026-05-18 14:13 Pacific
 
 ### Summary of changes since last update
 Task 5 complete: implemented the anchor-aware markdown parser via strict TDD. Created `src/lib/markdown/parse.ts` (pure `parseDocument` function), `tests/lib/markdown.parse.test.ts` (4 tests, all passing), and `tests/_helpers/fixtures.ts` (sample document fixture). Sanity check against real `content/bill-of-rights/v1.0.0.md` confirmed: frontmatter version 1.0.0, 10 articles (including preamble), 30 sentence anchors.

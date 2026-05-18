@@ -1,6 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { sql } from "drizzle-orm";
 import * as schema from "@/lib/db/schema";
 
 export type TestDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -11,11 +10,12 @@ export type TestDb = ReturnType<typeof drizzle<typeof schema>>;
  */
 export async function createTestDb(): Promise<TestDb> {
   const client = new PGlite();
+  await client.ready;
   const db = drizzle(client, { schema });
-  // Apply Phase 1 schema via raw DDL (mirrors what drizzle-kit would generate)
-  await db.execute(sql`
-    create extension if not exists "uuid-ossp";
-
+  // Apply Phase 1 schema via raw DDL (mirrors what drizzle-kit would generate).
+  // Use client.exec() instead of db.execute(sql`...`) because pglite's prepared-
+  // statement path rejects multi-command strings; exec() handles them correctly.
+  await client.exec(`
     create table versions (
       id uuid primary key default gen_random_uuid(),
       version text not null,
@@ -66,3 +66,4 @@ export async function createTestDb(): Promise<TestDb> {
   `);
   return db;
 }
+
