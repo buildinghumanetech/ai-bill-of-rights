@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 16:00 Pacific (Task 14)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 14 complete: created About and Why stub pages. Created 2 new files: `src/app/about/page.tsx` and `src/app/why/page.tsx`. Both are async server components that render a stub-page banner with introductory copy and a note that full content is forthcoming. No new tests or dependencies required.
+
+### Detail of changes made:
+- Created `src/app/about/page.tsx`: server component exporting default `AboutPage`. Renders an `<h1>About</h1>` with stub banner, introductory text about the Bill of Rights' origin (Erika Anderson, HumaneBench.ai), editorial council status, and a note indicating full content is forthcoming.
+- Created `src/app/why/page.tsx`: server component exporting default `WhyPage`. Renders an `<h1>Why</h1>` with stub banner, introductory text about frontier AI companies making decisions without asking, and a note indicating full content is forthcoming.
+- Both pages use consistent styling: `mx-auto w-full max-w-2xl px-6 py-12` for width/spacing, amber-700/400 text for the stub label, and zinc text colors for body copy with dark-mode variants.
+
+### Potential concerns to address:
+None. Both files are straightforward stub pages with no tests required.
+
+---
+
 ## Progress Update as of 2026-05-18 14:47 Pacific (Task 13)
 *(Most recent updates at top)*
 
