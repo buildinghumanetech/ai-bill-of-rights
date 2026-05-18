@@ -1,7 +1,24 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:06 Pacific
+## Progress Update as of 2026-05-18 14:18 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 4 complete: seeded v1.0.0 of the Bill of Rights and v1 consent text into the repo. Created 5 files: `content/bill-of-rights/v1.0.0.md` (9 articles, 30 sentence anchors), `content/bill-of-rights/v1.0.0.agents.md` (stub implementation guide), `content/bill-of-rights/v1.0.0.spec.json` (stub per-principle spec), `content/bill-of-rights/versions.json` (version index), and `content/consent/v1.md` (consent form template with 16 placeholder tokens). All files validated: JSON parses, sentence anchors present, placeholders match captured_fields shape.
+
+### Detail of changes made:
+- Created `content/bill-of-rights/v1.0.0.md` with complete preamble + 9 articles. Each heading has an anchor `{#article-N}` or `{#preamble}`, and every sentence has a per-sentence anchor `{#article-N-s-M}` or `{#preamble-s-1}`. Total: 30 sentence anchors (preamble: 1, article-1: 4, article-2: 4, article-3: 3, article-4: 3, article-5: 1, article-6: 3, article-7: 5, article-8: 4, article-9: 2).
+- Created `content/bill-of-rights/v1.0.0.agents.md` with status=stub and note that full directives will land in a future version. Includes self-attestation block template for README reuse.
+- Created `content/bill-of-rights/v1.0.0.spec.json` stub with single principle entry (data-ownership) containing empty arrays for prohibited/required behaviors and test conditions. Includes `_note` field.
+- Created `content/bill-of-rights/versions.json` index tracking current version 1.0.0 with published_at (2026-05-18), release_notes_pr (null), and changelog.
+- Created `content/consent/v1.md` form template with 16 `{{token}}` placeholders: 4 public (display_name, location, affiliation, verification_method), 12 private (ip, ip_geo_city, ip_geo_country, browser_name, browser_version, os_name, os_version, screen_resolution, timezone, language, referrer, signing_session_utc). Placeholders match the captured_fields shape from the database schema.
+
+### Potential concerns to address:
+None. All files validated: both JSON files parse correctly, sentence anchor count matches spec (30 total), consent template placeholders match schema (16 total), and all trailing newlines preserved.
+
+---
+
+## Progress Update as of 2026-05-18 14:06 Pacific
 
 ### Summary of changes since last update
 Task 3 complete: generated the initial Drizzle migration and created `.env.example`. Ran `pnpm db:generate` which produced `drizzle/0000_ambitious_rage.sql` (52 lines of DDL creating all four tables with proper indexes and foreign keys) plus `drizzle/meta/_journal.json`. Created `.env.example` at repo root with all 6 required env vars (DATABASE_URL, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, RESEND_API_KEY, RESEND_FROM_EMAIL, NEXT_PUBLIC_SITE_URL) and force-added it to git despite `.gitignore/*.env*` rules.
