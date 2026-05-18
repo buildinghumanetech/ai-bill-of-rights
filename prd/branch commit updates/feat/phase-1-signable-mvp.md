@@ -1,7 +1,26 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:00 Pacific
+## Progress Update as of 2026-05-18 14:15 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 2 complete: added Drizzle schema for all four Phase 1 tables (`versions`, `signers`, `consent_records`, `signatures`), the Neon HTTP database client, the pglite in-memory test helper, and the drizzle-kit config. All 3 schema tests pass.
+
+### Detail of changes made:
+- Created `src/lib/db/schema.ts` defining 4 pgTable exports: `versions` (with `uniqueIndex` on `version`), `signers` (with `.unique()` on `clerk_user_id`), `consentRecords` (references `signers.id`), and `signatures` (references `signers.id`, `versions.id`, `consentRecords.id`; `uniqueIndex` on `(signer_id, version_id)`). The partial-unique index for `is_current = true` is intentionally omitted (enforced transactionally in the sync script per plan trade-off note).
+- Created `src/lib/db/index.ts` as the production database client using `drizzle-orm/neon-http` and `@neondatabase/serverless`. Guards on `DATABASE_URL` at import time; exports both `db` and `schema`.
+- Created `tests/_helpers/pglite-db.ts` — `createTestDb()` spins up a fresh `PGlite` in-memory instance, runs raw DDL to mirror the Drizzle schema, and returns a typed `TestDb`. Safe for tests since it never touches `src/lib/db/index.ts` (which would throw without `DATABASE_URL`).
+- Created `drizzle.config.ts` pointing drizzle-kit at `./src/lib/db/schema.ts`, output to `./drizzle`, dialect `postgresql`.
+- Created `tests/lib/db.schema.test.ts` with 3 tests: table exports present, `signers.clerkUserId` defined, `consentRecords.capturedFields` defined. TDD: ran test against missing module (FAIL), then wrote schema (PASS).
+- Confirmed `drizzle-orm/pglite` and `drizzle-orm/neon-http` submodules both resolve from installed `drizzle-orm@0.36.4`.
+
+### Potential concerns to address:
+- `src/lib/db/index.ts` throws at import time if `DATABASE_URL` is unset — this is intentional and documented, but any server-side code that imports from `@/lib/db` will break in environments without the env var. Tests must always use `createTestDb()` from the helper, never the production client.
+- The CJS deprecation warning from Vite's Node API appears in test runs but does not affect test results. It will be silenced once the ecosystem moves to ESM-only — not actionable now.
+
+---
+
+## Progress Update as of 2026-05-18 14:00 Pacific
 
 ### Summary of changes since last update
 Fixed code quality review issues on Task 1: created `scripts/sync-versions.ts` as a no-op stub so `pnpm build` no longer fails on the postbuild hook, and removed `@types/ua-parser-js@0.7.39` from devDependencies to eliminate conflicting type definitions for `ua-parser-js@2.x`. Both fixes verified: `pnpm build` succeeds and `pnpm test` still correctly reports "No test files found."
