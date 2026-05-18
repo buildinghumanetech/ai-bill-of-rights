@@ -1,10 +1,17 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
-## Progress Update as of 2026-05-18 16:27 Pacific
+## Progress Update as of 2026-05-18 16:29 Pacific
 *(Most recent updates at top)*
 
 ### Summary of changes since last update
-Plan 2 Task 7: Created `/v/[version]/as-code` page with tool-tab navigation (Claude Code, Cursor, Copilot, Generic), download buttons for agents.md and spec.json, a curl one-liner, a markdown preview, and the `AttestationForm` component. Added `AsCodeButton` and `AttestationForm` components. Surfaced the new page from the version page (sticky CTA bar now has both SignButton and AsCodeButton) and the landing page (third link in the CTA group). TypeScript clean; all 39 tests pass; all four smoke-test URLs return 200.
+Plan 2 Task 8: Created the public `/attestations` page and `AttestationCard` component. The page displays a paginated list (50 per page) of published attestations. Users can optionally filter by version via `?version={version}` query parameter. The `AttestationCard` component renders product name, org name, product URL (if available), and attestation date. Smoke test: curl to `/attestations` returns 200. All 39 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/components/AttestationCard.tsx`: New component. Accepts an `AttestationListItem`. Renders product name (bold), org name (muted), optional product URL (link), and attestation date in ISO format.
+- `src/app/attestations/page.tsx`: New page. Accepts optional `?version` and `?page` query parameters. Calls `listPublishedAttestations` with limit=50 and pagination offset. Renders empty state if no attestations match. Renders "Next page" button if full page returned (indicates more results). Constructs next-page link preserving version filter.
+
+### Potential concerns to address:
+- None; implementation is complete and tested.
 
 ### Detail of changes made:
 - `src/components/AsCodeButton.tsx`: New component. Renders a ghost pill-button linking to `/v/${version}/as-code`.
