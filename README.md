@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Bill of Rights
 
-## Getting Started
+A versioned, signable, open-source living document at **aibillofrights.org**.
 
-First, run the development server:
+This repo is the source of truth for the document. Each version of the Bill of Rights lives as a markdown file in `content/bill-of-rights/`. The website at `/v/[version]` renders the document, lets verified humans sign it, and shows a public list of signers.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Stack
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind 4
+- Clerk for email/SMS OTP authentication
+- Neon Postgres + Drizzle ORM
+- Resend for transactional email
+- Deployed on Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Local development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. `pnpm install`
+2. Copy `.env.example` to `.env.local` and fill in:
+   - `DATABASE_URL` from a Neon project (free tier is fine for dev)
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from a Clerk app
+   - `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (optional locally — emails will no-op without them)
+3. `pnpm db:push` — apply the schema to your Neon dev branch
+4. `pnpm sync-versions` — seed the `versions` table from `content/bill-of-rights/`
+5. `pnpm dev` — open http://localhost:3000
 
-## Learn More
+## Tests
 
-To learn more about Next.js, take a look at the following resources:
+`pnpm test` runs the Vitest suite against an in-memory pglite Postgres. No external services required.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Publishing a new version of the Bill of Rights
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+A new version is a PR that adds:
+- `content/bill-of-rights/v{X.Y.Z}.md`
+- `content/bill-of-rights/v{X.Y.Z}.agents.md`
+- `content/bill-of-rights/v{X.Y.Z}.spec.json`
 
-## Deploy on Vercel
+…and bumps `current` in `content/bill-of-rights/versions.json`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database. Existing signatures stay attached to the version they signed — they do not migrate.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project structure
+
+See `docs/superpowers/specs/2026-05-18-ai-bill-of-rights-design.md` for the canonical design spec and `docs/superpowers/plans/2026-05-18-phase-1-signable-mvp.md` for the implementation plan.
+
+## License
+
+See `LICENSE`.

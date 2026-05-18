@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "status": "stub",
+  "principles": [
+    {
+      "id": 1,
+      "slug": "data-ownership",
+      "human_text": "Your Data Belongs to You",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": ["GDPR Article 7", "HumaneBench Principle: Dignity"]
+    }
+  ],
+  "_note": "Stub — full per-principle specs to be authored by the editorial council."
+}
