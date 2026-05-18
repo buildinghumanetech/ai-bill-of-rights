@@ -1,5 +1,31 @@
 # Branch Progress: main
 
+## Progress Update as of 2026-05-18 13:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Wrote the Phase 1 implementation plan at `docs/superpowers/plans/2026-05-18-phase-1-signable-mvp.md` — 17 tasks, all with bite-sized TDD steps and complete code. Phase 1 = the signable MVP (sign-as-is): DB, auth, document rendering, sign flow with consent screen + fingerprint capture, signer list, account dashboard, revocation, About/Why stubs. Plan 2 (Implement-as-Code + Attestations) and Plan 3 (Comments + Upvotes + Moderation) will be written separately.
+
+### Detail of changes made:
+- **Plan 1 saved to** `docs/superpowers/plans/2026-05-18-phase-1-signable-mvp.md`. Header includes the writing-plans skill convention (REQUIRED SUB-SKILL line, checkbox steps, file structure inventory at top).
+- **17 tasks**, each ending in a green commit. Task 0 is a no-commit "read the Next.js 16 docs in `node_modules/next/dist/docs/01-app/` first" orientation step — the existing AGENTS.md warns coding agents that v16 has breaking changes from training data, and this plan threads that reminder through every task that touches middleware, server actions, or async params.
+- **Tests run on in-memory pglite** via `@electric-sql/pglite` + `drizzle-orm/pglite`. Test helper at `tests/_helpers/pglite-db.ts` applies the Phase 1 schema as raw DDL — duplicated from Drizzle's generated migration so tests don't depend on the migration file being generated first. Trade-off documented in the plan.
+- **Phase 1 schema is 4 tables only**: versions, signers, signatures, consent_records. Comments / upvotes / reports / attestations are intentionally absent until Plans 2 and 3.
+- **`is_current` invariant** is enforced in the sync script's transactional update pass (one current at a time) rather than as a Postgres partial-unique index. Documented as a deliberate trade-off; can be tightened later without a data migration.
+- **Consent text is version-controlled** at `content/consent/v{N}.md` with `{{token}}` substitutions; the exact rendered text is sha256-hashed and stored on each `consent_records` row so we can prove what each signer saw. Article 1 of the document forbids opt-out / buried-checkbox consent — this approach is designed to hold up when read side-by-side.
+- **Fingerprint capture is server-side only** via Vercel's edge geolocation headers + `ua-parser-js` on the User-Agent header. No client-side JS fingerprinting. Plan ships test cases covering missing headers and multi-hop `x-forwarded-for`.
+- **Resend is wired but no-ops** without `RESEND_API_KEY`. CI and local-dev-without-keys still pass.
+- **Self-review at bottom of the plan** confirms spec coverage (Sections 4, 5 Phase-1-subset, 6, 7, 11), no placeholders, type consistency across tasks.
+
+### Potential concerns to address:
+- **Schema duplication between Drizzle and the test helper DDL** is a known maintenance burden. If the schema changes, both must change. Acceptable for Phase 1; consider switching to drizzle-kit's programmatic migration application against pglite once that surface stabilizes.
+- **`recordSignature` is not wrapped in a Drizzle transaction** — pglite's transaction semantics with drizzle-orm/pglite are still maturing. Phase 1 relies on the unique index on `(signer_id, version_id)` to catch double-signing; if the consent_records insert succeeds but signatures fails, we'd have an orphan consent row. Acceptable for MVP; tighten when moving from pglite to Neon proper for integration tests.
+- **`submitSignAction` does a dynamic import of `@clerk/nextjs/server` for the email step** — a workaround for keeping the Resend dependency tree out of test runs. Cleaner once Vitest's dependency-mocking matures.
+- **Plan 2 + Plan 3 not yet written.** Should be written before Phase 1 is fully implemented so the data model migrations stay forward-compatible (comments table joins on versions, attestations on versions, etc.).
+- **No E2E / Playwright tests in this plan.** Manual smoke at the end of each task plus Vitest for pure logic. Once Phase 1 lands, adding Playwright is a small follow-up; not blocking launch.
+
+---
+
 ## Progress Update as of 2026-05-18 12:30 Pacific
 *(Most recent updates at top)*
 
