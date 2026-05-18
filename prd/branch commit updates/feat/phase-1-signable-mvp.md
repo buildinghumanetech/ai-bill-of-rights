@@ -1,5 +1,23 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 14:45 Pacific (Task 11)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 11 complete: implemented the post-OTP profile capture step via strict TDD. Created `src/server/actions/profile.ts` (exports `upsertSignerProfile` + `submitProfileAction`), `src/app/sign/profile/page.tsx` (the Step 1 of 2 form), and `tests/server/profile.test.ts` (2 tests, both passing). All 15 tests across 5 test files pass. TS is clean.
+
+### Detail of changes made:
+- Created `tests/server/profile.test.ts` with 2 tests: (1) inserts a new signer row when none exists for the given Clerk user ID; (2) updates an existing signer when `upsertSignerProfile` is called twice with the same `clerkUserId`, and the final row count is exactly 1.
+- Created `src/server/actions/profile.ts` with `"use server"` at the top of the file. Exports `ProfileInput` interface, `upsertSignerProfile(db?, input)` (pure over a drizzle client — accepts an optional `db` argument defaulting to lazy `require("@/lib/db").db` to avoid the `DATABASE_URL` guard at import time in tests), and `submitProfileAction(formData)` (reads `auth()` from Clerk, validates `displayName` presence, extracts `affiliation`/`location`/`version` from `FormData`, infers `verificationMethod` from `sessionClaims`, calls `upsertSignerProfile`, and redirects to `/sign/consent?version=...`).
+- Created `src/app/sign/profile/page.tsx`: async server component that awaits `auth()` (redirects to `/` if no `userId`), awaits `searchParams` (Next.js 16 `Promise<{version?:string}>` convention), and renders a 3-field form (`displayName` required, `location` optional, `affiliation` optional) bound to `submitProfileAction`. Hidden `version` input threads the version param to the server action.
+- Lazy `getDb()` pattern in `profile.ts` mirrors the pattern established in `src/lib/db/queries.ts` for consistency.
+
+### Potential concerns to address:
+- `submitProfileAction` reads `verificationMethod` from `sessionClaims["primary_verification"]`. Clerk does not document this claim key; it defaults to `"email"` if absent. Task 12 can refine this if the actual Clerk claim key differs in production.
+- The profile page does not prefill fields if the signer has already completed this step (e.g., on re-entry). A future polish pass could call `upsertSignerProfile` in read-mode or add a `getSignerByClerkId` query to prefill values.
+
+---
+
 ## Progress Update as of 2026-05-18 14:45 Pacific
 *(Most recent updates at top)*
 
