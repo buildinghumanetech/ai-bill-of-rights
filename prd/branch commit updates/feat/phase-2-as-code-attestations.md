@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:11 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 5: Added `listPublishedAttestations` and `listPendingReviewAttestations` query helpers plus the `AttestationListItem` interface to `src/lib/db/queries.ts`. Added 3 test cases covering published-only filtering, version-string filtering, and the pending-review queue. All 39 tests pass; TypeScript is clean.
+
+### Detail of changes made:
+- `src/lib/db/queries.ts`: Merged `and`, `isNull`, `isNotNull` into the existing drizzle-orm import; added `attestations` to the schema import. Appended `AttestationListItem` interface, `listPublishedAttestations` (filters `published=true`, `hidden_at IS NULL`, optional `versionString` join), and `listPendingReviewAttestations` (filters `needs_manual_review=true`, `email_verified_at IS NOT NULL`, `manually_reviewed_at IS NULL`, `hidden_at IS NULL`). Both use the existing `getDefaultDb()` lazy pattern.
+- `tests/lib/db.queries.attestations.test.ts`: 3 test cases. `listPublishedAttestations` returns only verified/published rows (Beta's unverified row excluded), filters correctly by version string (hit returns 1, miss returns 0). `listPendingReviewAttestations` returns the OpenAI row after email verification (frontier-lab flag keeps it unpublished, but it appears in the review queue).
+
+### Potential concerns to address:
+- None; purely additive. 39/39 tests pass, TypeScript clean.
+
+---
+
 ## Progress Update as of 2026-05-18 16:09 Pacific
 *(Most recent updates at top)*
 
