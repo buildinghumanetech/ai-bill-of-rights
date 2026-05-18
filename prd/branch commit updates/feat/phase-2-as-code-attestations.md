@@ -1,5 +1,19 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:50 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 11 (FINAL): README.md documentation and Phase 2 completion. Added new section "Implement as Code" surface for AI builders" to README.md before the License section, documenting the three versioned files (v{X.Y.Z}.md, v{X.Y.Z}.agents.md, v{X.Y.Z}.spec.json), curl download commands, the /v/[version]/as-code page with tool tabs and attestation form, public /attestations page with filters, /attestations/verify/[token] landing page, and /admin/attestations review queue (Clerk + is_admin gated). Included instruction to promote admins via Neon console SQL. Ran full test suite — all 39 tests pass (12 test files). TypeScript --noEmit check: clean. Smoke-tested all 9 Phase 2 routes with expected status codes: /, /v/1.0.0, /v/1.0.0/as-code, /v/1.0.0/as-code?tool=cursor, /v/1.0.0/agents.md, /v/1.0.0/spec.json, /attestations, /attestations/verify/badtoken return 200; /admin/attestations returns 307 (Clerk redirect). Phase 2 implementation complete.
+
+### Detail of changes made:
+- `README.md`: Added new "Implement as Code" surface for AI builders" section documenting the three versioned files shipped per Bill of Rights version, curl download example for agents.md, description of /v/[version]/as-code UI (tool tabs, downloads, attestation form), public /attestations page, verification landing page at /attestations/verify/[token], admin review queue at /admin/attestations (Clerk + is_admin gated), and instructions to flip signers.is_admin = true in Neon console to promote admins (no admin UI in MVP). Inserted before the License section.
+
+### Potential concerns to address:
+- None; Phase 2 complete and fully tested. All routes operational, all 39 tests pass, TypeScript clean.
+
+---
+
 ## Progress Update as of 2026-05-18 16:45 Pacific
 *(Most recent updates at top)*
 
