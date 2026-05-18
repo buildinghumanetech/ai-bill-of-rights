@@ -1,7 +1,24 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 15:00 Pacific
+## Progress Update as of 2026-05-18 15:30 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 9 complete: implemented 3 DB query helpers and replaced the Next.js starter landing page with the live signature-count landing page. Created `src/lib/db/queries.ts` exporting `getCurrentVersion`, `getVersionByString`, and `getSignatureCount`. Created `tests/lib/db.queries.test.ts` (2 tests, both passing). Replaced `src/app/page.tsx` with the new landing page that calls both query helpers at request time (`force-dynamic`). TS is clean.
+
+### Detail of changes made:
+- Created `src/lib/db/queries.ts` with 3 exported async functions: `getCurrentVersion(db?)` selects the row with `is_current = true`; `getVersionByString(versionString, db?)` looks up a version by its string; `getSignatureCount(db?)` returns a `count()` aggregate as a `number`. All three accept an optional `db` argument (defaulting to the production client via a lazy `require()` call) so tests can inject a pglite instance without triggering the `DATABASE_URL` guard that lives in `src/lib/db/index.ts` at module-evaluation time.
+- Created `tests/lib/db.queries.test.ts` with 2 tests: `getCurrentVersion` returns the `is_current` row from a two-version DB; `getSignatureCount` returns 0 on a fresh DB.
+- Replaced `src/app/page.tsx` (Next.js starter boilerplate) with the new landing page component. Exports `dynamic = "force-dynamic"` for fresh counts on every request. Shows live signature count and version string, with "Read & sign" (→ `/v/${versionString}`) and "Why this matters" (→ `/why`) CTAs. No Next.js logo or vercel links remain.
+- `pnpm exec tsc --noEmit --skipLibCheck` exits cleanly (no output, code 0).
+
+### Potential concerns to address:
+- The lazy `require("./index")` pattern in `queries.ts` is used to avoid the top-level `DATABASE_URL` guard at import time in tests. In production (where `DATABASE_URL` is always set) this is equivalent to a direct import and has no downside. The pattern is documented with an inline comment.
+- `getVersionByString` is not exercised by Task 9 tests; it will be covered by Task 10 tests when the document rendering route uses it.
+
+---
+
+## Progress Update as of 2026-05-18 15:00 Pacific
 
 ### Summary of changes since last update
 Task 8 complete: Clerk proxy (middleware) and ClerkProvider wired into the app. Key discovery: Next.js 16 renamed `middleware.ts` to `proxy.ts` — the plan assumed Next.js 15 conventions. Created `src/proxy.ts` (not root `middleware.ts`) with `clerkMiddleware` protecting `/sign/profile(.*)`, `/sign/consent(.*)`, `/sign/complete(.*)`, and `/account(.*)`. Updated `src/app/layout.tsx` to wrap `<html>` in `<ClerkProvider>` and updated metadata title/description. Also fixed a pre-existing TypeScript error in `src/lib/db/sync.ts` (drizzle select return type `{}[]` → `VersionRow[]`) that was blocking `pnpm build`. Build passes (TS clean, 4 static pages generated, Proxy detected) with a properly formatted dummy Clerk key; the postbuild db script fails expectedly without `DATABASE_URL`.
