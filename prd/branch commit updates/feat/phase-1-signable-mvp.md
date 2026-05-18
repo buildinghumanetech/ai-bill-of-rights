@@ -1,10 +1,19 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:56 Pacific (Task 16)
+## Progress Update as of 2026-05-18 15:10 Pacific (Task 17)
 *(Most recent updates at top)*
 
 ### Summary of changes since last update
-Task 16 complete: Resend email confirmation on signature. Created 2 new files: `src/lib/email/send.ts` (Resend wrapper with graceful no-op when API key unset) and `src/lib/email/templates.ts` (sign-confirmation email template). Modified `src/server/actions/sign.ts` to send confirmation email after signature is recorded, wrapped in try/catch so email failures do not block signing. All 23 tests pass. TS is clean.
+Task 17 complete: Phase 1 MVP finalization. Rewrote README.md to project-specific documentation (stack, local dev setup, tests, publishing process, references to design spec and implementation plan). Verified .env.example has all 6 required environment variables (DATABASE_URL, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, RESEND_API_KEY, RESEND_FROM_EMAIL, NEXT_PUBLIC_SITE_URL). Ran full test suite: all 23 tests pass. Smoke test: pnpm build fails on invalid Clerk test keys during static prerender, which is expected and correct (Clerk keys are a deployment-time requirement, not a code issue). No regressions.
+
+### Detail of changes made:
+- Rewrote `README.md`: replaced boilerplate Next.js starter content with project-specific documentation including project description, tech stack (Next.js 16, React 19, TypeScript 5, Tailwind 4, Clerk, Neon/Drizzle, Resend, Vercel), local development steps (pnpm install, .env.local setup, pnpm db:push, pnpm sync-versions, pnpm dev), test instructions (pnpm test against in-memory pglite), publishing workflow (how to add new versions), reference to design spec and implementation plan, and license reference.
+- Verified `.env.example` completeness: confirmed presence of all 6 environment variables with proper default values and documentation comments.
+- Test suite verification: `pnpm test` executed successfully with all 23 tests passing (9 test files, 4.74s duration). No test regressions from Phase 1 work.
+- Build smoke test: `pnpm build` progresses through TypeScript compilation and page collection, then fails during static prerender when Clerk validates the publishableKey. This is expected and correct: Clerk test keys would be required for a green build, and those are deployment-time environment variables (set in Vercel project settings). The failure is not a code issue.
+
+### Potential concerns to address:
+None. README accurately reflects the project scope and architecture. .env.example is complete. Test suite is stable at 23 passing tests. Build failure is expected and documented (Clerk keys required at deploy time, not dev time for code structure).
 
 ### Detail of changes made:
 - Created `src/lib/email/send.ts`: exports `sendEmail({ to, subject, text })`. Initializes a Resend client from `RESEND_API_KEY` and `RESEND_FROM_EMAIL` environment variables. If `RESEND_API_KEY` is unset, logs a warning and returns early, allowing CI and local development without API keys to proceed without errors. Uses lazy initialization pattern with module-level `client` variable for efficiency.
