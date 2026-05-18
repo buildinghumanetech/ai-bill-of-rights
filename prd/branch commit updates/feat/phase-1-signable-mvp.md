@@ -1,7 +1,23 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:20 Pacific
+## Progress Update as of 2026-05-18 14:30 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 7 complete: replaced the no-op stub in `scripts/sync-versions.ts` with the real filesystem driver. The script loads `.env` via `dotenv/config`, reads `content/bill-of-rights/versions.json`, loads the three content files per version entry, builds a `VersionInput[]` with `isCurrent` derived from `versions.json.current`, captures the git HEAD SHA (best-effort, null on failure), and calls `syncVersions(db, inputs)`. Exits with code 1 on any error. Verified: project-wide `tsc --noEmit --skipLibCheck` is clean for the script (one pre-existing error in `sync.ts` around drizzle select typing is unrelated). Smoke test with `DATABASE_URL=''` correctly throws the db-client guard error, confirming all script logic up to the db call is correct.
+
+### Detail of changes made:
+- Replaced `scripts/sync-versions.ts` stub (4 lines) with the full 54-line implementation. Uses `node:fs`, `node:path`, `node:child_process` (execSync for `git rev-parse HEAD`), `dotenv/config`, `@/lib/db`, and `@/lib/db/sync`.
+- `gitCommit()` wraps `execSync` in try/catch and returns `null` on failure, supporting shallow CI clones without git history.
+- `main()` is an async function; `.catch()` handler logs the error and exits with code 1 for clean postbuild failure reporting.
+- No new dependencies required — all imports were already installed in Task 1.
+
+### Potential concerns to address:
+- The pre-existing `sync.ts` TS2339 error (`Property 'markdownHash' does not exist on type '{}'`) is a drizzle-orm inference limitation from Task 6. It does not affect runtime behavior (values are present at runtime) but will surface in `tsc --noEmit` output. Not introduced by this task.
+
+---
+
+## Progress Update as of 2026-05-18 14:20 Pacific
 
 ### Summary of changes since last update
 Task 6 complete: implemented `syncVersions(db, inputs)` idempotent version sync function via strict TDD. Created `src/lib/db/sync.ts` and `tests/lib/db.sync.test.ts` (4 tests, all passing). Also fixed the `tests/_helpers/pglite-db.ts` helper which had two latent bugs discovered on first actual use: (1) `db.execute(sql`...`)` goes through pglite's prepared-statement path which rejects multi-command strings — switched to `client.exec()` which handles them correctly; (2) `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"` is not available in pglite (which uses `gen_random_uuid()` as a Postgres 13+ builtin) — removed that line. All 11 tests across 3 test files pass.
