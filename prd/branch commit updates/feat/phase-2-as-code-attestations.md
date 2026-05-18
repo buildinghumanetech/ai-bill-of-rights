@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 15:57 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 3: Created frontier-lab allowlist (`needsManualReview` function) and verification-token helper (`generateVerificationToken` function). Implemented using test-driven development: wrote 4 test cases covering exact name matching (case-insensitive), word-boundary matching in longer strings, filtering unrelated names, and substring detection. All 4 allowlist tests pass. Ran full test suite — all 29 tests pass with no regressions.
+
+### Detail of changes made:
+- `tests/lib/attestations.allowlist.test.ts`: 4 test cases using vitest. Tests verify the `needsManualReview` function correctly identifies frontier AI labs by word boundaries, handles case-insensitive matching, filters unrelated organizations, and treats mentions as substrings (conservative approach erring toward false-positives for admin review).
+- `src/lib/attestations/allowlist.ts`: Exports `FRONTIER_LAB_NAMES` array (17 entries: openai, anthropic, google, deepmind, google deepmind, meta, amazon, microsoft, apple, mistral, xai, x.ai, cohere, perplexity, inflection, stability, stability ai). `needsManualReview(orgName: string): boolean` uses word-boundary regex to match org names, erring toward false-positives as a safety-first approach.
+- `src/lib/attestations/token.ts`: Exports `generateVerificationToken(): string` function that generates a UUID and removes hyphens for use as an opaque, single-use verification token stored on `attestations.verification_token` (UNIQUE column).
+
+### Potential concerns to address:
+- None; implementation is complete and tested.
+
+---
+
 ## Progress Update as of 2026-05-18 15:56 Pacific
 *(Most recent updates at top)*
 
