@@ -2,7 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { signers } from "@/lib/db/schema";
 
 // Lazily resolve the production db so that importing this module in tests
@@ -60,7 +60,7 @@ export async function upsertSignerProfile(
 }
 
 export async function submitProfileAction(formData: FormData): Promise<void> {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
   if (!userId) {
     redirect("/");
   }
@@ -71,12 +71,15 @@ export async function submitProfileAction(formData: FormData): Promise<void> {
   const affiliation = (formData.get("affiliation")?.toString() ?? "").trim() || null;
   const locationText = (formData.get("location")?.toString() ?? "").trim() || null;
   const version = String(formData.get("version") ?? "1.0.0");
-  // Verification method: read from Clerk session claims. Defaults to "email".
-  const method =
-    (sessionClaims?.["primary_verification" as keyof typeof sessionClaims] as
-      | "email"
-      | "sms"
-      | undefined) ?? "email";
+  // Derive verificationMethod from the real Clerk user object (I-1 fix).
+  // Session claims do not carry a reliable primary_verification key, so we
+  // fetch the user and check which identifier is primary.
+  const clerk = await clerkClient();
+  const clerkUser = await clerk.users.getUser(userId);
+  const method: "email" | "sms" =
+    clerkUser.primaryPhoneNumberId && !clerkUser.primaryEmailAddressId
+      ? "sms"
+      : "email";
 
   await upsertSignerProfile(getDb(), {
     clerkUserId: userId,

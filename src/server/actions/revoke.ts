@@ -18,22 +18,26 @@ export async function anonymizeSigner(
   sequenceNumber: number,
 ): Promise<void> {
   const db = dbClient ?? getDb();
-  await db
-    .update(signers)
-    .set({
-      displayName: `Anonymized signer #${sequenceNumber}`,
-      affiliation: null,
-      locationText: null,
-    })
-    .where(eq(signers.id, signerId));
+  // Wrap both updates in a transaction so they succeed or fail atomically.
+  // Production Neon HTTP and pglite both support db.transaction() (C-2 fix).
+  await db.transaction(async (tx: any) => {
+    await tx
+      .update(signers)
+      .set({
+        displayName: `Anonymized signer #${sequenceNumber}`,
+        affiliation: null,
+        locationText: null,
+      })
+      .where(eq(signers.id, signerId));
 
-  await db
-    .update(consentRecords)
-    .set({
-      revokedAt: new Date(),
-      capturedFields: null,
-    })
-    .where(eq(consentRecords.signerId, signerId));
+    await tx
+      .update(consentRecords)
+      .set({
+        revokedAt: new Date(),
+        capturedFields: null,
+      })
+      .where(eq(consentRecords.signerId, signerId));
+  });
 }
 
 async function nextSequenceNumber(dbClient: any = null): Promise<number> {

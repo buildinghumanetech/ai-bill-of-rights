@@ -29,9 +29,10 @@ export default async function ConsentPage({
   }
   const signer = rows[0];
 
+  const sessionUtc = new Date().toISOString();
   const h = await headers();
   const fields = extractCapturedFields(h, {
-    sessionUtc: new Date().toISOString(),
+    sessionUtc,
   });
   const consentText = renderConsentText(CURRENT_CONSENT_VERSION, {
     displayName: signer.displayName,
@@ -51,6 +52,7 @@ export default async function ConsentPage({
       </article>
       <form action={submitSignAction} className="mt-10 flex flex-col gap-6">
         <input type="hidden" name="version" value={version} />
+        <input type="hidden" name="signing_session_utc" value={sessionUtc} />
         <label className="flex items-start gap-3">
           <input
             type="checkbox"

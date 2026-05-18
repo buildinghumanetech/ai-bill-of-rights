@@ -1,5 +1,26 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 16:00 Pacific (Final review fixes: C-1, C-2, I-1)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Final code-review fixes applied. Three issues resolved: (C-1) consent text hash integrity — the stored hash now provably matches what the user saw by threading `signing_session_utc` through a hidden form field; (C-2) database transaction wrapping — both inserts in `recordSignature` and both updates in `anonymizeSigner` are now atomic; (I-1) real verification-method detection — `submitProfileAction` now fetches the Clerk user object and inspects `primaryPhoneNumberId`/`primaryEmailAddressId` instead of relying on a phantom session claim. All 25 tests pass (23 original + 2 new). TS clean.
+
+### Detail of changes made:
+- **C-1 fix — `src/app/sign/consent/page.tsx`:** Compute `const sessionUtc = new Date().toISOString()` once at the top of the component body; pass that value to `extractCapturedFields`; add `<input type="hidden" name="signing_session_utc" value={sessionUtc} />` inside the form so the exact timestamp travels to the server action.
+- **C-1 fix — `src/server/actions/sign.ts` (`submitSignAction`):** Read `sessionUtc` from `formData.get("signing_session_utc")` (falling back to `new Date().toISOString()` only when the field is absent). Pass this to `extractCapturedFields`, ensuring the two `renderConsentText` calls use the same `signing_session_utc` value and therefore produce identical strings and hashes.
+- **C-2 fix — `src/server/actions/sign.ts` (`recordSignature`):** Wrapped the two sequential inserts (`consentRecords`, `signatures`) in `db.transaction(async (tx) => { ... })`. If the `signatures` insert fails (e.g., unique-index violation on double-submit), both inserts roll back atomically — no orphan `consent_records` row.
+- **C-2 fix — `src/server/actions/revoke.ts` (`anonymizeSigner`):** Wrapped the two sequential updates (`signers` anonymization, `consentRecords` PII clear) in `db.transaction(async (tx) => { ... })` for the same atomicity guarantee.
+- **I-1 fix — `src/server/actions/profile.ts` (`submitProfileAction`):** Replaced phantom `sessionClaims["primary_verification"]` lookup with a real Clerk API call: `await (await clerkClient()).users.getUser(userId)`. Derives `verificationMethod` as `"sms"` only when `primaryPhoneNumberId` is set AND `primaryEmailAddressId` is null; otherwise `"email"`. Dropped unused `sessionClaims` from `auth()` destructure.
+- **New test — C-1 round-trip (`tests/server/sign.test.ts`):** Pins `signing_session_utc` to a fixed ISO string, renders consent text with those inputs, records the signature with the resulting hash, then re-renders with the same inputs and asserts `sha256Hex(reRendered) === records[0].consentTextHash`. Proves the round-trip is deterministic.
+- **New test — C-2 rollback (`tests/server/sign.test.ts`):** First submission succeeds; second (double-submit) fails on the unique index; asserts `consent_records` count remains 1 (not 2), confirming the transaction rolled back the orphan row.
+
+### Potential concerns to address:
+- `clerkClient()` in `submitProfileAction` makes a real network call to the Clerk API on every profile save. In the test suite this path is not exercised (tests call `upsertSignerProfile` directly, bypassing `submitProfileAction`), so no mock is needed and no test regressions arise. In production this adds ~1 network round-trip per profile submission, which is acceptable overhead for correctness.
+- The `db.transaction()` callback receives `tx: any` because the Drizzle PGlite and Neon types diverge at the generic level. Runtime behavior is correct on both backends; the `any` annotation is the established pragmatic pattern for this codebase.
+
+---
+
 ## Progress Update as of 2026-05-18 15:10 Pacific (Task 17)
 *(Most recent updates at top)*
 

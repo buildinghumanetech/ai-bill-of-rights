@@ -39,28 +39,32 @@ export async function recordSignature(
   }
   const versionRow = versionRows[0];
 
-  // Two-step insert. The unique index on (signer_id, version_id) enforces
-  // idempotency at the signatures level.
-  const [record] = await db
-    .insert(consentRecords)
-    .values({
-      signerId: input.signerId,
-      consentTextHash: input.consentTextHash,
-      capturedFields: input.capturedFields as unknown as object,
-    })
-    .returning({ id: consentRecords.id });
+  // Wrap both inserts in a transaction so an orphan consent_records row is
+  // never left behind if the signatures insert fails (e.g. unique-constraint
+  // double-submit). Production uses Neon serverless HTTP which supports
+  // db.transaction(); pglite-backed tests also expose the method (C-2 fix).
+  return db.transaction(async (tx: any) => {
+    const [record] = await tx
+      .insert(consentRecords)
+      .values({
+        signerId: input.signerId,
+        consentTextHash: input.consentTextHash,
+        capturedFields: input.capturedFields as unknown as object,
+      })
+      .returning({ id: consentRecords.id });
 
-  const [sig] = await db
-    .insert(signatures)
-    .values({
-      signerId: input.signerId,
-      versionId: versionRow.id,
-      versionHashAtSigning: versionRow.markdownHash,
-      consentRecordId: record.id,
-    })
-    .returning({ id: signatures.id });
+    const [sig] = await tx
+      .insert(signatures)
+      .values({
+        signerId: input.signerId,
+        versionId: versionRow.id,
+        versionHashAtSigning: versionRow.markdownHash,
+        consentRecordId: record.id,
+      })
+      .returning({ id: signatures.id });
 
-  return { signatureId: sig.id };
+    return { signatureId: sig.id };
+  });
 }
 
 export async function submitSignAction(formData: FormData): Promise<void> {
@@ -82,9 +86,12 @@ export async function submitSignAction(formData: FormData): Promise<void> {
   }
   const signer = signerRows[0];
 
+  // Use the sessionUtc the consent page stamped into the hidden field so the
+  // hash we store matches the text the user actually read (C-1 fix).
+  const sessionUtc = String(formData.get("signing_session_utc") ?? new Date().toISOString());
   const h = await headers();
   const fields = extractCapturedFields(h, {
-    sessionUtc: new Date().toISOString(),
+    sessionUtc,
     screenResolution: (formData.get("screen") as string | null) ?? "",
   });
 
