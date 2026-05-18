@@ -161,6 +161,25 @@ export async function createTestDb(): Promise<TestDb> {
     create index selfie_reports_selfie_unresolved_idx
       on selfie_reports (selfie_id)
       where resolved_at is null;
+
+    create table attestations (
+      id uuid primary key default gen_random_uuid(),
+      org_name text not null,
+      product_name text not null,
+      product_url text,
+      version_id uuid not null references versions(id),
+      contact_email text not null,
+      verification_token text not null unique,
+      claimed_at timestamptz not null default now(),
+      email_verified_at timestamptz,
+      needs_manual_review boolean not null default false,
+      manually_reviewed_at timestamptz,
+      manually_approved boolean,
+      published boolean not null default false,
+      hidden_at timestamptz
+    );
+    create index attestations_version_published
+      on attestations (version_id) where published = true;
   `);
   return db;
 }
