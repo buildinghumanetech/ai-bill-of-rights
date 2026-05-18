@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 16:30 Pacific (Vercel build fix: lazy DATABASE_URL guard)
+
+### Summary of changes since last update
+Vercel preview build was failing during `next build`'s "Collecting page data" phase with `DATABASE_URL is not set` thrown from `src/lib/db/index.ts`. Root cause: the module-level guard ran at every import — including during Next.js's static page-data collection — so any environment without `DATABASE_URL` (such as a fresh Vercel preview where the env var hadn't been added yet) crashed before build could finish, even though every db-using page is `force-dynamic`. Fix moves the guard into a lazy `getDb()` behind a `Proxy`, so the throw only fires on actual db method access. The 15:45 entry below predicted this cleaner fix and noted the open trade-off; this is that fix landing.
+
+### Detail of changes made:
+- `src/lib/db/index.ts`: replaced the top-level `if (!connectionString) throw ...` + `const db = drizzle(...)` with a lazy `getDb()` that reads `process.env.DATABASE_URL` on first access and memoizes the drizzle client in a module-level `_db`. The exported `db` is now a `Proxy<Database>` whose `get` trap forwards to `getDb()`, so existing call sites (`db.select(...)`, `db.transaction(...)`, etc.) continue to work without changes. Typed as `Database = ReturnType<typeof drizzle<typeof schema>>` to preserve drizzle's inference through the Proxy cast.
+- No call-site changes needed. `src/lib/db/queries.ts` already used a `getDefaultDb()` lazy pattern; pages (`/account`, `/sign/consent`, `/sign/complete`) import `db` directly but only invoke methods inside async handlers, so the Proxy is transparent to them.
+
+### Potential concerns to address:
+- **Runtime env var still required.** This fix unblocks `next build` only. `/account` and the sign flow will still 500 at request time if `DATABASE_URL` is missing from the Vercel project's Preview/Production envs. The failing deploy under `erika-andersons-projects/ai-bill-of-rights` needs `DATABASE_URL` (and likely the Clerk keys + Resend key for `/sign/*` to actually work) added in the Vercel dashboard before the preview is fully functional.
+- Proxy cast (`as Database`) sheds some type safety at the boundary, but every method access is still typed because the Proxy target is `Database`-shaped. Acceptable trade-off given the alternative (re-exporting every drizzle method explicitly) would be much worse.
+
+---
+
 ## Progress Update as of 2026-05-18 15:45 Pacific (.env.local loading fix)
 
 ### Summary of changes since last update
