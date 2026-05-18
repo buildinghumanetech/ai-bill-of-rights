@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:12 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 6: Created two raw file routes for serving versioned content files. `src/app/v/[version]/agents.md/route.ts` serves markdown files from disk with `text/markdown` content type. `src/app/v/[version]/spec.json/route.ts` serves JSON files with `application/json` content type. Both routes enforce semantic versioning validation (`^\d+\.\d+\.\d+$`), check file existence, and return 404 if invalid version or missing file. Verified with curl: agents.md returns 200 + text/markdown; spec.json returns 200 + application/json; bad version returns 404.
+
+### Detail of changes made:
+- `src/app/v/[version]/agents.md/route.ts`: GET handler that reads `content/bill-of-rights/v{version}.agents.md` from disk, validates version format, returns 404 if invalid/missing, serves with text/markdown content-type and 60-second cache-control header.
+- `src/app/v/[version]/spec.json/route.ts`: GET handler that reads `content/bill-of-rights/v{version}.spec.json` from disk, validates version format, returns 404 if invalid/missing, serves with application/json content-type and 60-second cache-control header.
+
+### Potential concerns to address:
+- None; routes tested and working as expected.
+
+---
+
 ## Progress Update as of 2026-05-18 16:11 Pacific
 *(Most recent updates at top)*
 
