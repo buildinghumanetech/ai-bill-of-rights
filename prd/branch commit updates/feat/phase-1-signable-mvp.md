@@ -1,5 +1,24 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 14:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 10 complete: rendered the parsed Bill of Rights at `/v/[version]` and set up `/bill-of-rights` to redirect to the current version. Created 5 files — a redirect page, 3 shared components (`VersionBanner`, `DocumentRenderer`, `SignButton`), and the dynamic `[version]` page. TS is clean; all 13 existing tests still pass.
+
+### Detail of changes made:
+- Created `src/app/bill-of-rights/page.tsx`: server component with `force-dynamic` that calls `getCurrentVersion()` and redirects to `/v/${version}`, falling back to `"1.0.0"` if no current version exists.
+- Created `src/components/VersionBanner.tsx`: displays version string, publish date (from `Date | string` for Drizzle compat), and an optional changelog link.
+- Created `src/components/DocumentRenderer.tsx`: renders a `ParsedDocument` as semantic HTML — preamble as `<h1>`, other articles as `<h2>`, paragraphs as `<p>`, sentences as `<span>` with `data-anchor-id` and `className="anchored-sentence"`. Uses `prose prose-zinc` Tailwind classes (decorative without `@tailwindcss/typography`).
+- Created `src/components/SignButton.tsx`: a sticky `<Link>` to `/sign/profile?version=<encoded>` styled as a rounded pill button.
+- Created `src/app/v/[version]/page.tsx`: server component with `force-dynamic`. Awaits `params` (Next.js 16 `Promise<{version: string}>` convention), calls `getVersionByString`, calls `notFound()` on miss, casts `row.parsedJson as unknown as ParsedDocument`, and composes the three components.
+
+### Potential concerns to address:
+- `prose` Tailwind classes are emitted but `@tailwindcss/typography` is not installed. The document will render unstyled until a polish pass adds the plugin.
+- `data-anchor-id` attributes on sentence spans are in place for future highlight/anchor UX (Tasks TBD).
+
+---
+
 ## Progress Update as of 2026-05-18 15:30 Pacific
 *(Most recent updates at top)*
 
