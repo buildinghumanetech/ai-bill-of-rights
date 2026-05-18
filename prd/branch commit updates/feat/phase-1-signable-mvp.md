@@ -1,5 +1,27 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 14:47 Pacific (Task 13)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 13 complete: implemented sign-complete page, public signatories list, individual signer profile pages, plus the three new query helpers backing them. Extended the existing test file with 1 new test (TDD: fail-then-pass). All 22 tests pass (1 new). TS is clean.
+
+### Detail of changes made:
+- Extended `tests/lib/db.queries.test.ts`: added imports for `listSignatures`, `getSignerById`, `signers`, `consentRecords`, `signatures`, `versions`; added `describe("signer list queries")` block with 1 test that inserts a full signer+consent+signature row and verifies `listSignatures` returns the joined row with correct `displayName` and `locationText`.
+- Extended `src/lib/db/queries.ts`: added `desc` to the drizzle-orm import; added `signers` to the schema import; exported `SignerListItem` interface; added `listSignatures(db, opts)` (joined select of `signers`+`signatures`+`versions`, ordered newest-first, with limit/offset pagination); added `getSignerById(signerId, db)` (single-row select by UUID); added `listSignaturesForSigner(signerId, db)` (select `signedAt`+`version` for all signatures by a given signer). All three follow the established `db ?? getDefaultDb()` lazy pattern.
+- Created `src/components/VerificationBadge.tsx`: small pill badge showing "Verified via email" or "Verified via SMS" in emerald colours with dark-mode variant.
+- Created `src/components/SignatureCard.tsx`: a `<Link>` card to `/signatories/{signerId}` displaying display name, verification badge, location/affiliation, and version+date. Accepts a `SignerListItem` prop.
+- Created `src/app/sign/complete/page.tsx`: `force-dynamic` server component. Awaits `auth()` (redirects to `/` if unauthenticated), reads `searchParams.version`, looks up the signer row by `clerkUserId`, and renders a confirmation screen with links to the signer's public profile page and the signatories list.
+- Created `src/app/signatories/page.tsx`: `force-dynamic` server component. Reads `searchParams.page`, calls `listSignatures(undefined, {limit:50, offset})`, renders `SignatureCard` for each row, and shows a "Next page" link when the page is full.
+- Created `src/app/signatories/[id]/page.tsx`: `force-dynamic` server component. Awaits `params.id`, calls `getSignerById` (→ `notFound()` on miss) and `listSignaturesForSigner`, renders the signer's name, verification badge, location/affiliation, and a list of signed versions linking to `/v/{version}`, plus a "Revoke your signature" footer link.
+- Fixed one TS error introduced by the `sigs.map` callback: typed the `s` parameter explicitly as `{ version: string; signedAt: Date }` since `listSignaturesForSigner` returns `any[]`.
+
+### Potential concerns to address:
+- `listSignaturesForSigner` returns `any[]` because Drizzle's inferred return type for `db: any` is not propagated. The explicit type annotation on the `s` parameter in the profile page is the workaround. A future refactor could define a `SignerSignatureRow` interface and cast the return.
+- `src/app/sign/complete/page.tsx` imports `db` directly from `@/lib/db` (the production Neon client). This is correct for a server component that runs only in production, but it means the page cannot be rendered in unit tests without a real `DATABASE_URL`. Consistent with all other page-level code in this project.
+
+---
+
 ## Progress Update as of 2026-05-18 14:41 Pacific (Task 12)
 *(Most recent updates at top)*
 
