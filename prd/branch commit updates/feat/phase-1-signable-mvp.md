@@ -1,7 +1,25 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 13:45 Pacific
+## Progress Update as of 2026-05-18 14:00 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Fixed code quality review issues on Task 1: created `scripts/sync-versions.ts` as a no-op stub so `pnpm build` no longer fails on the postbuild hook, and removed `@types/ua-parser-js@0.7.39` from devDependencies to eliminate conflicting type definitions for `ua-parser-js@2.x`. Both fixes verified: `pnpm build` succeeds and `pnpm test` still correctly reports "No test files found."
+
+### Detail of changes made:
+- Created `scripts/sync-versions.ts` with a stub console.log (no-op until Task 7 implements real logic). This unblocks the `postbuild` npm script which was failing because the file did not exist.
+- Removed `@types/ua-parser-js@0.7.39` from devDependencies. The v2.x runtime package includes its own TypeScript definitions; the DefinitelyTyped package (for v0.x) was misleading and now unnecessary.
+- Ran `pnpm install` to update `pnpm-lock.yaml` (entry for @types/ua-parser-js removed, stub script added to repo).
+- Verified `pnpm build` completes successfully; postbuild hook runs stub and exits with status 0.
+- Verified `pnpm test` still outputs "No test files found, exiting with code 1" — expected at this stage.
+
+### Potential concerns to address:
+None new. The original Task 1 concerns remain (documented below).
+
+---
+
+## Progress Update as of 2026-05-18 13:45 Pacific
+*(Earlier updates)*
 
 ### Summary of changes since last update
 Task 1 complete: installed all runtime and dev dependencies, scaffolded the full directory layout, created `vitest.config.ts`, added the `@/*` path alias (already present in `tsconfig.json`), and wired up 6 new npm scripts in `package.json`. Smoke test confirms vitest is configured correctly.
