@@ -1,5 +1,28 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 14:41 Pacific (Task 12)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 12 complete: implemented the consent screen, fingerprint capture, and signature submission via strict TDD. Created 7 new files across lib, server, app, and tests. All 21 tests pass (6 new). TS is clean.
+
+### Detail of changes made:
+- Created `tests/lib/fingerprint.extract.test.ts` (3 tests): verifies UA parsing into browser/os/version, graceful handling of missing headers, and first-IP extraction from multi-hop `x-forwarded-for`.
+- Created `tests/lib/consent.hash.test.ts` (1 test): verifies SHA-256 produces a known stable hex digest against the `"abc"` vector.
+- Created `tests/server/sign.test.ts` (2 tests): (1) atomically inserts a `consent_records` row + `signatures` row and links them via `consentRecordId`; (2) rejects double-signing the same `(signer_id, version_id)` via the unique index constraint.
+- Created `src/lib/fingerprint/extract.ts`: `extractCapturedFields(headers, context)` reads IP (first hop of `x-forwarded-for`), Vercel geo headers (`x-vercel-ip-city/country-region/country/timezone`), UA via `ua-parser-js`, `accept-language`, `referer`, and the caller-supplied `sessionUtc` + optional `screenResolution`.
+- Created `src/lib/consent/hash.ts`: thin wrapper around `node:crypto` SHA-256 producing lowercase hex.
+- Created `src/lib/consent/render.ts`: `renderConsentText(version, input)` reads `content/consent/v{N}.md` at runtime, substitutes `{{token}}` placeholders with signer profile fields + captured fingerprint fields, returns the rendered string that is subsequently hashed for the record. Exports `CURRENT_CONSENT_VERSION = 1`.
+- Created `src/server/actions/sign.ts`: `"use server"`. Exports `recordSignature(db?, input)` (pure over a drizzle client — accepts optional `db` for testability, looks up the version row, two-step inserts `consent_records` then `signatures`) and `submitSignAction(formData)` (auth check, consent checkbox validation, signer lookup with profile-redirect fallback, server-side fingerprint re-capture at submit time, consent text render + SHA-256 hash, calls `recordSignature`, redirects to `/sign/complete`).
+- Created `src/app/sign/consent/page.tsx`: async server component with `force-dynamic`. Awaits `auth()`, `searchParams`, loads the signer row (redirects to `/sign/profile` if missing), renders the consent text with a fingerprint snapshot from page-load headers (for display only — submit re-captures), and renders the form with a required checkbox + hidden `version` field bound to `submitSignAction`.
+
+### Potential concerns to address:
+- **Orphan consent rows on partial failure:** `recordSignature` performs two sequential inserts without a transaction. If `consent_records` succeeds but `signatures` fails (e.g., due to the unique-index constraint on double-sign), an orphan `consent_records` row is created. The orphan has no `signature` linking it to a `version`, so it has no legal weight, but it represents noise in the table. A future migration to wrap both inserts in a transaction would eliminate this. Flagged as known MVP trade-off in comments inside `sign.ts`.
+- **Consent text drift between display and submission:** The consent text rendered on the page (for the user to read) is captured from request headers at page-load time. The consent text that is hashed and stored is captured at form-submit time. If the user leaves the page open across a network change (e.g., phone → WiFi), the stored fingerprint may differ from what was displayed. The spec explicitly accepts this; the submit-time capture is the authoritative one.
+- **Screen resolution not captured at page load:** `extractCapturedFields` at the server-component level has no `screenResolution` (client JS needed). The hidden `screen` input in the form allows the submit action to populate it from client-side JS if desired. Currently no JS sets it — screen_resolution will appear as `(not provided)` in the consent record. A future enhancement can add a small `<script>` to the consent page to set the hidden input before submit.
+
+---
+
 ## Progress Update as of 2026-05-18 14:45 Pacific (Task 11)
 *(Most recent updates at top)*
 
