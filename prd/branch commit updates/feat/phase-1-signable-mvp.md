@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 15:45 Pacific (.env.local loading fix)
+
+### Summary of changes since last update
+Local-dev DX fix discovered while booting the first localhost session: `drizzle-kit` and the standalone `sync-versions` script now load `.env.local` (Next.js convention) before `.env`. Previously they only loaded `.env`, so `pnpm db:push` and `pnpm sync-versions` failed with "DATABASE_URL is not set" even when `.env.local` was populated.
+
+### Detail of changes made:
+- `drizzle.config.ts`: replaced `import "dotenv/config"` with explicit `config({ path: ".env.local" })` then `config({ path: ".env" })` as fallback.
+- `scripts/sync-versions.ts`: same dotenv fix, AND restructured so the `db` import is dynamic inside `main()` rather than a top-level static import. The TypeScript transformer was hoisting `import { db } from "@/lib/db"` above the runtime dotenv calls, so the db module evaluated its `DATABASE_URL` guard before env vars were loaded. Dynamic import fixes the ordering.
+- No behavior change for production: Next.js itself loads `.env.local` in dev and Vercel injects env vars in prod. The fix is only relevant for the standalone CLI scripts.
+
+### Potential concerns to address:
+- Dynamic import in `sync-versions.ts` sidesteps a TS hoisting issue but is a small code-smell. A cleaner fix would be to make `src/lib/db/index.ts` itself load `.env.local` before its guard, but that would add dotenv to the runtime path of every Next.js request. Current approach keeps Next clean and accepts the dynamic-import in the one script.
+
+---
+
 ## Progress Update as of 2026-05-18 16:00 Pacific (Final review fixes: C-1, C-2, I-1)
 *(Most recent updates at top)*
 
