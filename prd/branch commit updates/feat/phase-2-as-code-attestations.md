@@ -1,5 +1,19 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:36 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 9: Created the email-verification landing page at `src/app/attestations/verify/[token]/page.tsx`. This page handles the three outcomes of verification: (1) published (attestation auto-published because not flagged), (2) review (email confirmed but awaiting manual admin review), and (3) error (invalid/expired token). The page calls `verifyAttestationToken` which is already implemented. Renders centered UI with appropriate messaging and optional "See all attestations" CTA. Smoke test: curl to `/attestations/verify/badtoken` returns 200. All 39 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/app/attestations/verify/[token]/page.tsx`: New async page component. Accepts `[token]` dynamic route parameter. Calls `verifyAttestationToken` from existing server actions. Maps boolean `published` + `needsManualReview` into three outcome states. Renders three UI branches: success (published), pending-review, and error. All content centered, responsive, with dark-mode support via Tailwind classes.
+
+### Potential concerns to address:
+- None; implementation is complete and tested.
+
+---
+
 ## Progress Update as of 2026-05-18 16:29 Pacific
 *(Most recent updates at top)*
 
