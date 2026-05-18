@@ -63,6 +63,24 @@ A new version is a PR that adds:
 
 Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database. Existing signatures stay attached to the version they signed — they do not migrate.
 
+## "Implement as Code" surface for AI builders
+
+Every version of the Bill of Rights ships with three files:
+
+- `v{X.Y.Z}.md` — human-readable document
+- `v{X.Y.Z}.agents.md` — LLM/coding-agent instruction file (drop into your project as `CLAUDE.md`, `.cursorrules`, `AGENTS.md`, etc.)
+- `v{X.Y.Z}.spec.json` — machine-readable per-principle spec
+
+Builders can grab these directly:
+
+```bash
+curl -fsSL https://aibillofrights.org/v/1.0.0/agents.md > AGENTS.md
+```
+
+…or visit `/v/[version]/as-code` for tool-specific tabs, download buttons, and the public attestation form. Public attestations appear at `/attestations`; claims naming frontier AI labs queue for admin review at `/admin/attestations` before going live.
+
+To promote a signer to admin (Erika, project moderators, etc.), flip `signers.is_admin = true` directly in the Neon console (no admin UI in MVP).
+
 ## Project structure
 
 See `docs/superpowers/specs/2026-05-18-ai-bill-of-rights-design.md` for the canonical design spec and `docs/superpowers/plans/2026-05-18-phase-1-signable-mvp.md` for the implementation plan.
