@@ -85,3 +85,24 @@ export const signatures = pgTable(
     uniqueIndex("signatures_signer_version_unique").on(t.signerId, t.versionId),
   ],
 );
+
+export const attestations = pgTable("attestations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgName: text("org_name").notNull(),
+  productName: text("product_name").notNull(),
+  productUrl: text("product_url"),
+  versionId: uuid("version_id")
+    .notNull()
+    .references(() => versions.id),
+  contactEmail: text("contact_email").notNull(),
+  verificationToken: text("verification_token").notNull().unique(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  needsManualReview: boolean("needs_manual_review").notNull().default(false),
+  manuallyReviewedAt: timestamp("manually_reviewed_at", { withTimezone: true }),
+  manuallyApproved: boolean("manually_approved"),
+  published: boolean("published").notNull().default(false),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+});

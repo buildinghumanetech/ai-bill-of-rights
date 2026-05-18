@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 1: added the `attestations` table to the Drizzle schema and the pglite test helper DDL. Updated the schema test to assert all current tables including `attestations`. All 25 tests pass (9 test files).
+
+### Detail of changes made:
+- `src/lib/db/schema.ts`: appended `export const attestations = pgTable("attestations", {...})` after `signatures`. Columns: `id`, `org_name`, `product_name`, `product_url`, `version_id` (FK to `versions.id`), `contact_email`, `verification_token` (unique), `claimed_at`, `email_verified_at`, `needs_manual_review`, `manually_reviewed_at`, `manually_approved`, `published`, `hidden_at`. No existing tables were touched.
+- `tests/_helpers/pglite-db.ts`: appended `create table attestations (...)` DDL and a partial index `attestations_version_published on attestations(version_id) where published = true` inside the existing `client.exec(...)` call (matches the method chosen in Plan 1 Task 6 fix for multi-statement strings).
+- `tests/lib/db.schema.test.ts`: renamed test from "exports all Phase 1 tables" to "exports all current tables" and added `expect(schema.attestations).toBeDefined()`.
+
+### Potential concerns to address:
+- No concerns introduced in this task; purely additive schema change with no migration applied to any live DB yet.
+
+---
+
 ## Progress Update as of 2026-05-18 15:45 Pacific
 *(Most recent updates at top)*
 
