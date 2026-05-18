@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 10: Created admin review queue at `/admin/attestations`. Added `/admin(.*)` to `isProtectedRoute` in `src/proxy.ts` so Clerk middleware requires authentication for all admin routes. Created `src/app/admin/attestations/page.tsx` with dual-layer authorization: Clerk for authentication, `signers.is_admin` DB check for admin role. Page lists `listPendingReviewAttestations` results in amber cards with Approve and Hide (false claim) form actions. Both server actions re-check `is_admin` before calling `approveAttestation`/`hideAttestation`. Smoke test: curl to `/admin/attestations` returns 307 (Clerk redirect to sign-in for unauthenticated requests). TypeScript clean. All 39 tests pass.
+
+### Detail of changes made:
+- `src/proxy.ts`: Added `"/admin(.*)"` to the `isProtectedRoute` matcher array — Clerk now requires a valid session for any `/admin/...` path before the request reaches Next.js.
+- `src/app/admin/attestations/page.tsx`: New async page. Dual auth: Clerk `auth()` check + `signers.is_admin` DB lookup. Renders "Not authorized" UI if the signed-in user is not an admin (rather than a redirect, so admins can share the URL without confusion). Fetches `listPendingReviewAttestations()` and maps rows to amber review cards. Each card shows org name, product name, version, contact email, product URL, claimed date, and email-verified date. Two inline `"use server"` form actions (`approveFormAction`, `hideFormAction`) each repeat the `is_admin` check before delegating to `approveAttestation`/`hideAttestation`, then redirect back to `/admin/attestations`.
+
+### Potential concerns to address:
+- None; implementation complete and tested.
+
+---
+
 ## Progress Update as of 2026-05-18 16:36 Pacific
 *(Most recent updates at top)*
 
