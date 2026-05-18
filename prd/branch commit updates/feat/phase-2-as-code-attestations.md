@@ -1,5 +1,22 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 15:56 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 2: Generated the `attestations` migration using `pnpm db:generate`. Generated migration file: `drizzle/0001_brainy_hulk.sql`. Verified the SQL contains only the `CREATE TABLE attestations` DDL and the foreign key constraint to `versions.id` — no destructive changes to existing tables. Applied the migration to Neon dev DB using `pnpm db:push`. Migration completed successfully.
+
+### Detail of changes made:
+- `drizzle/0001_brainy_hulk.sql`: New migration file created by drizzle-kit. Contains CREATE TABLE for attestations with 14 columns and a UNIQUE constraint on `verification_token`. Also includes ALTER TABLE to add the FK constraint to `versions(id)`. No DROP or ALTER statements affecting existing tables.
+- `drizzle/meta/_journal.json`: Updated with new entry for migration 0001 (tag: "0001_brainy_hulk").
+- `drizzle/meta/0001_snapshot.json`: New snapshot file capturing the current schema state after the migration.
+- Neon dev DB: Migration successfully applied. All 5 tables now present (versions, signers, signatures, consent_records, attestations).
+
+### Potential concerns to address:
+- None; migration is pure additive. Ready to proceed with Phase 2 server actions and UI work.
+
+---
+
 ## Progress Update as of 2026-05-18 16:00 Pacific
 *(Most recent updates at top)*
 
