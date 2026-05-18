@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:09 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 4: Implemented attestation server actions (`createAttestation`, `verifyAttestationToken`, `approveAttestation`, `hideAttestation`, `submitAttestationAction`) and added the `attestationVerifyEmail` email template. Followed TDD: wrote 6 test cases first (confirmed FAIL), then wrote implementation, confirmed 36/36 tests pass.
+
+### Detail of changes made:
+- `tests/server/attestations.test.ts`: 6 test cases covering `createAttestation` (inserts with token, flags frontier-lab org names), `verifyAttestationToken` (publishes unflagged, keeps flagged unpublished, throws on unknown token), `approveAttestation` (sets `published=true`, `manually_approved=true`, `manually_reviewed_at`), and `hideAttestation` (sets `hidden_at`).
+- `src/server/actions/attestations.ts`: All 5 exported functions. Uses the lazy `getDb()` pattern. `createAttestation` resolves version by string, calls `needsManualReview` from the allowlist, generates a token via `generateVerificationToken`. `verifyAttestationToken` gates publishing on the `needsManualReview` flag. `submitAttestationAction` is a `FormData`-based server action that calls `createAttestation` then fire-and-forgets the verification email. The `hideAttestation` reason parameter is intentionally not persisted (MVP — Vercel logs are the audit trail).
+- `src/lib/email/templates.ts`: Added `attestationVerifyEmail` function returning subject + text body with the verify URL. Consistent with the existing `signConfirmation` export in the same file.
+
+### Potential concerns to address:
+- None; all 36 tests pass with no regressions. Email send is wrapped in try/catch so a send failure does not surface as a 500 to the user.
+
+---
+
 ## Progress Update as of 2026-05-18 15:57 Pacific
 *(Most recent updates at top)*
 
