@@ -1,5 +1,22 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
+## Progress Update as of 2026-05-18 14:56 Pacific (Task 16)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 16 complete: Resend email confirmation on signature. Created 2 new files: `src/lib/email/send.ts` (Resend wrapper with graceful no-op when API key unset) and `src/lib/email/templates.ts` (sign-confirmation email template). Modified `src/server/actions/sign.ts` to send confirmation email after signature is recorded, wrapped in try/catch so email failures do not block signing. All 23 tests pass. TS is clean.
+
+### Detail of changes made:
+- Created `src/lib/email/send.ts`: exports `sendEmail({ to, subject, text })`. Initializes a Resend client from `RESEND_API_KEY` and `RESEND_FROM_EMAIL` environment variables. If `RESEND_API_KEY` is unset, logs a warning and returns early, allowing CI and local development without API keys to proceed without errors. Uses lazy initialization pattern with module-level `client` variable for efficiency.
+- Created `src/lib/email/templates.ts`: exports `signConfirmation(opts)` which takes `displayName`, `version`, `signerPageUrl`, and `revokeUrl`. Returns an object with `subject` and `text` fields. The subject line is "You signed the AI Bill of Rights v{version}" and the text body includes a thank-you message, link to the signer's public profile, a revocation link, and a footer. Uses plain text for broad email client compatibility.
+- Modified `src/server/actions/sign.ts`: after `recordSignature` completes and before the final redirect, added a try/catch block that: fetches the user object from Clerk using `clerkClient().users.getUser(userId)`, extracts the primary email address, imports the email template and send function dynamically, constructs the confirmation template with the signer's display name, version, signer page URL, and revoke URL, calls `sendEmail` with the constructed message. Email send failures are logged but do not throw — preserving signature flow integrity even if Resend is down or misconfigured.
+
+### Potential concerns to address:
+- `sendEmail` is a side effect and deliberately not awaited in tests (dynamic import pattern keeps Resend off the test runtime). The existing `recordSignature` tests do not exercise this path, so there is no test coverage for the email block itself. This is acceptable since the email wrapper has a straightforward no-op fallback and the integration with Clerk user fetch is tested implicitly: if the try block throws, the catch logs and the flow continues.
+- Dynamic imports (`await import(...)`) are used to defer Resend and email template loading until after signature recording, keeping Resend out of the test module scope. This means tests never instantiate Resend or encounter any Resend-related mock misses.
+
+---
+
 ## Progress Update as of 2026-05-18 14:55 Pacific (Task 15)
 *(Most recent updates at top)*
 

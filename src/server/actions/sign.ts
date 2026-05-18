@@ -104,5 +104,27 @@ export async function submitSignAction(formData: FormData): Promise<void> {
     capturedFields: fields,
   });
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  try {
+    const clerkClientFn = (await import("@clerk/nextjs/server")).clerkClient;
+    const clerk = await clerkClientFn();
+    const userObj = await clerk.users.getUser(userId);
+    const email = userObj.primaryEmailAddress?.emailAddress;
+    if (email) {
+      const { signConfirmation } = await import("@/lib/email/templates");
+      const { sendEmail } = await import("@/lib/email/send");
+      const tpl = signConfirmation({
+        displayName: signer.displayName,
+        version: versionString,
+        signerPageUrl: `${siteUrl}/signatories/${signer.id}`,
+        revokeUrl: `${siteUrl}/account/revoke`,
+      });
+      await sendEmail({ to: email, ...tpl });
+    }
+  } catch (err) {
+    // Email send failure should not block the signature flow.
+    console.error("[email] confirmation send failed:", err);
+  }
+
   redirect(`/sign/complete?version=${encodeURIComponent(versionString)}`);
 }
