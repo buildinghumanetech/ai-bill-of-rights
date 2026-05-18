@@ -1,7 +1,24 @@
 # Branch Progress: feat/phase-1-signable-mvp
 
-## Progress Update as of 2026-05-18 14:30 Pacific
+## Progress Update as of 2026-05-18 15:00 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 8 complete: Clerk proxy (middleware) and ClerkProvider wired into the app. Key discovery: Next.js 16 renamed `middleware.ts` to `proxy.ts` — the plan assumed Next.js 15 conventions. Created `src/proxy.ts` (not root `middleware.ts`) with `clerkMiddleware` protecting `/sign/profile(.*)`, `/sign/consent(.*)`, `/sign/complete(.*)`, and `/account(.*)`. Updated `src/app/layout.tsx` to wrap `<html>` in `<ClerkProvider>` and updated metadata title/description. Also fixed a pre-existing TypeScript error in `src/lib/db/sync.ts` (drizzle select return type `{}[]` → `VersionRow[]`) that was blocking `pnpm build`. Build passes (TS clean, 4 static pages generated, Proxy detected) with a properly formatted dummy Clerk key; the postbuild db script fails expectedly without `DATABASE_URL`.
+
+### Detail of changes made:
+- Created `src/proxy.ts` (Next.js 16 `proxy.ts` convention, not `middleware.ts`). Exports `clerkMiddleware` as default export and `config` with matcher. Clerk v6.39.3 accepts both `middleware` and `proxy` filenames for Next 16.
+- Updated `src/app/layout.tsx`: added `ClerkProvider` import from `@clerk/nextjs`, wrapped `<html>` in `<ClerkProvider>`, updated `metadata.title` to "AI Bill of Rights" and `metadata.description` to "A People's Demand for Human-Centered AI".
+- Fixed `src/lib/db/sync.ts`: typed the `db.select().from(versions)` result as `VersionRow[]` using `typeof versions.$inferSelect`, eliminating the TS2339 error that blocked `next build`.
+- `pnpm build` produces `ƒ Proxy (Middleware)` in route output, confirming Next.js 16 recognized `src/proxy.ts`.
+
+### Potential concerns to address:
+- `pnpm build` requires a real (or correctly formatted) `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at build time. Clerk validates the key's base64-decoded frontend API URL against a regex (`/^(([a-z]+)-){2}([0-9]{1,2})\.clerk\.accounts([a-z.]*)(dev|com)$/i`). An empty or syntactically invalid key causes a hard build error during static prerender. The user must copy `.env.example` to `.env.local` and fill in real Clerk keys before running `pnpm build` locally.
+- Next.js 16 renamed Middleware → Proxy. Any future documentation, AI suggestions, or third-party guides referencing `middleware.ts` will need to be translated to `proxy.ts` for this project.
+
+---
+
+## Progress Update as of 2026-05-18 14:30 Pacific
 
 ### Summary of changes since last update
 Task 7 complete: replaced the no-op stub in `scripts/sync-versions.ts` with the real filesystem driver. The script loads `.env` via `dotenv/config`, reads `content/bill-of-rights/versions.json`, loads the three content files per version entry, builds a `VersionInput[]` with `isCurrent` derived from `versions.json.current`, captures the git HEAD SHA (best-effort, null on failure), and calls `syncVersions(db, inputs)`. Exits with code 1 on any error. Verified: project-wide `tsc --noEmit --skipLibCheck` is clean for the script (one pre-existing error in `sync.ts` around drizzle select typing is unrelated). Smoke test with `DATABASE_URL=''` correctly throws the db-client guard error, confirming all script logic up to the db call is correct.

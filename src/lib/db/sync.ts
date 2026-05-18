@@ -21,8 +21,9 @@ export async function syncVersions(
   db: any,
   inputs: VersionInput[],
 ): Promise<void> {
-  const existing = await db.select().from(versions);
-  const existingByVersion = new Map(existing.map((r: any) => [r.version, r]));
+  type VersionRow = typeof versions.$inferSelect;
+  const existing: VersionRow[] = await db.select().from(versions);
+  const existingByVersion = new Map(existing.map((r) => [r.version, r]));
 
   for (const input of inputs) {
     const markdownHash = sha256Hex(input.markdown);
