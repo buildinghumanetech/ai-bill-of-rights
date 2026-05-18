@@ -1,5 +1,23 @@
 # Branch Progress: feat/phase-2-as-code-attestations
 
+## Progress Update as of 2026-05-18 16:27 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Plan 2 Task 7: Created `/v/[version]/as-code` page with tool-tab navigation (Claude Code, Cursor, Copilot, Generic), download buttons for agents.md and spec.json, a curl one-liner, a markdown preview, and the `AttestationForm` component. Added `AsCodeButton` and `AttestationForm` components. Surfaced the new page from the version page (sticky CTA bar now has both SignButton and AsCodeButton) and the landing page (third link in the CTA group). TypeScript clean; all 39 tests pass; all four smoke-test URLs return 200.
+
+### Detail of changes made:
+- `src/components/AsCodeButton.tsx`: New component. Renders a ghost pill-button linking to `/v/${version}/as-code`.
+- `src/components/AttestationForm.tsx`: New component. Server-component form with a `handleSubmit` inline server action that delegates to `submitAttestationAction` (wrapping to satisfy `void` return-type constraint). Collects orgName, productName, productUrl, contactEmail, and hidden version field.
+- `src/app/v/[version]/as-code/page.tsx`: New page. Validates version with `^\d+\.\d+\.\d+$`, checks file existence, reads agents.md from disk for preview. Tool-tab query param (`?tool=claude-code|cursor|copilot|generic`) controls the `saveAsName` filename in download and curl commands. Renders download buttons for agents.md and spec.json, curl one-liner, markdown preview, and `AttestationForm`.
+- `src/app/v/[version]/page.tsx`: Added `AsCodeButton` import; updated sticky CTA `div` from `flex justify-center` to `flex flex-wrap justify-center gap-3` and added `<AsCodeButton version={row.version} />` alongside `<SignButton />`.
+- `src/app/page.tsx`: Added third `<Link>` ("Building AI? Implement this in your code →") pointing to `/v/${versionString}/as-code` in the landing page CTA group.
+
+### Potential concerns to address:
+- `AttestationForm` uses an inline `"use server"` wrapper because `submitAttestationAction` returns `{ ok, id, needsManualReview }` rather than `void`. The wrapper drops the return value to satisfy the `form action` prop type. Could alternatively change `submitAttestationAction` to return `void`, but that would require touching the server action and its tests.
+
+---
+
 ## Progress Update as of 2026-05-18 16:12 Pacific
 *(Most recent updates at top)*
 

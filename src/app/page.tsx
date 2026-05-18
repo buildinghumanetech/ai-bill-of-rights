@@ -41,6 +41,12 @@ export default async function Home() {
           >
             Why this matters
           </Link>
+          <Link
+            href={`/v/${versionString}/as-code`}
+            className="text-base font-medium text-zinc-700 underline-offset-4 hover:underline dark:text-zinc-300"
+          >
+            Building AI? Implement this in your code →
+          </Link>
         </div>
       </div>
     </main>
