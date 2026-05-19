@@ -13,12 +13,36 @@ import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { signConfirmation } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 
+type NameDisplayFormat = "initials" | "first-initial" | "full";
+type NotificationPreference = "major" | "minor" | "proposed";
+
 export interface SignFromModalInput {
   firstName: string;
   lastName: string;
   method: "email" | "phone";
   shareLocation: boolean;
   versionString: string;
+  nameDisplayFormat?: NameDisplayFormat;
+  notificationPreference?: NotificationPreference;
+}
+
+// Local helper (kept private — "use server" disallows non-async exports).
+function formatDisplayName(
+  first: string,
+  last: string,
+  format: NameDisplayFormat,
+): string {
+  const f = first.trim();
+  const l = last.trim();
+  if (format === "full") return `${f} ${l}`.trim();
+  const maskedLast = l
+    ? `${l[0].toUpperCase()}${"*".repeat(Math.max(0, l.length - 1))}`
+    : "";
+  if (format === "first-initial") return `${f} ${maskedLast}`.trim();
+  const maskedFirst = f
+    ? `${f[0].toUpperCase()}${"*".repeat(Math.max(0, f.length - 1))}`
+    : "";
+  return `${maskedFirst} ${maskedLast}`.trim();
 }
 
 export interface SignFromModalResult {
@@ -43,7 +67,11 @@ export async function recordSignatureFromModal(
     if (!firstName || !lastName) {
       return { success: false, error: "First and last name are required." };
     }
-    const displayName = `${firstName} ${lastName}`;
+    const displayName = formatDisplayName(
+      firstName,
+      lastName,
+      input.nameDisplayFormat ?? "full",
+    );
 
     const h = await headers();
     const fields = extractCapturedFields(h, {
@@ -65,6 +93,7 @@ export async function recordSignatureFromModal(
       affiliation: null,
       locationText,
       verificationMethod,
+      notificationPreference: input.notificationPreference ?? "major",
     });
 
     const consentText = renderConsentText(CURRENT_CONSENT_VERSION, {

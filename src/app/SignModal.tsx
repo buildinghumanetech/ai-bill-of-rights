@@ -16,6 +16,24 @@ type Flow = "signUp" | "signIn";
 
 const VERSION = "1.0.0";
 
+function formatNamePreview(
+  first: string,
+  last: string,
+  format: "initials" | "first-initial" | "full",
+): string {
+  const f = first.trim();
+  const l = last.trim();
+  if (format === "full") return `${f} ${l}`.trim();
+  const maskedLast = l
+    ? `${l[0].toUpperCase()}${"*".repeat(Math.max(0, l.length - 1))}`
+    : "";
+  if (format === "first-initial") return `${f} ${maskedLast}`.trim();
+  const maskedFirst = f
+    ? `${f[0].toUpperCase()}${"*".repeat(Math.max(0, f.length - 1))}`
+    : "";
+  return `${maskedFirst} ${maskedLast}`.trim();
+}
+
 function clerkErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "errors" in err) {
     const errors = (err as { errors?: Array<{ message?: string }> }).errors;
@@ -41,6 +59,12 @@ export default function SignModal({ open, onClose }: Props) {
   const [method, setMethod] = useState<Method>("email");
   const [identifier, setIdentifier] = useState("");
   const [shareLocation, setShareLocation] = useState(true);
+  const [nameDisplayFormat, setNameDisplayFormat] = useState<
+    "initials" | "first-initial" | "full"
+  >("full");
+  const [notificationPreference, setNotificationPreference] = useState<
+    "major" | "minor" | "proposed"
+  >("major");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -114,6 +138,8 @@ export default function SignModal({ open, onClose }: Props) {
           method,
           shareLocation,
           versionString: VERSION,
+          nameDisplayFormat,
+          notificationPreference,
         });
         if (!res.success) {
           setError(res.error ?? "We couldn't record your signature.");
@@ -480,53 +506,47 @@ export default function SignModal({ open, onClose }: Props) {
               </label>
             </div>
 
-            <fieldset className="mt-5">
-              <legend className="text-sm font-medium text-zinc-700">
+            <div
+              className="mt-5 flex items-center justify-between gap-4"
+              role="radiogroup"
+              aria-label="Verification method"
+            >
+              <span className="text-sm font-medium text-zinc-700">
                 Verify me via
-              </legend>
-              <div className="mt-2 flex items-center gap-4">
+              </span>
+              <div className="relative inline-flex rounded-full bg-zinc-100 p-1 text-sm">
+                <span
+                  aria-hidden
+                  className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200 ${
+                    method === "phone"
+                      ? "translate-x-[calc(100%+0.25rem)]"
+                      : "translate-x-0"
+                  }`}
+                />
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={method === "email"}
                   onClick={() => setMethod("email")}
-                  className={`text-sm transition-colors ${
-                    method === "email"
-                      ? "font-semibold text-zinc-950"
-                      : "text-zinc-500 hover:text-zinc-700"
+                  className={`relative z-10 rounded-full px-4 py-1.5 font-medium transition-colors ${
+                    method === "email" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
                   Email
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setMethod(method === "email" ? "phone" : "email")
-                  }
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${
-                    method === "phone" ? "bg-blue-600" : "bg-zinc-300"
-                  }`}
-                  aria-label="Toggle verification method"
-                  role="switch"
+                  role="radio"
                   aria-checked={method === "phone"}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                      method === "phone" ? "translate-x-5" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-                <button
-                  type="button"
                   onClick={() => setMethod("phone")}
-                  className={`text-sm transition-colors ${
-                    method === "phone"
-                      ? "font-semibold text-zinc-950"
-                      : "text-zinc-500 hover:text-zinc-700"
+                  className={`relative z-10 rounded-full px-4 py-1.5 font-medium transition-colors ${
+                    method === "phone" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
-                  Phone
+                  Phone SMS
                 </button>
               </div>
-            </fieldset>
+            </div>
 
             <div className="mt-4">
               <label className="block">
@@ -559,6 +579,112 @@ export default function SignModal({ open, onClose }: Props) {
               />
               <span>Share my approximate city &amp; state</span>
             </label>
+
+            {/* Show my name as — radio with live preview */}
+            <fieldset className="mt-5">
+              <legend className="text-sm font-medium text-zinc-700">
+                Show my name as
+              </legend>
+              <div
+                className="mt-2 flex flex-col gap-1.5"
+                role="radiogroup"
+                aria-label="Name display format"
+              >
+                {(
+                  [
+                    { value: "initials", sample: "J*** D**" },
+                    { value: "first-initial", sample: "Jane D**" },
+                    { value: "full", sample: "Jane Doe" },
+                  ] as const
+                ).map((opt) => {
+                  const preview =
+                    firstName.trim() && lastName.trim()
+                      ? formatNamePreview(
+                          firstName,
+                          lastName,
+                          opt.value,
+                        )
+                      : opt.sample;
+                  return (
+                    <label
+                      key={opt.value}
+                      className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
+                    >
+                      <input
+                        type="radio"
+                        name="name-display-format"
+                        value={opt.value}
+                        checked={nameDisplayFormat === opt.value}
+                        onChange={() => setNameDisplayFormat(opt.value)}
+                        className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                      />
+                      <span className="font-mono text-sm text-zinc-900">
+                        {preview}
+                      </span>
+                      <span className="ml-1 text-xs text-zinc-500">
+                        {opt.value === "initials" &&
+                          "(just initials show)"}
+                        {opt.value === "first-initial" &&
+                          "(first name plus initial)"}
+                        {opt.value === "full" && "(full name)"}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {/* Alert me when updated */}
+            <fieldset className="mt-5">
+              <legend className="text-sm font-medium text-zinc-700">
+                Alert me when the AI Bill of Rights is updated
+              </legend>
+              <div
+                className="mt-2 flex flex-col gap-1.5"
+                role="radiogroup"
+                aria-label="Notification preference"
+              >
+                {(
+                  [
+                    {
+                      value: "major",
+                      label: "Major revisions",
+                      hint: "v2.0.0 → v3.0.0 (default)",
+                    },
+                    {
+                      value: "minor",
+                      label: "Minor revisions",
+                      hint: "v1.0.0 → v1.1.0",
+                    },
+                    {
+                      value: "proposed",
+                      label: "Proposed revisions",
+                      hint: "Pull requests against the document",
+                    },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
+                  >
+                    <input
+                      type="radio"
+                      name="notification-preference"
+                      value={opt.value}
+                      checked={notificationPreference === opt.value}
+                      onChange={() =>
+                        setNotificationPreference(opt.value)
+                      }
+                      className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                    />
+                    <span>{opt.label}</span>
+                    <span className="ml-1 text-xs text-zinc-500">
+                      {opt.hint}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             {/* Clerk CAPTCHA (required for sign-up in v6) */}
             <div id="clerk-captcha" className="mt-4" />

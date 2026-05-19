@@ -1,5 +1,97 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-18 18:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Modal form polish: inline segmented "Email / Phone SMS" slider, a
+name-display-format radio group with live previews, and a
+notification-preference radio group. Adds a `notification_preference`
+column to `signers` (default `'major'`) with a hand-written migration
+file that needs to be applied to Neon before signing works end-to-end
+again.
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`** form additions:
+  - Verification-method UI is now a segmented control inline with the
+    "Verify me via" label, animated white pill behind the active
+    option. "Email" or "Phone SMS" inside the active pill, no slider
+    track.
+  - New `formatNamePreview()` helper (same logic as the server-side
+    formatter) computes live previews from current First/Last inputs.
+    Falls back to "Jane Doe" sample text until both fields have
+    content.
+  - "Show my name as" radio group: three options — initials (`J*** D**`),
+    first + initial (`Jane D**`), full (`Jane Doe`, default). Each
+    label is mono-spaced and shows the actual masked preview based on
+    current input.
+  - "Alert me when the AI Bill of Rights is updated" radio group: three
+    options — Major revisions (default, hint "v2.0.0 → v3.0.0"), Minor
+    revisions ("v1.0.0 → v1.1.0"), Proposed revisions ("Pull requests
+    against the document").
+  - Both new selections are state on the modal and passed through to
+    the server action call (`nameDisplayFormat`, `notificationPreference`).
+- **`src/server/actions/sign-from-modal.ts`**:
+  - `SignFromModalInput` extended with optional `nameDisplayFormat`
+    and `notificationPreference`.
+  - New private `formatDisplayName(first, last, format)` runs server-side
+    to compute the masked name to store as `signers.display_name`. So
+    if a signer picks "initials", the public listings/profile pages
+    only ever see e.g. `D*** O***`. Their underlying first/last go to
+    Clerk's profile as before and are not exposed publicly.
+  - The function is **not exported** because the file has
+    `"use server"`, which disallows non-async exports.
+    `SignModal.tsx` has its own client-side `formatNamePreview()` with
+    identical logic for live previews — a small duplication that's
+    cheaper than introducing a shared utility module right now.
+  - Notification preference is forwarded to `upsertSignerProfile`.
+- **`src/server/actions/profile.ts`**:
+  - `ProfileInput` extended with `notificationPreference?:
+    "major" | "minor" | "proposed"`.
+  - Upsert sets the column on both insert and update paths; defaults
+    to `'major'` if the caller doesn't pass one (matches the DB
+    default).
+- **`src/lib/db/schema.ts`**:
+  - Added `notificationPreference` column to `signers` with the enum
+    `["major", "minor", "proposed"]` and a default of `'major'`.
+- **`drizzle/0001_add_signer_notification_preference.sql`** (new): a
+  one-line `ALTER TABLE signers ADD COLUMN notification_preference text
+  NOT NULL DEFAULT 'major';`. Written by hand rather than via
+  `drizzle-kit generate` so the Drizzle journal/snapshot is **not**
+  updated — next time someone runs `drizzle-kit generate` it will
+  notice the drift and re-emit a similar migration. For now the SQL
+  needs to be applied manually (Neon SQL editor) or via
+  `pnpm drizzle-kit migrate` before a signature record can be
+  inserted, otherwise the insert will fail with a column-doesn't-exist
+  error.
+
+### Potential concerns to address:
+- **The migration must be applied to the active Neon DB** before
+  this version of the modal can record a signature. Until then,
+  signing will fail at the `INSERT INTO signers` step. Run:
+  ```sql
+  ALTER TABLE signers ADD COLUMN notification_preference text NOT NULL
+  DEFAULT 'major';
+  ```
+  in Neon's SQL editor, or `pnpm drizzle-kit migrate` if drizzle-kit
+  is set up locally with the right `DATABASE_URL`.
+- **Drizzle metadata is now out of sync with the SQL we applied.**
+  When the next migration is generated via `drizzle-kit generate`,
+  it'll regenerate the same ALTER (because the snapshot doesn't know
+  the column was added) — easy to discard but worth being aware of.
+  Long-term fix: regenerate `0001_*.sql` + snapshot + journal through
+  drizzle-kit and force-replace the hand-written version.
+- **No update-notification emails are actually sent yet.** The
+  preference is stored but unused. When a new version of the document
+  is published, a separate cron/job needs to honor the
+  `notification_preference` thresholds and send via Resend.
+- **The masked display name is one-way.** A signer who picks
+  "initials" and later wants their full name shown has to revoke and
+  re-sign (per the existing revocation model). Adding an "edit
+  display preferences" action on `/account` would be a small follow-up.
+
+---
+
 ## Progress Update as of [2026-05-18 18:30 Pacific]
 *(Most recent updates at top)*
 
