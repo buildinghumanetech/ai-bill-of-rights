@@ -1,5 +1,24 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 17:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `src/components/AnchorSentence.tsx` — a client component that wraps a single anchored sentence with a hover-reveal comment-count badge. This is Task 2.6 of 14. `tsc --noEmit` clean. No UI integration yet (Tasks 2.10–2.12).
+
+### Detail of changes made:
+- Created `src/components/AnchorSentence.tsx`:
+  - Renders a `<span>` with `data-anchor-id` so the parent `DocumentRenderer` `mouseup` listener can identify which anchor the user is interacting with.
+  - Shows a small inline badge (count or `+`) that is `opacity-0` by default and `opacity-100` on `group-hover` via Tailwind.
+  - Badge click dispatches `anchor-open-comments` CustomEvent with `{ anchorId }` so the future `CommentDrawer` (Task 2.11) can react without a direct React prop-drilling dependency.
+  - No `mode` prop in Phase 2 — Task 3.6 will add that during the proposed-tab integration.
+  - `count` prop drives the badge label: `💬 N` when N > 0, otherwise `+`.
+
+### Potential concerns to address:
+- The `anchor-open-comments` CustomEvent is consumed nowhere yet; the listener will land in Task 2.11 (CommentDrawer).
+
+---
+
 ## Progress Update as of 2026-05-19 17:00 Pacific
 *(Most recent updates at top)*
 
