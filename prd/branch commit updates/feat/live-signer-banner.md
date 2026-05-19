@@ -1,5 +1,21 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 18:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 8 complete: all three `{signatureCount.toLocaleString()}` usages replaced with `<SignatureCount />`. `page.tsx` drops its own DB fetch and `async` keyword; `FloatingSignButton.tsx` loses its `Props` interface and `signatureCount` parameter. A fourth site (`src/app/v/[version]/page.tsx`) was not in the plan but also passed `signatureCount` to `FloatingSignButton` — fixed there too to unblock the type-check. TypeScript type-check and `pnpm build` both pass clean.
+
+### Detail of changes made:
+- **`src/app/page.tsx`**: Removed `getSignatureCount` import; added `SignatureCount` import. Converted `async function Home()` → `function Home()` (no more `await`). Deleted the `let signatureCount = 0; try { ... } catch { ... }` block. Replaced three `{signatureCount.toLocaleString()}` usages with `<SignatureCount />`, accepting the plural hardcode ("other real people", "who have") at count=1 per plan. Changed `<FloatingSignButton signatureCount={signatureCount} />` → `<FloatingSignButton />`.
+- **`src/app/FloatingSignButton.tsx`**: Added `SignatureCount` import. Removed `interface Props` and the `{ signatureCount }: Props` destructuring; function is now `FloatingSignButton()` with no props. Replaced `{signatureCount.toLocaleString()} {signatureCount === 1 ? "other" : "others"}` with `<SignatureCount /> others` (hardcoded plural per plan).
+- **`src/app/v/[version]/page.tsx`** (unplanned fix): This file also imported `getSignatureCount` and passed the prop. Removed the import, the fetch block, and the prop from `<FloatingSignButton />`. This was necessary to pass `pnpm tsc --noEmit`; not doing it would be a type error.
+
+### Potential concerns to address:
+- The `src/app/v/[version]/page.tsx` change was not listed in the plan. The plan only enumerated `page.tsx` and `FloatingSignButton.tsx`, but the prop removal from `FloatingSignButton` made the version-page a type error. The fix is minimal and correct — the version page's count display was the `FloatingSignButton` pill anyway, which now reads from context.
+
+---
+
 ## Progress Update as of 2026-05-19 17:00 Pacific
 *(Most recent updates at top)*
 
