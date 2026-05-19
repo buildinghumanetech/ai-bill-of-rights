@@ -41,7 +41,13 @@ export default async function SignerProfile({
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32 sm:py-24">
       <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-        A signer of the AI Bill of Rights
+        A signer of the{" "}
+        <Link
+          href="/"
+          className="text-zinc-700 underline-offset-4 hover:text-zinc-900 hover:underline"
+        >
+          AI Bill of Rights
+        </Link>
       </p>
 
       <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-2">
@@ -87,7 +93,13 @@ export default async function SignerProfile({
 
       <section className="mt-14 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
         <h2 className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
-          Add your name to the AI Bill of Rights
+          Add your name to the{" "}
+          <Link
+            href="/"
+            className="underline underline-offset-4 hover:text-zinc-700"
+          >
+            AI Bill of Rights
+          </Link>
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700">
           Nine commitments we&apos;re demanding from every AI company.
@@ -98,16 +110,6 @@ export default async function SignerProfile({
             Sign the AI Bill of Rights →
           </SignTrigger>
         </div>
-        <p className="mt-4 text-xs text-zinc-500">
-          Or{" "}
-          <Link
-            href="/"
-            className="text-zinc-700 underline underline-offset-4 hover:text-zinc-900"
-          >
-            read the full document first
-          </Link>
-          .
-        </p>
       </section>
 
       <p className="mt-14 text-xs text-zinc-500">

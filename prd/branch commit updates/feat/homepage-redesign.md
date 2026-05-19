@@ -1,5 +1,29 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 06:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+On `/signatories/[id]`, linked both occurrences of "AI Bill of Rights"
+(top subtitle and CTA card heading) to the home page, and removed the
+secondary "Or read the full document first" link below the Sign CTA
+since the heading itself now provides that affordance.
+
+### Detail of changes made:
+- **`src/app/signatories/[id]/page.tsx`**:
+  - Top subtitle: "A signer of the **AI Bill of Rights**" — the
+    bolded phrase is now a Link to `/` with subtle underline-on-hover.
+  - CTA card heading: "Add your name to the **AI Bill of Rights**" —
+    same treatment, underlined inline link.
+  - Removed the `<p>Or <Link href="/">read the full document
+    first</Link>.</p>` footnote inside the CTA section. The heading
+    link replaces it.
+
+### Potential concerns to address:
+- None.
+
+---
+
 ## Progress Update as of [2026-05-19 06:15 Pacific]
 *(Most recent updates at top)*
 
