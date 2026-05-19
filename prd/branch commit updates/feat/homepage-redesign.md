@@ -1,5 +1,44 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 09:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Vercel build failed on the previous push because the preview
+environment was missing Clerk env vars — the prerenderer for
+/_not-found errored with "Missing publishableKey". Pushed all six
+env vars (Clerk publishable + secret, Database, Resend key + from
+email, public site URL) to Vercel preview+production via the API,
+then pushed an empty commit to retrigger the build.
+
+### Detail of changes made:
+- Vercel project: 6 env vars upserted to `preview` and `production`
+  targets via `POST https://api.vercel.com/v10/projects/<id>/env`
+  with `upsert=true`. Verified via `GET /env` listing afterwards.
+  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (plain, the publishable
+    half — safe to be public per Clerk's design)
+  - `CLERK_SECRET_KEY` (encrypted)
+  - `DATABASE_URL` (encrypted)
+  - `RESEND_API_KEY` (encrypted)
+  - `RESEND_FROM_EMAIL` (encrypted)
+  - `NEXT_PUBLIC_SITE_URL` (plain) — set to
+    `https://ai-for-people.org` so confirmation emails point to the
+    production domain.
+- Empty commit pushed to trigger a rebuild on the same branch
+  (`feat/homepage-redesign`).
+
+### Potential concerns to address:
+- **Production deploy on the live `ai-for-people.org` domain** is
+  not affected by this branch; the production env on main already
+  had the vars from earlier work. The new vars are also targeted at
+  production, which is idempotent (upsert).
+- **Token rotation reminder still stands**: the Vercel token used
+  for these API calls is still the same one from earlier in this
+  conversation. Rotate at https://vercel.com/account/tokens after
+  the PR merges.
+
+---
+
 ## Progress Update as of [2026-05-19 09:15 Pacific]
 *(Most recent updates at top)*
 
