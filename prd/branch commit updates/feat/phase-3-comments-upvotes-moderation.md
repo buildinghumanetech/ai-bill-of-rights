@@ -1,5 +1,25 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 2: migration generated and applied)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Generated Drizzle migration file (`drizzle/0002_useful_excalibur.sql`) via `pnpm db:generate` and successfully applied it to Neon via `pnpm db:push`. Migration is additive only: creates three new tables (`comments`, `comment_upvotes`, `reports`) with all foreign key constraints and the unique index for upvotes.
+
+### Detail of changes made:
+- Migration file: `drizzle/0002_useful_excalibur.sql` (37 lines total)
+- Creates three tables with CREATE TABLE statements (lines 1-28)
+- Adds six foreign key constraints via ALTER TABLE (lines 30-36)
+- Creates unique index `comment_upvotes_pk` on `(comment_id, signer_id)` (line 37)
+- All three tables properly reference existing tables (`versions`, `signers`, `comments`)
+- No destructive operations (no DROP/ALTER to existing tables)
+- Migration applied successfully to Neon (exit 0)
+
+### Potential concerns to address:
+- None. Task 2 complete and ready for Task 3 (server action implementations).
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 1: schema tables)
 *(Most recent updates at top)*
 
