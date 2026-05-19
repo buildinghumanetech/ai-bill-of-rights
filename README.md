@@ -16,12 +16,37 @@ This repo is the source of truth for the document. Each version of the Bill of R
 
 1. `pnpm install`
 2. Copy `.env.example` to `.env.local` and fill in:
-   - `DATABASE_URL` from a Neon project (free tier is fine for dev)
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from a Clerk app
+   - `DATABASE_URL` — see "Dev / prod database isolation" below
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` — see "Dev / prod Clerk instances" below
    - `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (optional locally — emails will no-op without them)
 3. `pnpm db:push` — apply the schema to your Neon dev branch
 4. `pnpm sync-versions` — seed the `versions` table from `content/bill-of-rights/`
 5. `pnpm dev` — open http://localhost:3000
+
+### Dev / prod database isolation
+
+Local development must **never** point at the production database. We use [Neon branches](https://neon.tech/docs/introduction/branching) for copy-on-write isolation:
+
+- `main` branch — production data. Lives in Vercel env as `DATABASE_URL` (Production scope only).
+- `dev` branch — copy-on-write fork of `main` for local development. Lives in `.env.local` and also in Vercel env as `DATABASE_URL` (Preview scope).
+
+To set up a dev branch:
+
+1. Open the [Neon console](https://console.neon.tech) → your project → Branches → **Create branch**, parent = `main`, name = `dev`.
+2. Open the new `dev` branch → Connection details → copy the **pooled** connection string.
+3. Paste it into `.env.local` as `DATABASE_URL`.
+4. Run `pnpm db:push` then `pnpm sync-versions` to apply the schema and seed the `versions` table on the dev branch.
+
+Maintenance scripts under `scripts/` (e.g. `rename-version.ts`, `merge-version-rows.ts`) connect via `DATABASE_URL` from `.env.local` — so they only ever touch the dev branch as long as your `.env.local` is correct. Double-check before running anything destructive.
+
+### Dev / prod Clerk instances
+
+We use two Clerk instances on a single Clerk account:
+
+- **Development instance** (`pk_test_…` / `sk_test_…`) — used in `.env.local` and in Vercel Preview deployments. Email OTPs from this instance are branded `[Development]` and sent from `notifications@accounts.dev` (Clerk's shared sender). That's fine for testing.
+- **Production instance** (`pk_live_…` / `sk_live_…`) — used in Vercel Production scope only. Configure the from-address on `verify@ai-for-people.org` (or your own verified domain) via Clerk Dashboard → Customization → Email templates.
+
+Never commit live keys. They go in Vercel env (Production scope) and nowhere else.
 
 ## Tests
 
