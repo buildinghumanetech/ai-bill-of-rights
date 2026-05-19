@@ -1,5 +1,21 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 15:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Implemented Task 3: pure `liveSignersReducer` at `src/app/live-signers-reducer.ts` with 8 Vitest unit tests. All 8 tests pass; the 2 pre-existing failures in `revoke.test.ts` and `sign.test.ts` are unchanged.
+
+### Detail of changes made:
+- **`src/app/live-signers-reducer.ts`** (new): Exports `LiveSignerEvent`, `LiveSignersState`, `LiveSignersAction` types, `QUEUE_CAP = 5` constant, `initialLiveSignersState(count)` factory, and `liveSignersReducer(state, action)`. Two action types: `poll-response` (handles cold-start vs. regular polling, reverses server newest-first to oldest-first queue order, caps queue at `QUEUE_CAP`, drains head to `currentEvent` when banner is idle) and `event-finished` (advances queue head to `currentEvent` or clears it). `latestSignedAt` tracks the newest `signedAt` seen — used by the provider (Task 4) as the `?since=` cursor for subsequent poll requests.
+- **`tests/app/live-signers-reducer.test.ts`** (new): 8 tests in 4 `describe` blocks: (1) initial state seeds count from prop, (2) cold-start with no signers updates count only, (3) cold-start with signers promotes most recent to `currentEvent` and queues nothing, (4) regular poll reverses to oldest-first and drains head, (5) regular poll does not displace active `currentEvent`, (6) queue cap respected at `QUEUE_CAP`, (7) `event-finished` with non-empty queue advances to next, (8) `event-finished` with empty queue clears `currentEvent`. No mocks needed — pure function.
+- **Design decision**: `LiveSignerEvent.signedAt` is `string` (ISO), not `Date`. This is intentional — it is the client-side wire shape returned by `NextResponse.json()` (which serializes `Date` → ISO string). Task 4's provider will use `RecentSignerEvent` from the API layer and accept the JSON payload directly without converting types.
+
+### Potential concerns to address:
+- **Pre-existing test failures** in `tests/server/revoke.test.ts` (`relation "reports" does not exist`) and `tests/server/sign.test.ts` (transaction rollback assertion) remain. Not regressions.
+
+---
+
 ## Progress Update as of 2026-05-19 14:45 Pacific
 *(Most recent updates at top)*
 
