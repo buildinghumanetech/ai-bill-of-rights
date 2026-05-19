@@ -94,8 +94,15 @@ export default function HeroSection() {
     <section ref={sectionRef} className="relative h-[220vh]">
       <div className="sticky top-0 flex h-screen w-full items-center justify-center overflow-hidden bg-zinc-900">
         <div
-          className="grid w-full will-change-transform"
+          className="grid shrink-0 will-change-transform"
           style={{
+            // Size to max(100vw, 100vh) so the square grid fully covers
+            // portrait viewports (mobile). shrink-0 prevents the flex parent
+            // from collapsing this back to 100vw, which would otherwise
+            // leave cells 1/5 of width tall but row tracks 1/5 of height —
+            // visible as horizontal black stripes between rows.
+            width: "max(100vw, 100vh)",
+            height: "max(100vw, 100vh)",
             gridTemplateColumns: `repeat(${COLS}, 1fr)`,
             gridTemplateRows: `repeat(${ROWS}, 1fr)`,
             transformOrigin: "50% 50%",
@@ -112,7 +119,11 @@ export default function HeroSection() {
                 alt=""
                 fill
                 priority={i === CENTER_INDEX}
-                sizes="20vw"
+                quality={i === CENTER_INDEX ? 90 : 75}
+                // Center cell zooms 5x at scale=5, so it needs ~100vw worth
+                // of pixels to stay sharp. Outer cells never zoom past their
+                // 1/5 grid track, so 20vw is plenty.
+                sizes={i === CENTER_INDEX ? "100vw" : "20vw"}
                 className="object-cover"
                 style={
                   i === CENTER_INDEX

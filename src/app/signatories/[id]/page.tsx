@@ -121,7 +121,7 @@ export default async function SignerProfile({
         </p>
         <div className="mt-6">
           <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
-            Sign the AI Bill of Rights →
+            Sign the AI Bill of Rights
           </SignTrigger>
         </div>
       </section>
