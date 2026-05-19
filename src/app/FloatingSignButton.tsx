@@ -22,10 +22,11 @@ export default function FloatingSignButton({ signatureCount }: Props) {
           onClick={() => setOpen(true)}
           className={buttonClasses}
         >
-          Sign the AI Bill of Rights →
+          Sign the{" "}
+          <span className="block sm:inline">AI Bill of Rights</span>
         </button>
 
-        <p className="pointer-events-auto rounded-full bg-white/70 px-4 py-1 text-xs text-zinc-700 backdrop-blur-md backdrop-saturate-150">
+        <p className="pointer-events-auto rounded-full bg-white/70 px-4 py-1 text-center text-xs text-zinc-700 backdrop-blur-md backdrop-saturate-150">
           Join{" "}
           <Link
             href="/signers"
