@@ -15,7 +15,11 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    // Skip Next internals and known static-asset extensions only. The
+    // previous `.*\\..*` was too greedy — it also matched dotted route
+    // segments like `/v/0.0.1`, so clerkMiddleware didn't run there and
+    // `auth()` in the root layout threw on every dotted-version page.
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|map|avif)).*)",
     "/(api|trpc)(.*)",
   ],
 };
