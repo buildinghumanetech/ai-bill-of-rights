@@ -1,6 +1,6 @@
 # Design: Current vs Proposed tabs + proposed-edits workflow
 
-**Status:** Draft, awaiting user review.
+**Status:** Self-reviewed; awaiting user review.
 **Author:** Claude (Opus 4.7) in collaboration with Daniel Odio.
 **Date:** 2026-05-19.
 
@@ -98,7 +98,7 @@ Anonymous compose: a user can start typing a Comment or Suggest Changes without 
 
 ## Data model
 
-Three new tables, one column on a new column on signers, and (in a separate later phase) a way to migrate Phase 3's `comments`/`comment_upvotes`/`reports` tables back from the closed PRs into the new schema.
+Four new tables. No schema changes to existing tables (`signers`, `signatures`, `consent_records`, `versions`). The closed Phase 3 PR (#4) is being superseded, not re-introduced — its `comments`/`comment_upvotes`/`reports` definitions don't carry over; we redefine `comments` here with a polymorphic anchor and add `proposed_edits`, `proposal_upvotes`, and `endorsements`.
 
 ### `proposed_edits`
 
@@ -228,16 +228,26 @@ Lists all `pending` proposals for the current `baseVersionId`. Columns: proposer
 
 No changes to `signers`, `signatures`, `consent_records`, or `versions` schemas. The whole feature lives in net-new tables that join to existing ones.
 
+## Anchor stability + comment persistence across releases
+
+Anchor IDs (e.g. `article-1-s-3`) are emitted by the markdown parser per version. When the admin releases the next version, the release flow has two jobs:
+
+1. **Preserve anchor IDs for unchanged sentences.** For every sentence in the new version's markdown that is byte-identical to a sentence in the base version, carry the same `{#anchor-id}` marker forward. Only newly-inserted sentences get fresh IDs.
+2. **Don't migrate comments or proposals.** Both `comments` and `proposed_edits` rows are keyed on `baseVersionId`. When a new version ships, those rows stay attached to the version they were submitted against. The UI surfaces only the *current* `baseVersionId`'s rows on `/` and `/proposed`. Older comments remain in the database but are not rendered on the archive view at `/v/[old-version]` (consistent with the archive-view rule already shipped in PR #7).
+
+This keeps the model simple. Consequence: if a user comments on Current and then a new version ships before an admin acts, that comment is effectively archived. Acceptable for v1.
+
 ## Open questions / out of scope
 
-- **Forking** (a user signs a fork) — explicitly deferred. `versions.is_user_fork` + `versions.parent_version_id` columns are already in the schema and reserved for this.
-- **Conflict between two `replace` proposals on the same anchor** — both can be `accepted`? Spec says no: accepting one of two proposals on the same anchor should auto-reject the other (with a small note). Implementation: a check in the accept action.
-- **Conflict between an `accepted` `insert_after` and a `delete` of the target anchor** — accept rejects insert-after first, then accept the delete. The system should warn the admin.
-- **What if the doc has zero accepted edits at release time?** — disallow release. The admin gets an error: "No changes to release. Accept at least one proposal first."
+- **Forking** (a user signs a fork) — deferred. `versions.is_user_fork` + `versions.parent_version_id` columns are already in the schema and reserved for this.
+- **Two `replace` proposals on the same anchor** — both cannot be `accepted`. Accepting one auto-rejects the other (with an admin-visible note recording the auto-rejection). Enforced in the accept action.
+- **An `accepted` `insert_after` plus a `delete` of the same anchor** — also mutually exclusive: accepting a delete on an anchor auto-rejects any pending or accepted `insert_after` for that anchor (with a warning shown to the admin at accept time).
+- **Suggest-Changes on a sentence that an accepted `delete` has removed** — disallowed by the UI: the highlight popover does not appear on deleted anchors on `/proposed`. Backend rejects POSTs that target a deleted anchor.
+- **Zero accepted edits at release time** — disallow release. Admin gets an error: "No changes to release. Accept at least one proposal first."
 - **Markdown formatting inside edits** — v1 is plain text; no bold/italic. Add later if needed.
 - **Spam moderation** — soft-banned signers (existing column) can't submit comments or proposals. Rate-limit submissions per signer (e.g. 10/hour). No automated content filter v1.
 - **Endorsement email throttling** — if the user endorses 5 drafts in a row, they get 5 emails when each ships. Acceptable for v1.
 
 ---
 
-*End of design doc. Spec self-review pending. User review pending.*
+*End of design doc.*
