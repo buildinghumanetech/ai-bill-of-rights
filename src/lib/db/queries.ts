@@ -1,5 +1,5 @@
-import { eq, count, desc, gt, and, isNull } from "drizzle-orm";
-import { versions, signatures, signers } from "./schema";
+import { eq, count, desc, gt, and, isNull, asc } from "drizzle-orm";
+import { versions, signatures, signers, comments } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -120,4 +120,63 @@ export async function listRecentSignersSince(
     .where(and(gt(signatures.signedAt, cutoff), isNull(signers.softBannedAt)))
     .orderBy(desc(signatures.signedAt));
   return rows as RecentSignerEvent[];
+}
+
+export interface CommentRow {
+  id: string;
+  body: string;
+  signerId: string;
+  displayName: string;
+  parentCommentId: string | null;
+  createdAt: Date;
+}
+
+export async function countCommentsByAnchor(
+  db: any,
+  baseVersionId: string,
+): Promise<Record<string, number>> {
+  const rows = await db
+    .select({
+      anchorId: comments.anchorId,
+    })
+    .from(comments)
+    .where(
+      and(
+        eq(comments.baseVersionId, baseVersionId),
+        isNull(comments.hiddenAt),
+      ),
+    );
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.anchorId) continue;
+    out[r.anchorId] = (out[r.anchorId] ?? 0) + 1;
+  }
+  return out;
+}
+
+export async function listCommentsForAnchor(
+  db: any,
+  baseVersionId: string,
+  anchorId: string,
+): Promise<CommentRow[]> {
+  const rows = await db
+    .select({
+      id: comments.id,
+      body: comments.body,
+      signerId: comments.signerId,
+      displayName: signers.displayName,
+      parentCommentId: comments.parentCommentId,
+      createdAt: comments.createdAt,
+    })
+    .from(comments)
+    .innerJoin(signers, eq(signers.id, comments.signerId))
+    .where(
+      and(
+        eq(comments.baseVersionId, baseVersionId),
+        eq(comments.anchorId, anchorId),
+        isNull(comments.hiddenAt),
+      ),
+    )
+    .orderBy(asc(comments.createdAt));
+  return rows as CommentRow[];
 }

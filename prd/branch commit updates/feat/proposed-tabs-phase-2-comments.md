@@ -4,6 +4,26 @@
 *(Most recent updates at top)*
 
 ### Summary of changes since last update
+Added `countCommentsByAnchor` and `listCommentsForAnchor` query functions to `src/lib/db/queries.ts` with full TDD (red → green cycle confirmed). This is Task 2.2 of 14.
+
+### Detail of changes made:
+- Modified `src/lib/db/queries.ts`: added `asc` to the drizzle-orm import (existing `and`, `isNull`, `eq` were already present); added `comments` to the schema import alongside the existing `versions`, `signatures`, `signers`. Appended `CommentRow` interface plus `countCommentsByAnchor(db, baseVersionId)` and `listCommentsForAnchor(db, baseVersionId, anchorId)` exports at the end of the file.
+- `countCommentsByAnchor`: selects all non-hidden (`hiddenAt IS NULL`) comments for a version, then aggregates counts in JS keyed by `anchorId`. Returns `Record<string, number>` — only anchor IDs with at least one visible comment appear in the map.
+- `listCommentsForAnchor`: inner-joins `comments` with `signers` to get `displayName`, filters by `baseVersionId`, `anchorId`, and `hiddenAt IS NULL`, orders `ASC` by `createdAt` (oldest-first).
+- Both functions take an explicit `db` as first arg (matching the pattern used by `countCommentsByAnchor` etc. in the file), with no default — callers always supply the db in tests; production callers will supply it from the route handler.
+- Created `tests/lib/db.queries.comments.test.ts` with two tests: one for `countCommentsByAnchor` (inserts 4 comments, 1 hidden, expects `{preamble-s-1: 2, preamble-s-2: 1}`), one for `listCommentsForAnchor` (inserts 3 comments across 2 anchors, expects 2 rows for the target anchor in insertion order with correct `displayName`).
+- Full test suite: 49 passed (15 test files). `tsc --noEmit` clean.
+
+### Potential concerns to address:
+- `countCommentsByAnchor` uses in-process aggregation rather than a SQL `GROUP BY` + `COUNT(*)`. This is fine for the expected comment volumes per document version, but if counts ever need to be computed for thousands of rows a SQL-level aggregation would be preferable.
+- Both queries use `db: any` type, consistent with the rest of the file. A typed Drizzle db type could be introduced as a follow-up cleanup.
+
+---
+
+## Progress Update as of 2026-05-19 16:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
 Added the DB-backed sliding-window rate limiter (`enforceRateLimit`) as the first building block of Phase 2 (per-sentence Comments). This is Task 2.1 of 14.
 
 ### Detail of changes made:
