@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 4: comment server actions)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/server/actions/comments.ts` with `createComment`, `hideComment`, `unhideComment`, and `submitCommentAction`. Added `tests/server/comments.test.ts` with 4 TDD tests (top-level insert, reply insert, empty-body rejection, hide/unhide cycle). All 45 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/server/actions/comments.ts`: lazy `getDb()` pattern; `createComment` validates trimmed body (empty → throws, >5000 chars → throws), inserts into `comments`, returns `{ id }`; `hideComment` sets `hidden_at` + `hidden_reason`; `unhideComment` clears both to null; `submitCommentAction` is the Next.js Server Action wired to Clerk auth, signer lookup, dual rate-limit enforcement (5/min, 50/day via `enforceRateLimit`), then delegates to `createComment`, then `revalidatePath`.
+- `tests/server/comments.test.ts`: 4 tests covering the three exported helpers (submitCommentAction not unit-tested since it requires Clerk + Next.js context).
+
+### Potential concerns to address:
+- `softBannedAt` still not checked in `submitCommentAction` (pre-existing tracked concern). Trivial one-liner fix before launch.
+- All prior concerns from Task 3 and earlier still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 3: DB-backed rate-limit enforcer)
 *(Most recent updates at top)*
 
