@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { listSignatures, type SignerListItem } from "@/lib/db/queries";
+import { getActiveSelfiesForSigners } from "@/lib/selfie/queries";
+import { SelfieAvatar } from "@/components/SelfieAvatar";
 import SignTrigger from "../SignTrigger";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +84,12 @@ export default async function SignersPage({
     seen.add(r.signerId);
     return true;
   });
+
+  // Batch-fetch active approved selfies for the visible signers so the
+  // table renders thumbnails without an N+1 query per row.
+  const activeSelfies = await getActiveSelfiesForSigners(
+    signers.map((s) => s.signerId),
+  );
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
@@ -174,15 +182,25 @@ export default async function SignersPage({
                   <td className="whitespace-nowrap px-6 py-4">
                     <Link
                       href={`/signatories/${signer.signerId}`}
-                      className="font-medium text-zinc-950 hover:text-blue-600 hover:underline"
+                      className="group flex items-center gap-3"
                     >
-                      {signer.displayName}
-                    </Link>
-                    {signer.affiliation ? (
-                      <div className="mt-0.5 text-xs text-zinc-500">
-                        {signer.affiliation}
+                      <SelfieAvatar
+                        size="sm"
+                        signerId={signer.signerId}
+                        displayName={signer.displayName}
+                        preloadedActiveSelfies={activeSelfies}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-medium text-zinc-950 group-hover:text-blue-600 group-hover:underline">
+                          {signer.displayName}
+                        </div>
+                        {signer.affiliation ? (
+                          <div className="mt-0.5 text-xs text-zinc-500">
+                            {signer.affiliation}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
+                    </Link>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-zinc-700">
                     {signer.locationText || (
