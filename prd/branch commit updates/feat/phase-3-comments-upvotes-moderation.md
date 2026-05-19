@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 13: README touchups + final smoke for Phase 3)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+**Phase 3 complete.** Appended "Discussion: comments, upvotes, and moderation" section to README.md documenting the hover-to-comment workflow, comment nesting, upvotes, reports, admin moderation surfaces, and rate limits. Tests: 52 passing. TypeScript: clean. Smoke tests skipped (dev server down). Committed to branch.
+
+### Detail of changes made:
+- `README.md`: Added section before License documenting the Phase 3 features (comments, upvotes, moderation). Explains hover-to-comment on `/v/[version]`, comment nesting with depth-4 collapse, one-click upvotes, abuse reports with auto-soft-hide at 5-report threshold. Lists three admin routes: `/admin/reports`, `/admin/signers`, `/admin/comments`. Describes rate limits (5 comments/min, 50/day) enforced server-side via DB-backed window count (no Redis).
+- `prd/branch commit updates/feat/phase-3-comments-upvotes-moderation.md`: Prepended this task entry.
+
+### Potential concerns to address:
+- All prior concerns from Tasks 1–12 remain valid (soft-ban enforcement, N+1 queries, drawer payload size, AnchorMarker.tsx dead code).
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 12: /admin/comments recent list with hide/unhide)
 *(Most recent updates at top)*
 

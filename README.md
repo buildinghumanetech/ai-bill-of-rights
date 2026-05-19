@@ -60,6 +60,18 @@ To promote a signer to admin (Erika, project moderators, etc.), flip `signers.is
 
 See `docs/superpowers/specs/2026-05-18-ai-bill-of-rights-design.md` for the canonical design spec and `docs/superpowers/plans/2026-05-18-phase-1-signable-mvp.md` for the implementation plan.
 
+## Discussion: comments, upvotes, and moderation
+
+Verified signers can hover any sentence on `/v/[version]` to attach a comment to its anchor. Comments support arbitrary nesting (collapsed past depth 4 desktop). Upvotes are one click; report flags abuse. Five reports on a single comment auto-hide it pending moderator review.
+
+Moderators (signers with `is_admin = true`) get three admin routes:
+
+- `/admin/reports` — pending-report queue (hide comment or dismiss report)
+- `/admin/signers` — search signers, grant/revoke admin role, soft-ban
+- `/admin/comments` — 100 most recent comments with hide/unhide
+
+Rate limits: 5 comments / signer / minute; 50 / signer / day. Enforced server-side via a DB-backed window count (no Redis).
+
 ## License
 
 See `LICENSE`.
