@@ -1,5 +1,79 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 07:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Big batch: expanded the hero grid from 3×3 to 5×5 (25 images — 9 BHT
+images at the inner center plus 16 large-images on the outer ring,
+converted from a new `large-images/` folder via sharp), tightened the
+hero scroll budget so the user reaches the article copy sooner, added
+a manual "Add signer" admin form on `/admin/signers` that bypasses
+Clerk OTP, and adjusted three pieces of article copy.
+
+### Detail of changes made:
+- **`large-images/` → `public/images/wall/*.webp`**: 21 PNGs (12-27MB
+  each, total ~400MB) converted to 1200px-wide WebPs at quality 80
+  via a one-off `node -e` script using the project's transitive sharp
+  install. Output ~100KB each, ~2.2MB total.
+- **`src/app/HeroSection.tsx`**: rewritten to render a 5×5 grid of
+  25 images with continuous center-anchored zoom. Row-major order is
+  carefully laid out so the inner 3×3 (positions 6-8, 11-13, 16-18)
+  is the 9 BHT images that drove the original 9-box reveal, with
+  IMG_9691 (the whiteboard "Principle 1, Principle 2" photo) at the
+  absolute center (index 12). Sixteen large-images fill the outer
+  ring. `START_SCALE = 5` so at progress=0 only the center cell fills
+  the viewport; at progress=1 the full 5×5 is visible. Section
+  height shortened to `h-[260vh]` (vs. the prior 220vh) so there's a
+  bit more scroll runway for the bigger animation but the user still
+  reaches Article 01 within ~2 viewports of scroll.
+- **`src/app/page.tsx`** copy:
+  - Article 01 pull-quote: "The default is no." →
+    `The default is "No LLM training on my data"`.
+  - Article 02 pull-quote: "Memory built on your life is yours." →
+    `LLM memory built on your life is yours.`
+  - Pull-quote `<blockquote>` font dropped two sizes
+    (`text-xl sm:text-2xl` → `text-sm sm:text-base`) per the user's
+    "~50% smaller" guidance.
+- **`src/server/actions/admin.ts`**: new `adminAddSignerAction`
+  server action. Admin-only (`requireAdminOrBootstrap`). Creates a
+  signers row with a synthetic `clerk_user_id` of
+  `admin-added-<uuid>` (so the NOT NULL UNIQUE column is satisfied),
+  inserts a minimal consent_records row with `captured_fields =
+  { source: "admin_added", admin_signer_id, added_at_utc }`, and a
+  signatures row for the requested version. revalidates /, /signers,
+  /admin/signers.
+- **`src/app/admin/signers/AdminAddSignerForm.tsx`** (new): client
+  component that collapses to a "+ Add signer manually" button by
+  default. Expanding shows a card with fields: Display name
+  (required), Affiliation, Location, Verified-by radio
+  (Email | Phone), Notification preference radio (Major | Minor |
+  None), Grant-admin checkbox. Submit calls
+  `adminAddSignerAction` in a `useTransition`, surfaces inline
+  errors, and resets + collapses on success.
+- **`src/app/admin/signers/page.tsx`**: imports the new form and
+  renders it above the signers table.
+
+### Potential concerns to address:
+- **Manually-added signers have a `clerk_user_id` like
+  `admin-added-<uuid>`.** This means they can't sign in to Clerk
+  themselves to manage their record (the modal's
+  `getMySignatureStatus` keys on the current Clerk session's userId
+  and won't find their row). For now that's fine — they were added
+  on behalf of someone. If we ever need them to claim their record,
+  we'd add a "claim" flow that links a real Clerk identity to the
+  synthetic row.
+- **No upper bound on admin-added cascade.** Deleting an admin-added
+  signer works via the same `deleteSignerAction` (cascades
+  signatures + consent_records). Nothing special required.
+- **Hero scroll behavior**: extending to 25 images (5×5) without
+  also extending the scroll length means the zoom is faster per
+  scroll-unit than the original 3×3 version. If users want a
+  longer dwell on the 9-box state in the middle, we can either
+  bump section height back up or apply a non-linear ease curve.
+
+---
+
 ## Progress Update as of [2026-05-19 06:45 Pacific]
 *(Most recent updates at top)*
 

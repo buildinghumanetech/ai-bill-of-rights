@@ -10,13 +10,13 @@ const articles = [
     number: "01",
     title: "Your Data Belongs to You",
     body: "No AI company may use your conversations, your images, or your behavioral data to train their models without your explicit, informed, revocable consent. Opt-out is not consent. Buried checkboxes are not consent.",
-    pullQuote: "The default is no.",
+    pullQuote: 'The default is "No LLM training on my data"',
   },
   {
     number: "02",
     title: "Your Memory Is Portable",
     body: "Everything an AI system learns about you must be exportable by you, in a readable format, at any time. You have the right to move that context to a different system. You have the right to delete it completely.",
-    pullQuote: "Memory built on your life is yours.",
+    pullQuote: "LLM memory built on your life is yours.",
   },
   {
     number: "03",
@@ -131,7 +131,7 @@ export default async function Home() {
                     {article.body}
                   </p>
                   {article.pullQuote && (
-                    <blockquote className="mt-6 border-l-2 border-zinc-900 pl-5 text-xl font-medium italic leading-snug text-zinc-900 sm:text-2xl">
+                    <blockquote className="mt-6 border-l-2 border-zinc-900 pl-5 text-sm font-medium italic leading-snug text-zinc-900 sm:text-base">
                       {article.pullQuote}
                     </blockquote>
                   )}

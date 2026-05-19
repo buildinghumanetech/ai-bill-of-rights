@@ -1,9 +1,16 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { consentRecords, signatures, signers } from "@/lib/db/schema";
+import {
+  consentRecords,
+  signatures,
+  signers,
+  versions,
+} from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
+import { sha256Hex } from "@/lib/consent/hash";
 
 let _db: any | null = null;
 function getDb() {
@@ -58,4 +65,101 @@ export async function setAdminFlagAction(
     .set({ isAdmin: makeAdmin })
     .where(eq(signers.id, signerId));
   revalidatePath("/admin/signers");
+}
+
+export interface AdminAddSignerInput {
+  displayName: string;
+  affiliation: string;
+  locationText: string;
+  verificationMethod: "email" | "sms";
+  isAdmin: boolean;
+  notificationPreference: "major" | "minor" | "none";
+  versionString: string;
+}
+
+export interface AdminAddSignerResult {
+  success: boolean;
+  signerId?: string;
+  error?: string;
+}
+
+/**
+ * Admin-only: manually create a signer + signature row. Bypasses Clerk OTP;
+ * uses a synthetic clerk_user_id (`admin-added-…`) since the column is
+ * NOT NULL UNIQUE. The "verification" is the admin's word, recorded as
+ * verification_method per their choice. Captured fields are minimal — we
+ * stamp who added it so it's auditable.
+ */
+export async function adminAddSignerAction(
+  input: AdminAddSignerInput,
+): Promise<AdminAddSignerResult> {
+  const ctx = await requireAdminOrBootstrap();
+  const db = getDb();
+
+  const displayName = input.displayName.trim();
+  if (!displayName) {
+    return { success: false, error: "Display name is required." };
+  }
+
+  const versionRows = await db
+    .select()
+    .from(versions)
+    .where(eq(versions.version, input.versionString))
+    .limit(1);
+  if (versionRows.length === 0) {
+    return {
+      success: false,
+      error: `Unknown version: ${input.versionString}`,
+    };
+  }
+  const versionRow = versionRows[0];
+
+  const adminSigner =
+    ctx.state === "admin" ? ctx.signer : ctx.state === "no-admins-yet" ? ctx.signer : null;
+  const syntheticClerkId = `admin-added-${randomUUID()}`;
+  const capturedFields = {
+    source: "admin_added" as const,
+    admin_signer_id: adminSigner?.id ?? null,
+    added_at_utc: new Date().toISOString(),
+  };
+
+  const [signer] = await db
+    .insert(signers)
+    .values({
+      clerkUserId: syntheticClerkId,
+      displayName,
+      affiliation: input.affiliation.trim() || null,
+      locationText: input.locationText.trim() || null,
+      verificationMethod: input.verificationMethod,
+      isAdmin: input.isAdmin,
+      notificationPreference: input.notificationPreference,
+      verifiedAt: new Date(),
+    })
+    .returning({ id: signers.id });
+
+  // Build consent text hash (small, deterministic).
+  const consentText = `admin-added|v${input.versionString}|${displayName}|${input.verificationMethod}`;
+  const consentTextHash = sha256Hex(consentText);
+
+  const [consent] = await db
+    .insert(consentRecords)
+    .values({
+      signerId: signer.id,
+      consentTextHash,
+      capturedFields,
+    })
+    .returning({ id: consentRecords.id });
+
+  await db.insert(signatures).values({
+    signerId: signer.id,
+    versionId: versionRow.id,
+    versionHashAtSigning: versionRow.markdownHash,
+    consentRecordId: consent.id,
+  });
+
+  revalidatePath("/admin/signers");
+  revalidatePath("/signers");
+  revalidatePath("/");
+
+  return { success: true, signerId: signer.id };
 }

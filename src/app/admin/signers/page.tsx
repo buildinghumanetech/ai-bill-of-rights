@@ -6,6 +6,7 @@ import { signers } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { bootstrapAdminAction } from "@/server/actions/admin";
 import AdminRowActions from "./AdminRowActions";
+import AdminAddSignerForm from "./AdminAddSignerForm";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,10 @@ export default async function AdminSignersPage() {
           View public list →
         </Link>
       </header>
+
+      <div className="mb-8">
+        <AdminAddSignerForm />
+      </div>
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-12 text-center text-zinc-600">
