@@ -1,5 +1,19 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 12: /admin/comments recent list with hide/unhide)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/app/admin/comments/page.tsx` — a server-rendered admin page listing the 100 most recent comments with inline hide/unhide actions. TypeScript clean; 52 tests pass.
+
+### Detail of changes made:
+- `src/app/admin/comments/page.tsx`: Next.js server page with `force-dynamic`. Gate checks `signers.isAdmin` via Clerk `userId`. Queries 100 most recent comments via `innerJoin` on `signers` and `versions`, ordered by `createdAt desc`. Two inline server actions — `hideAction` (calls `hideComment` with reason `"moderator: hidden"`) and `unhideAction` (calls `unhideComment`), both re-check admin status server-side before acting. Hidden comments are displayed with reduced opacity and a badge showing the hide reason. Redirects back to `/admin/comments` after each action.
+
+### Potential concerns to address:
+- All prior concerns from Tasks 1–11 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 11: /admin/signers search + role assign + soft-ban)
 *(Most recent updates at top)*
 
