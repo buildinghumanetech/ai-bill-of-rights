@@ -1,5 +1,26 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 17:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `src/components/HighlightPopover.tsx` — a client component that listens for `selection-in-anchor` window events and renders a floating popover with Comment and (disabled) Suggest Changes buttons. This is Task 2.7 of 14. `tsc --noEmit` clean. No UI integration yet (Tasks 2.10–2.12).
+
+### Detail of changes made:
+- Created `src/components/HighlightPopover.tsx`:
+  - Maintains a single `open: OpenDetail | null` state driven by `selection-in-anchor` CustomEvents (emitted by DocumentRenderer in Task 2.11).
+  - Positions itself absolutely above the selection using `rect` from the event detail plus `window.scrollY`/`scrollX` offsets.
+  - `mousedown` on `window` closes the popover; `onMouseDown` on the popover itself calls `stopPropagation` to prevent self-closing when clicking buttons.
+  - "💬 Comment" button dispatches `compose-comment` CustomEvent — consumed later by `CommentComposer` (Task 2.8).
+  - "✏️ Suggest Changes" button: disabled in Phase 2 (`enableSuggestChanges = false` default); shows "Coming soon" tooltip. Phase 3 will flip the prop to `true` and wire `compose-suggest`.
+  - `OpenDetail` interface carries `anchorId`, `selectedText`, and `rect` — enough for the composer to pre-fill context.
+
+### Potential concerns to address:
+- `selection-in-anchor` event is not emitted yet — that lands in Task 2.11 (DocumentRenderer mouseup listener).
+- Absolute positioning assumes the popover is inside a `position: relative` ancestor; if placed at the document root it will need `position: fixed` and viewport-relative coords instead.
+
+---
+
 ## Progress Update as of 2026-05-19 17:15 Pacific
 *(Most recent updates at top)*
 
