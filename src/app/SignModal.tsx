@@ -139,6 +139,7 @@ export default function SignModal({ open, onClose }: Props) {
     SignatureStatus | { state: "loading" } | null
   >(null);
   const [removing, setRemoving] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [shareLocation, setShareLocation] = useState(true);
   const [nameDisplayFormat, setNameDisplayFormat] = useState<
     "initials" | "first-initial" | "full"
@@ -190,6 +191,7 @@ export default function SignModal({ open, onClose }: Props) {
       setInviteResult(null);
       setSignatureStatus(null);
       setRemoving(false);
+      setConfirmingRemove(false);
     }
   }, [open]);
 
@@ -214,14 +216,8 @@ export default function SignModal({ open, onClose }: Props) {
   }, [open, isSignedIn]);
 
   async function handleRemoveSignature() {
-    if (
-      !window.confirm(
-        "Remove your signature from the AI Bill of Rights? This deletes your signer record and is irreversible.",
-      )
-    ) {
-      return;
-    }
     setRemoving(true);
+    setError(null);
     try {
       const res = await removeMySignature();
       if (!res.success) {
@@ -230,6 +226,7 @@ export default function SignModal({ open, onClose }: Props) {
       }
       // Refresh status so the form re-renders for a fresh sign attempt.
       setSignatureStatus({ state: "not-signed" });
+      setConfirmingRemove(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't remove.");
     } finally {
@@ -622,23 +619,54 @@ export default function SignModal({ open, onClose }: Props) {
               </p>
             ) : null}
 
-            <div className="mt-6 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleRemoveSignature}
-                disabled={removing}
-                className="w-full rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {removing ? "Removing…" : "Remove my signature"}
-              </button>
-              <button
-                type="button"
-                onClick={() => signOut()}
-                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
-              >
-                Sign out
-              </button>
-            </div>
+            {confirmingRemove ? (
+              <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5">
+                <p className="text-sm font-semibold text-red-900">
+                  Remove your signature from the AI Bill of Rights?
+                </p>
+                <p className="mt-1 text-sm text-red-800">
+                  This deletes your signer record and is irreversible.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRemoveSignature}
+                    disabled={removing}
+                    className="flex-1 rounded-full bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {removing ? "Removing…" : "Yes, remove"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRemove(false)}
+                    disabled={removing}
+                    className="flex-1 rounded-full bg-white px-6 py-2.5 text-sm font-medium text-zinc-900 ring-1 ring-inset ring-zinc-300 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setConfirmingRemove(true);
+                  }}
+                  className="w-full rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100"
+                >
+                  Remove my signature
+                </button>
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className="w-full rounded-full bg-zinc-100 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -712,10 +740,10 @@ export default function SignModal({ open, onClose }: Props) {
               <span className="text-sm font-bold text-zinc-900">
                 Verify me via
               </span>
-              <div className="relative inline-flex rounded-full bg-zinc-100 p-1 text-sm">
+              <div className="relative inline-flex rounded-lg bg-zinc-100 p-1 text-sm">
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200"
+                  className="pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200"
                   style={{
                     transform:
                       method === "email" ? "translateX(100%)" : "translateX(0)",
@@ -726,7 +754,7 @@ export default function SignModal({ open, onClose }: Props) {
                   role="radio"
                   aria-checked={method === "phone"}
                   onClick={() => setMethod("phone")}
-                  className={`relative z-10 min-w-[6rem] rounded-full px-4 py-1.5 text-center font-medium transition-colors ${
+                  className={`relative z-10 min-w-[6rem] rounded-md px-4 py-1.5 text-center font-medium transition-colors ${
                     method === "phone" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
@@ -737,7 +765,7 @@ export default function SignModal({ open, onClose }: Props) {
                   role="radio"
                   aria-checked={method === "email"}
                   onClick={() => setMethod("email")}
-                  className={`relative z-10 min-w-[6rem] rounded-full px-4 py-1.5 text-center font-medium transition-colors ${
+                  className={`relative z-10 min-w-[6rem] rounded-md px-4 py-1.5 text-center font-medium transition-colors ${
                     method === "email" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
@@ -763,20 +791,35 @@ export default function SignModal({ open, onClose }: Props) {
                 </label>
               ) : (
                 <div className="flex gap-2">
-                  <label className="block">
+                  <label className="relative block">
                     <span className="sr-only">Country</span>
                     <select
                       value={countryId}
                       onChange={(e) => setCountryId(e.target.value)}
                       aria-label="Country"
-                      className="h-full rounded-lg border border-zinc-300 bg-white px-2 py-2.5 text-sm text-zinc-950 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      title={selectedCountry.name}
+                      className="w-[5.75rem] appearance-none rounded-lg border border-zinc-300 bg-white py-2.5 pl-2.5 pr-7 text-sm text-zinc-950 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     >
                       {COUNTRIES.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.flag} {c.code} {c.name}
+                          {c.flag} {c.code}
                         </option>
                       ))}
                     </select>
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-500"
+                    >
+                      <path
+                        d="M3 4.5L6 7.5L9 4.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </label>
                   <label className="block flex-1">
                     <span className="sr-only">Phone number</span>
@@ -816,36 +859,26 @@ export default function SignModal({ open, onClose }: Props) {
                   role="radiogroup"
                   aria-label="Name display format"
                 >
-                  {(
-                    [
-                      { value: "initials", hint: "(just initials show)" },
-                      {
-                        value: "first-initial",
-                        hint: "(first name plus initial)",
-                      },
-                      { value: "full", hint: "(full name)" },
-                    ] as const
-                  ).map((opt) => (
-                    <label
-                      key={opt.value}
-                      className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
-                    >
-                      <input
-                        type="radio"
-                        name="name-display-format"
-                        value={opt.value}
-                        checked={nameDisplayFormat === opt.value}
-                        onChange={() => setNameDisplayFormat(opt.value)}
-                        className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
-                      />
-                      <span className="font-mono text-sm text-zinc-900">
-                        {formatNamePreview(firstName, lastName, opt.value)}
-                      </span>
-                      <span className="ml-1 text-xs text-zinc-500">
-                        {opt.hint}
-                      </span>
-                    </label>
-                  ))}
+                  {(["initials", "first-initial", "full"] as const).map(
+                    (value) => (
+                      <label
+                        key={value}
+                        className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
+                      >
+                        <input
+                          type="radio"
+                          name="name-display-format"
+                          value={value}
+                          checked={nameDisplayFormat === value}
+                          onChange={() => setNameDisplayFormat(value)}
+                          className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                        />
+                        <span className="font-mono text-sm text-zinc-900">
+                          {formatNamePreview(firstName, lastName, value)}
+                        </span>
+                      </label>
+                    ),
+                  )}
                 </div>
               </fieldset>
             ) : null}

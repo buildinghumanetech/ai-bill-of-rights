@@ -1,5 +1,65 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 05:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+A run of modal polish: replaced the native `window.confirm` for
+signature removal with an inline confirmation panel (the destructive
+prompt now stays inside our modal), slimmed the country dropdown to
+flag + dial code only with a custom-positioned caret SVG (the native
+caret was crowding the right edge), squared up the Phone SMS / Email
+segmented control corners, and dropped the parenthetical hints from
+the "Show my name as" radio labels so the previews stand alone.
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`** — inline remove-confirm:
+  - New `confirmingRemove` boolean state. Clicking "Remove my
+    signature" no longer calls `window.confirm`; it sets
+    `confirmingRemove = true` and the action area swaps to a red
+    panel with the explicit warning ("Remove your signature from the
+    AI Bill of Rights? This deletes your signer record and is
+    irreversible.") and two side-by-side buttons: a solid-red "Yes,
+    remove" that runs `handleRemoveSignature`, and a white "Cancel"
+    that resets the confirm state. Both disable while the deletion
+    is in-flight.
+  - `confirmingRemove` is also reset alongside the other modal
+    state in the close `useEffect` so a fresh open always starts
+    out of the confirmation state.
+- **`src/app/SignModal.tsx`** — country dropdown slimmed with custom
+  caret:
+  - `<option>` text is now just `{flag} {code}` (e.g. "🇺🇸 +1"); the
+    country name moved to the `title` attribute on the select so it
+    still surfaces as a tooltip / a11y hint when the user hovers.
+  - Width pinned to `w-[5.75rem]` (92px).
+  - Native browser caret hidden with `appearance-none`; replaced with
+    a 12×12 SVG chevron positioned `absolute right-2 top-1/2
+    -translate-y-1/2`. Wrapper `<label>` gets `relative` to anchor
+    the caret. Right padding bumped to `pr-7` to leave room for the
+    chevron without overlapping option text.
+- **`src/app/SignModal.tsx`** — segmented control corners:
+  - Container `rounded-full` → `rounded-lg`. Inner pill and the
+    Phone / Email buttons `rounded-full` → `rounded-md`. Same slider
+    physics; just less circular.
+- **`src/app/SignModal.tsx`** — name-format radios:
+  - Removed the "(just initials show)" / "(first name plus initial)"
+    / "(full name)" hint spans next to each option label. The
+    masked-name preview itself (mono-spaced font) is now the only
+    visible element per option — clearer once a name is entered.
+
+### Potential concerns to address:
+- **Mobile select rendering** — native `<select>` with `appearance-
+  none` strips iOS Safari's native caret; the SVG chevron replaces it
+  consistently. Browser-native open-list UI still differs across
+  platforms but that's expected.
+- **`title="United States"` for screen readers** — sets an
+  accessible label but doesn't replace per-option text, so blind
+  users still hear "🇺🇸 +1" not "United States +1" when picking
+  through options. If we ever want true a11y labels per option,
+  we'd need a custom dropdown.
+
+---
+
 ## Progress Update as of [2026-05-19 05:00 Pacific]
 *(Most recent updates at top)*
 
