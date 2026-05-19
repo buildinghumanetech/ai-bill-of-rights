@@ -1,5 +1,28 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 16:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Implemented Task 6: `LiveSignerBanner` client component at `src/app/LiveSignerBanner.tsx` and appended a `prefers-reduced-motion` override for `.glass-banner` to `src/app/globals.css`. TypeScript type-check passes with no errors. (Note: Task 5 commit `e22fe7c` — `SignatureCount` client component — shipped without a progress log entry; this entry covers both Tasks 5 and 6 so the narrative is continuous.)
+
+### Detail of changes made:
+- **`src/app/LiveSignerBanner.tsx`** (new): `"use client"` component. Consumes `useLiveSigners()` from `LiveSignersProvider`. Key design points:
+  - `rendered` state locks the displayed event so a mid-animation provider swap cannot visually glitch the banner. The component only picks up a new `currentEvent` when `rendered` is `null`.
+  - Phase state machine: `"enter"` (0 → 240ms, translates in + fades in) → `"hold"` (240ms → 5240ms, fully visible) → `"exit"` (5240ms → 5480ms, translates out + fades out) → idle (calls `onEventFinished()` + resets `rendered` to `null`).
+  - Transitions driven by `setTimeout` in a `useEffect` keyed on `[phase, rendered, onEventFinished]`. Each arm returns a cleanup that clears its own timer.
+  - Click on the link calls `setPhase("exit")` immediately, cutting the hold short — the banner exits, then calls `onEventFinished()` normally after 240ms.
+  - Layout: fixed, full-width flex container with `z-50 top-6`. Link is the visible pill; outer `div` is `pointer-events-none` so the pill receives clicks but the transparent area does not.
+  - Accessibility: outer `div` has `aria-live="polite"` and `role="status"`.
+  - CSS hook: `.glass-banner` class on the link lets globals.css override transitions for `prefers-reduced-motion` without touching the component.
+- **`src/app/globals.css`**: Appended `@media (prefers-reduced-motion: reduce) { .glass-banner { transition: opacity 240ms ease !important; transform: none !important; } }`. This disables the Y-translate entirely for users who prefer reduced motion while preserving the opacity fade (which is still useful as a presence cue).
+
+### Potential concerns to address:
+- Banner not yet rendered anywhere — wired into root layout in Task 7. No smoke test possible until then.
+- Pre-existing test failures in `tests/server/revoke.test.ts` and `tests/server/sign.test.ts` remain unrelated to this branch.
+
+---
+
 ## Progress Update as of 2026-05-19 15:30 Pacific
 *(Most recent updates at top)*
 
