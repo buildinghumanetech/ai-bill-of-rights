@@ -82,6 +82,42 @@ export async function createTestDb(): Promise<TestDb> {
     );
     create index attestations_version_published
       on attestations (version_id) where published = true;
+
+    create table comments (
+      id uuid primary key default gen_random_uuid(),
+      version_id uuid not null references versions(id),
+      anchor_id text not null,
+      signer_id uuid not null references signers(id),
+      body text not null,
+      parent_comment_id uuid,
+      created_at timestamptz not null default now(),
+      hidden_at timestamptz,
+      hidden_reason text
+    );
+    create index comments_version_anchor_active
+      on comments (version_id, anchor_id) where hidden_at is null;
+    create index comments_parent
+      on comments (parent_comment_id);
+
+    create table comment_upvotes (
+      comment_id uuid not null references comments(id),
+      signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now(),
+      primary key (comment_id, signer_id)
+    );
+    create index comment_upvotes_comment on comment_upvotes (comment_id);
+
+    create table reports (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      reporter_signer_id uuid not null references signers(id),
+      reason text,
+      created_at timestamptz not null default now(),
+      resolved_at timestamptz,
+      resolved_by uuid references signers(id),
+      resolution text check (resolution in ('hidden','allowed'))
+    );
+    create index reports_pending on reports (comment_id) where resolved_at is null;
   `);
   return db;
 }

@@ -1,5 +1,22 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 1: schema tables)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `comments`, `comment_upvotes`, and `reports` tables to the Drizzle schema (`src/lib/db/schema.ts`), mirrored the DDL in the PGlite test helper (`tests/_helpers/pglite-db.ts`), and added three assertions to the schema test (`tests/lib/db.schema.test.ts`). Full test suite passes (39 tests).
+
+### Detail of changes made:
+- `comments`: uuid PK, FK to `versions` and `signers`, `anchor_id` text, `body` text, nullable `parent_comment_id` for threading, `hidden_at`/`hidden_reason` for soft-hide.
+- `comment_upvotes`: composite PK `(comment_id, signer_id)` enforced via `uniqueIndex("comment_upvotes_pk")`; FK to `comments` and `signers`.
+- `reports`: uuid PK, FK to `comments` and `signers` (reporter + optional resolver), `resolution` enum `('hidden' | 'allowed')`, `resolved_at`/`resolved_by` for audit trail.
+- PGlite DDL includes partial indexes: `comments_version_anchor_active` (active comments per anchor), `comments_parent`, `comment_upvotes_comment`, `reports_pending` (unresolved reports per comment).
+
+### Potential concerns to address:
+- None introduced by this task. Pre-existing concerns from prior entry still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 17:00 Pacific (Plan 3 spec written)
 *(Most recent updates at top)*
 

@@ -8,6 +8,9 @@ describe("db schema", () => {
     expect(schema.signatures).toBeDefined();
     expect(schema.consentRecords).toBeDefined();
     expect(schema.attestations).toBeDefined();
+    expect(schema.comments).toBeDefined();
+    expect(schema.commentUpvotes).toBeDefined();
+    expect(schema.reports).toBeDefined();
   });
 
   it("signers has clerk_user_id as unique text column", () => {

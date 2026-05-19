@@ -106,3 +106,54 @@ export const attestations = pgTable("attestations", {
   published: boolean("published").notNull().default(false),
   hiddenAt: timestamp("hidden_at", { withTimezone: true }),
 });
+
+export const comments = pgTable("comments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  versionId: uuid("version_id")
+    .notNull()
+    .references(() => versions.id),
+  anchorId: text("anchor_id").notNull(),
+  signerId: uuid("signer_id")
+    .notNull()
+    .references(() => signers.id),
+  body: text("body").notNull(),
+  parentCommentId: uuid("parent_comment_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  hiddenReason: text("hidden_reason"),
+});
+
+export const commentUpvotes = pgTable(
+  "comment_upvotes",
+  {
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => comments.id),
+    signerId: uuid("signer_id")
+      .notNull()
+      .references(() => signers.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("comment_upvotes_pk").on(t.commentId, t.signerId)],
+);
+
+export const reports = pgTable("reports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  commentId: uuid("comment_id")
+    .notNull()
+    .references(() => comments.id),
+  reporterSignerId: uuid("reporter_signer_id")
+    .notNull()
+    .references(() => signers.id),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedBy: uuid("resolved_by").references(() => signers.id),
+  resolution: text("resolution", { enum: ["hidden", "allowed"] }),
+});
