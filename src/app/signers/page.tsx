@@ -35,7 +35,7 @@ function VerificationPill({
     : "bg-indigo-50 text-indigo-700 ring-indigo-600/20";
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${styles}`}
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles}`}
     >
       <svg
         className="mr-1 h-3 w-3"
@@ -185,7 +185,7 @@ export default async function SignersPage({
                         preloadedActiveSelfies={activeSelfies}
                       />
                       <div className="min-w-0">
-                        <div className="font-medium text-zinc-950 group-hover:text-blue-600 group-hover:underline">
+                        <div className="font-bold text-zinc-950 group-hover:text-blue-600 group-hover:underline">
                           {signer.displayName}
                         </div>
                         {signer.affiliation ? (
