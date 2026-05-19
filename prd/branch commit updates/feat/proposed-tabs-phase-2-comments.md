@@ -1,5 +1,26 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 17:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `src/lib/comments/draft.ts` — a browser-only localStorage helper that persists unsubmitted comment and proposal drafts across Clerk OTP redirects. This is Task 2.5 of 14. `tsc --noEmit` clean. No tests (DOM/localStorage not exercised in vitest+pglite).
+
+### Detail of changes made:
+- Created `src/lib/comments/draft.ts` (new `src/lib/comments/` directory):
+  - `DraftPayload` interface — covers both `comment` and `proposal` kinds in a single permissive shape; proposal-specific fields (`proposalKind`, `rationale`) are optional and ignored for comments.
+  - `saveDraft(d)` — serializes to JSON and writes to `localStorage` under key `"abor-draft-v1"`. Stamps `ts` with `Date.now()` so expiry works even if caller forgets. No-ops in SSR (`window === "undefined"`) and swallows QuotaExceededError / private-mode errors.
+  - `loadDraft()` — parses and returns the stored draft, or `null` if absent or older than 30 minutes.
+  - `clearDraft()` — removes the key; called after successful submission.
+  - Single key strategy (`abor-draft-v1`) — intentional; only one in-flight draft at a time, matching the UX design where only one composer is open at a time.
+- This helper will be consumed by Task 2.8 (`CommentComposer`) and Task 3.4 (`SuggestChangesComposer`).
+
+### Potential concerns to address:
+- If a user opens two tabs simultaneously, the single-key approach means one draft can overwrite the other. Acceptable for MVP; could migrate to a per-anchor key later.
+- 30-minute expiry is arbitrary; adjust if UX feedback indicates sessions routinely exceed this.
+
+---
+
 ## Progress Update as of 2026-05-19 16:30 Pacific
 *(Most recent updates at top)*
 
