@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { signers } from "@/lib/db/schema";
+import { signatures, signers, versions } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { bootstrapAdminAction } from "@/server/actions/admin";
 import AdminRowActions from "./AdminRowActions";
@@ -64,6 +64,23 @@ export default async function AdminSignersPage() {
     .from(signers)
     .orderBy(desc(signers.createdAt));
 
+  // Latest signed version per signer (single query, deduped client-side
+  // by ordering signatures by signed_at desc).
+  const sigRows = await db
+    .select({
+      signerId: signatures.signerId,
+      version: versions.version,
+    })
+    .from(signatures)
+    .innerJoin(versions, eq(versions.id, signatures.versionId))
+    .orderBy(desc(signatures.signedAt));
+  const latestVersionBySigner = new Map<string, string>();
+  for (const s of sigRows) {
+    if (!latestVersionBySigner.has(s.signerId)) {
+      latestVersionBySigner.set(s.signerId, s.version);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12">
       <header className="mb-8 flex items-end justify-between">
@@ -114,6 +131,9 @@ export default async function AdminSignersPage() {
                   Role
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                  Version
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600">
                   Joined
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-zinc-600">
@@ -154,6 +174,18 @@ export default async function AdminSignersPage() {
                       <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
                         Signer
                       </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {latestVersionBySigner.get(row.id) ? (
+                      <Link
+                        href={`/v/${latestVersionBySigner.get(row.id)}`}
+                        className="font-mono text-zinc-700 underline-offset-4 hover:text-blue-600 hover:underline"
+                      >
+                        v{latestVersionBySigner.get(row.id)}
+                      </Link>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-zinc-500">
