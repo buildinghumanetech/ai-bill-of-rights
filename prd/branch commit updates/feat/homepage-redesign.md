@@ -1,5 +1,22 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 06:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+One-line copy tweak on the post-sign share card: replaced "Your
+shareable link" with "Share your signature with others".
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`**: the share-card `<label>` text above
+  the read-only URL input now reads "Share your signature with
+  others" instead of "Your shareable link".
+
+### Potential concerns to address:
+- None.
+
+---
+
 ## Progress Update as of [2026-05-19 05:45 Pacific]
 *(Most recent updates at top)*
 

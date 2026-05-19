@@ -1057,7 +1057,7 @@ export default function SignModal({ open, onClose }: Props) {
                     htmlFor="share-url-input"
                     className="block text-xs font-medium uppercase tracking-[0.18em] text-zinc-500"
                   >
-                    Your shareable link
+                    Share your signature with others
                   </label>
                   <div className="mt-2 flex items-center gap-2">
                     <input
