@@ -1,5 +1,22 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 14:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Implemented Task 2: `GET /api/signers/recent` route handler with 4 Vitest tests using mocked queries. All 4 new tests pass; pre-existing failures in revoke.test.ts and sign.test.ts are unrelated.
+
+### Detail of changes made:
+- **`src/app/api/signers/recent/route.ts`** (new): Exports `dynamic = "force-dynamic"` and named `GET(request: NextRequest)` handler. Parses optional `?since=` ISO-8601 query param, returning 400 if invalid. Calls `getSignatureCount()` and `listRecentSignersSince(since)` in parallel with `Promise.all`. Returns `{ count, newSigners }` JSON with `Cache-Control: no-store`. Catches DB errors and returns `{ error: "Internal server error" }` with status 500 — error message is a static string so no internal details can leak.
+- **`tests/app/api/signers.recent.test.ts`** (new): Four tests using `vi.mock("@/lib/db/queries", ...)` to mock both query functions. Tests cover: (1) cold-start shape verification including `Cache-Control: no-store` header and `Date` → ISO string serialization, (2) `since` cursor pass-through as a `Date` instance, (3) 400 on invalid `since`, (4) 500 on DB error without leaking internal error message content.
+- **Next.js 16 docs confirmed**: `request.nextUrl.searchParams.get(...)` remains correct; `export const dynamic = "force-dynamic"` is still the right opt-out; named `GET` export receiving `NextRequest` is unchanged. One note: the docs show both `NextRequest` and bare `Request` as valid — the plan uses `NextRequest` which is a superset and the right choice for `nextUrl` access.
+
+### Potential concerns to address:
+- **Pre-existing test failures** in `tests/server/revoke.test.ts` (`relation "reports" does not exist`) and `tests/server/sign.test.ts` (transaction rollback assertion) were failing before this task. Not regressions.
+- **`console.error` in the 500 path** will print the full error (including DB credentials if present) to the server log. This is intentional — operators need the real error; the client only receives "Internal server error". The test verifies the response body is clean.
+
+---
+
 ## Progress Update as of 2026-05-19 14:30 Pacific
 *(Most recent updates at top)*
 
