@@ -27,17 +27,31 @@ export async function deleteSigner(
   signerId: string,
 ): Promise<void> {
   const db = dbClient ?? getDb();
-  await db.execute(sql`
+  // Defensive cascade through legacy Phase 3 tables that may exist on prod
+  // (left behind by an earlier db:push) but not on pglite or the cleaned dev
+  // branch. Wrap each in try/catch so "relation does not exist" is a no-op.
+  async function tryExec(stmt: ReturnType<typeof sql>): Promise<void> {
+    try {
+      await db.execute(stmt);
+    } catch (err) {
+      const msg = (err as Error).message ?? "";
+      if (!/does not exist|undefined_table/i.test(msg)) throw err;
+    }
+  }
+  // Order matters: reports.comment_id → comments.id FK, comment_upvotes.comment_id → comments.id FK.
+  // Both join tables must be cleared of rows that reference this signer's
+  // comments BEFORE the comments themselves are deleted.
+  await tryExec(sql`
     DELETE FROM reports
     WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
        OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
   `);
-  await db.execute(sql`
+  await tryExec(sql`
     DELETE FROM comment_upvotes
     WHERE signer_id = ${signerId}
        OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
   `);
-  await db.execute(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
+  await tryExec(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
   await db.delete(signatures).where(eq(signatures.signerId, signerId));
   await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
   await db.delete(signers).where(eq(signers.id, signerId));

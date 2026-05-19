@@ -13,6 +13,7 @@ import {
   jsonb,
   boolean,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const versions = pgTable(
@@ -90,5 +91,113 @@ export const signatures = pgTable(
   },
   (t) => [
     uniqueIndex("signatures_signer_version_unique").on(t.signerId, t.versionId),
+  ],
+);
+
+export const proposedEdits = pgTable("proposed_edits", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  baseVersionId: uuid("base_version_id")
+    .notNull()
+    .references(() => versions.id),
+  proposerSignerId: uuid("proposer_signer_id")
+    .notNull()
+    .references(() => signers.id),
+  kind: text("kind", {
+    enum: ["replace", "insert_after", "delete"],
+  }).notNull(),
+  targetAnchorId: text("target_anchor_id").notNull(),
+  newText: text("new_text"),
+  rationale: text("rationale"),
+  status: text("status", {
+    enum: ["pending", "accepted", "rejected", "stale", "published"],
+  })
+    .notNull()
+    .default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decidedBy: uuid("decided_by").references(() => signers.id),
+  publishedInVersionId: uuid("published_in_version_id").references(
+    () => versions.id,
+  ),
+});
+
+export const proposalUpvotes = pgTable(
+  "proposal_upvotes",
+  {
+    proposalId: uuid("proposal_id")
+      .notNull()
+      .references(() => proposedEdits.id),
+    signerId: uuid("signer_id")
+      .notNull()
+      .references(() => signers.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("proposal_upvotes_proposal_signer_unique").on(t.proposalId, t.signerId),
+  ],
+);
+
+export const comments = pgTable("comments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  baseVersionId: uuid("base_version_id")
+    .notNull()
+    .references(() => versions.id),
+  // Polymorphic: exactly one of (anchorId, proposalId) is non-null.
+  anchorId: text("anchor_id"),
+  proposalId: uuid("proposal_id").references(() => proposedEdits.id),
+  signerId: uuid("signer_id")
+    .notNull()
+    .references(() => signers.id),
+  body: text("body").notNull(),
+  parentCommentId: uuid("parent_comment_id").references((): AnyPgColumn => comments.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  hiddenReason: text("hidden_reason"),
+});
+
+export const commentUpvotes = pgTable(
+  "comment_upvotes",
+  {
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => comments.id),
+    signerId: uuid("signer_id")
+      .notNull()
+      .references(() => signers.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("comment_upvotes_comment_signer_unique").on(t.commentId, t.signerId),
+  ],
+);
+
+export const endorsements = pgTable(
+  "endorsements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    signerId: uuid("signer_id")
+      .notNull()
+      .references(() => signers.id),
+    baseVersionId: uuid("base_version_id")
+      .notNull()
+      .references(() => versions.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    convertedToVersionId: uuid("converted_to_version_id").references(
+      () => versions.id,
+    ),
+    convertedAt: timestamp("converted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("endorsements_signer_base_unique").on(t.signerId, t.baseVersionId),
   ],
 );
