@@ -71,14 +71,14 @@ export function LiveSignersProvider({
 
   const isFirstPollRef = useRef(true);
 
-  const poll = useCallback(async () => {
+  const poll = useCallback(async (signal?: AbortSignal) => {
     const cursor = cursorRef.current;
     const url =
       cursor === null
         ? "/api/signers/recent"
         : `/api/signers/recent?since=${encodeURIComponent(cursor)}`;
     try {
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, { cache: "no-store", signal });
       if (!res.ok) {
         console.error(
           "[live-signers] poll failed:",
@@ -101,30 +101,41 @@ export function LiveSignersProvider({
         newSigners: json.newSigners,
       });
     } catch (err) {
+      // AbortError on intentional cancellation is expected — don't log it.
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("[live-signers] poll threw:", err);
     }
   }, []);
 
   // Mount: fire one immediate poll (cold-start), then poll on an interval.
   useEffect(() => {
-    poll();
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    const doPoll = () => {
+      void poll(signal);
+    };
+
+    doPoll();
     const id = setInterval(() => {
       if (document.visibilityState === "visible") {
-        poll();
+        doPoll();
       }
     }, POLL_INTERVAL_MS);
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         // Catch up immediately when the tab refocuses.
-        poll();
+        doPoll();
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      controller.abort();
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      isFirstPollRef.current = true;
     };
   }, [poll]);
 

@@ -1,5 +1,22 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 15:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Addressed Task 4 code-review feedback in `src/app/LiveSignersProvider.tsx`: fixed two bugs — Strict Mode double-invocation corrupting `isFirstPollRef`, and missing `AbortController` on the in-flight fetch.
+
+### Detail of changes made:
+- **`src/app/LiveSignersProvider.tsx`** — two changes:
+  - **Issue 1 (Strict Mode reset):** Added `isFirstPollRef.current = true` to the cleanup return of the mount `useEffect`. In React 18 Strict Mode, effects mount → cleanup → remount; without the reset, the second mount skips the cold-start path and uses a potentially stale `cursorRef`.
+  - **Issue 2 (AbortController):** `poll` now accepts an optional `AbortSignal` parameter and passes it to `fetch`. The mount `useEffect` creates an `AbortController`, threads `signal` through a `doPoll` wrapper, and calls `controller.abort()` in cleanup. `catch` block now filters `DOMException` with `name === "AbortError"` to suppress expected cancellation noise. Also changed `poll()` call sites to `void poll(signal)` to make the floating-promise explicit.
+- TypeScript type-check (`pnpm tsc --noEmit`) passes with no errors.
+
+### Potential concerns to address:
+- No new concerns. Pre-existing test failures in `tests/server/revoke.test.ts` and `tests/server/sign.test.ts` remain unrelated to this branch.
+
+---
+
 ## Progress Update as of 2026-05-19 15:15 Pacific
 *(Most recent updates at top)*
 
