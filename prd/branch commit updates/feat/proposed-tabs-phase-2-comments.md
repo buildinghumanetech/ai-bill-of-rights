@@ -1,5 +1,30 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 16:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 2.12 complete. The homepage (`src/app/page.tsx`) now serves the AI Bill of Rights through `DocumentRenderer` with per-sentence anchor IDs and comment counts pulled from the DB, replacing the hardcoded `articles` array. `HighlightPopover` and `CommentDrawer` are slotted in as fixed-position overlays at the bottom of the root `<div>`.
+
+### Detail of changes made:
+- Modified `src/app/page.tsx`:
+  - Added imports: `CommentDrawer`, `HighlightPopover`, `DocumentRenderer`, `ParsedDocument`, `countCommentsByAnchor`, `listCommentsForAnchor`, `getCurrentVersion`.
+  - Converted `Home` from a sync function to `async` (server component data-fetching pattern).
+  - Before the return, calls `getCurrentVersion()`, then `countCommentsByAnchor()` and `listCommentsForAnchor()` for each anchor that has comments; wrapped in try/catch so DB unavailability in preview silently yields empty maps.
+  - `undefined as any` is the db argument pattern — consistent with how `getDefaultDb()` lazy-requires the real DB at call time.
+  - Replaced the hardcoded `<ol>{articles.map(...)}` block with `<DocumentRenderer document={current.parsedJson as unknown as ParsedDocument} anchorCounts={anchorCounts} />`.
+  - Added `<HighlightPopover enableSuggestChanges={false} />` and `<CommentDrawer baseVersionId={current.id} commentsByAnchor={commentsByAnchor} />` as the last children of the root `<div>` (outside the article section, so they render as fixed-position overlays).
+  - Removed: `PILL_COLORS` constant, `pillColor()` helper, `articles` array constant — all unused.
+- Smoke test: dev server returned 200.
+- `pnpm exec tsc --noEmit`: clean (no output).
+- `pnpm test`: 54/54 pass.
+
+### Potential concerns to address:
+- **Intentional UX regression**: The curated pull quotes (blockquotes per article) and "Connects to" pills (links to /resources/ slugs) from the previous hardcoded layout are gone. The document is now driven entirely by the parsed markdown. Per the plan, restoring those as parsed metadata is a follow-up phase.
+- If `getCurrentVersion()` returns null (no version seeded in DB), the articles section renders nothing — the UI will show just the header/hero/footer with an empty middle. This is acceptable for now but worth noting.
+
+---
+
 ## Progress Update as of 2026-05-19 16:30 Pacific
 *(Most recent updates at top)*
 
