@@ -1045,7 +1045,7 @@ export default function SignModal({ open, onClose }: Props) {
                 Your name is now on v{VERSION}.
                 <br />
                 AI companies pay more attention every time another person
-                signs — help us spread it.
+                signs. Who can you share this with?
               </p>
             </div>
 

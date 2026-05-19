@@ -1,5 +1,22 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 06:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Post-sign copy: closed out the call-to-action sentence with a direct
+question rather than an exhortation.
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`**: line 2 of the post-sign `<p>` now ends
+  "…every time another person signs. Who can you share this with?"
+  instead of "…every time another person signs — help us spread it."
+
+### Potential concerns to address:
+- None.
+
+---
+
 ## Progress Update as of [2026-05-19 06:00 Pacific]
 *(Most recent updates at top)*
 
