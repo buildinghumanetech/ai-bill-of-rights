@@ -1,5 +1,65 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 08:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Wired up "Connects to" pills for all 9 articles using the per-article
+lists pasted in from the original Google Doc. Created 26 new resource
+markdown stubs (titles only — bodies will be filled in by the user).
+Restyled the pills: less-rounded corners and a deterministic pastel
+palette so the same slug always renders the same color.
+
+### Detail of changes made:
+- **`content/resources/*.md`** — 26 new files (29 total now):
+  - Article 2: gdpr-article-20-data-portability, interoperability-
+    advocacy, competitive-ai-market-concerns
+  - Article 3: humanebench-principle-honesty, california-bot-
+    disclosure-act-sb-1001, ftc-guidance-deceptive-ai
+  - Article 4: humanebench-principle-non-manipulation, eu-ai-act-
+    prohibited-practices, ftc-act-section-5
+  - Article 5: humanebench-principle-transparency, white-house-ai-
+    bill-of-rights-2022, gdpr-article-22-automated-decision-making
+  - Article 6: humanebench-principle-empowerment, consumer-
+    protection-law, healthcare-ai-ethics-literature
+  - Article 7: coppa, uk-age-appropriate-design-code, ieee-ai-
+    children-working-group, childrens-rights-frameworks
+  - Article 8: humanebench-as-measurement-infrastructure, eu-ai-act-
+    conformity-assessments, uk-ai-safety-institute, algorithmic-
+    audit-proposals
+  - Article 9: center-for-humane-technology-attention-rights,
+    humanebench-respect-user-attention, eu-ai-act-prohibited-
+    practices-subliminal-manipulation
+- **`src/app/page.tsx`**:
+  - Each of the 9 articles now has a `connects: [{title, slug}]`
+    array matching the Google Doc.
+  - New `PILL_COLORS` array with 10 pastel combos (border + bg + text
+    + hover). Full class strings so Tailwind's JIT emits them
+    correctly.
+  - New `pillColor(slug)` helper: trivial char-code-sum hash → palette
+    index, so each slug deterministically maps to one of the 10
+    pastels. Same pill = same color across articles + reloads.
+  - Pill links: `rounded-md` (was `rounded-full`) — much less curvy.
+    Per-pill `bg`/`border`/`text`/`hover` classes come from
+    `pillColor(slug)`.
+
+### Potential concerns to address:
+- **Markdown stubs are empty.** Every resource page renders a
+  placeholder pointing at `content/resources/<slug>.md` for the
+  abstract — the user is expected to fill those in.
+- **Color collisions are possible.** With 29 slugs and 10 colors,
+  ~3 slugs share each color on average. No effort is made to
+  separate adjacent pills' colors — they may sometimes be the same.
+  Acceptable for now; if it gets visually monotonous we can
+  per-article shuffle or rotate.
+- **"EU AI Act prohibited practices"** vs **"EU AI Act prohibited
+  practices (subliminal manipulation)"** are intentionally kept as
+  separate resources (different slugs) because Article 4 cites the
+  general category and Article 9 cites the specific subset. If the
+  user wants them merged later, easy to consolidate.
+
+---
+
 ## Progress Update as of [2026-05-19 08:15 Pacific]
 *(Most recent updates at top)*
 
