@@ -50,12 +50,15 @@ export async function submitUpvoteAction(formData: FormData): Promise<void> {
   const versionString = String(formData.get("versionString") ?? "");
   const db = getDb();
   const signerRows = await db
-    .select({ id: signers.id })
+    .select({ id: signers.id, softBannedAt: signers.softBannedAt })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
   if (signerRows.length === 0) {
     throw new Error("Only verified signers can upvote");
+  }
+  if (signerRows[0].softBannedAt !== null) {
+    throw new Error("This account is suspended pending moderator review.");
   }
   await toggleUpvote(db, commentId, signerRows[0].id);
   revalidatePath(`/v/${versionString}`);

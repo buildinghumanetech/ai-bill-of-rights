@@ -81,12 +81,15 @@ export async function submitCommentAction(formData: FormData): Promise<void> {
 
   const db = getDb();
   const signerRows = await db
-    .select({ id: signers.id })
+    .select({ id: signers.id, softBannedAt: signers.softBannedAt })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
   if (signerRows.length === 0) {
     throw new Error("Only verified signers can comment");
+  }
+  if (signerRows[0].softBannedAt !== null) {
+    throw new Error("This account is suspended pending moderator review.");
   }
   const signerId = signerRows[0].id;
 
