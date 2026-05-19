@@ -1,5 +1,24 @@
 # Branch Progress: feat/proposed-tabs-phase-1-schema
 
+## Progress Update as of 2026-05-19 14:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Mirrored the five new tables (`proposed_edits`, `proposal_upvotes`, `comments`, `comment_upvotes`, `endorsements`) and the explicit unique index on `endorsements` into the in-memory pglite test helper at `tests/_helpers/pglite-db.ts`. The DDL block inside `client.exec(...)` now matches the post-migration production schema. Confirmed that the 8 pre-existing test failures (all `column "notification_preference" does not exist`) existed before and after this change — the helper edit introduced zero new failures (17 tests still pass, 8 still fail for the unrelated column gap).
+
+### Detail of changes made:
+- **`tests/_helpers/pglite-db.ts`**: Appended 5 CREATE TABLE statements and 1 CREATE UNIQUE INDEX to the `client.exec(...)` DDL block:
+  - `proposed_edits` — with composite check on `kind` and `status`, self-referential-safe FKs to `versions` and `signers`
+  - `proposal_upvotes` — composite primary key `(proposal_id, signer_id)` provides uniqueness without a separate index
+  - `comments` — includes self-referential `parent_comment_id uuid references comments(id)` matching the `AnyPgColumn` FK in `schema.ts`
+  - `comment_upvotes` — composite primary key `(comment_id, signer_id)`
+  - `endorsements` — primary key on `id`; explicit `create unique index endorsements_signer_base_unique on endorsements (signer_id, base_version_id)` because the PK is not the composite key
+
+### Potential concerns to address:
+- The 8 pre-existing failures (`notification_preference` column missing from the pglite helper's `signers` DDL) remain. The `signers` table in the helper is missing the `notification_preference text` column that `schema.ts` references (added by the migration). These should be fixed in a follow-up by adding `notification_preference text` to the `signers` DDL in `createTestDb()`.
+
+---
+
 ## Progress Update as of 2026-05-19 13:30 Pacific
 *(Most recent updates at top)*
 

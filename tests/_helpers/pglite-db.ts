@@ -63,6 +63,58 @@ export async function createTestDb(): Promise<TestDb> {
     );
     create unique index signatures_signer_version_unique
       on signatures (signer_id, version_id);
+
+    create table proposed_edits (
+      id uuid primary key default gen_random_uuid(),
+      base_version_id uuid not null references versions(id),
+      proposer_signer_id uuid not null references signers(id),
+      kind text not null check (kind in ('replace','insert_after','delete')),
+      target_anchor_id text not null,
+      new_text text,
+      rationale text,
+      status text not null default 'pending' check (status in ('pending','accepted','rejected','stale','published')),
+      created_at timestamptz not null default now(),
+      decided_at timestamptz,
+      decided_by uuid references signers(id),
+      published_in_version_id uuid references versions(id)
+    );
+
+    create table proposal_upvotes (
+      proposal_id uuid not null references proposed_edits(id),
+      signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now(),
+      primary key (proposal_id, signer_id)
+    );
+
+    create table comments (
+      id uuid primary key default gen_random_uuid(),
+      base_version_id uuid not null references versions(id),
+      anchor_id text,
+      proposal_id uuid references proposed_edits(id),
+      signer_id uuid not null references signers(id),
+      body text not null,
+      parent_comment_id uuid references comments(id),
+      created_at timestamptz not null default now(),
+      hidden_at timestamptz,
+      hidden_reason text
+    );
+
+    create table comment_upvotes (
+      comment_id uuid not null references comments(id),
+      signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now(),
+      primary key (comment_id, signer_id)
+    );
+
+    create table endorsements (
+      id uuid primary key default gen_random_uuid(),
+      signer_id uuid not null references signers(id),
+      base_version_id uuid not null references versions(id),
+      created_at timestamptz not null default now(),
+      converted_to_version_id uuid references versions(id),
+      converted_at timestamptz
+    );
+    create unique index endorsements_signer_base_unique on endorsements (signer_id, base_version_id);
   `);
   return db;
 }
