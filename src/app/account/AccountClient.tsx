@@ -2,6 +2,8 @@
 
 import { FormEvent, useState, useTransition } from "react";
 import Link from "next/link";
+import { useClerk } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import {
   removeMySignatureForVersionAction,
   updateMyProfileAction,
@@ -35,6 +37,14 @@ export default function AccountClient({
   const [profilePending, startProfileTransition] = useTransition();
 
   const [signatures, setSignatures] = useState<Signature[]>(initialSignatures);
+
+  const { signOut } = useClerk();
+  const router = useRouter();
+  async function handleSignOut() {
+    await signOut();
+    router.push("/");
+    router.refresh();
+  }
   const [removingVersion, setRemovingVersion] = useState<string | null>(null);
 
   function handleProfileSave(e: FormEvent) {
@@ -175,7 +185,14 @@ export default function AccountClient({
         )}
       </section>
 
-      <section className="mt-12">
+      <section className="mt-12 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="self-start rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 sm:self-auto"
+        >
+          Sign out
+        </button>
         <Link
           href="/account/revoke"
           className="text-sm font-medium text-red-700 underline-offset-4 hover:underline"
