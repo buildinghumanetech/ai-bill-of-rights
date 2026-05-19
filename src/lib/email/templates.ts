@@ -133,15 +133,22 @@ export function attestationVerifyEmail(opts: {
   productName: string;
   version: string;
   verifyUrl: string;
+  submitterEmail: string;
 }): { subject: string; text: string } {
   return {
-    subject: `Confirm: ${opts.orgName}'s attestation for AI Bill of Rights v${opts.version}`,
-    text: `Someone — hopefully you — submitted an attestation that ${opts.productName} (${opts.orgName}) was built referencing AI Bill of Rights v${opts.version}.
+    subject: `Admin review: ${opts.orgName}'s attestation for AI Bill of Rights v${opts.version}`,
+    text: `An attestation has been submitted and is waiting for an admin to verify it:
 
-To confirm, click this link:
+  Product:      ${opts.productName}
+  Organization: ${opts.orgName}
+  Version:      v${opts.version}
+  Submitter:    ${opts.submitterEmail}
+
+You're receiving this because you're an admin on the AI Bill of Rights project. Any admin can publish this attestation by clicking the link below. The first click wins.
+
 ${opts.verifyUrl}
 
-If you didn't submit this, just ignore the email and the attestation will not be published.
+If this looks fake or low-quality, just ignore it — unpublished attestations stay in the queue and can be hidden from the admin dashboard.
 
 — The AI Bill of Rights project
 `,
