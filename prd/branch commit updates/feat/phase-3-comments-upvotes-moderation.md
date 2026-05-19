@@ -1,5 +1,19 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 11: /admin/signers search + role assign + soft-ban)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/app/admin/signers/page.tsx` — a server-rendered admin page for listing and managing signers with search, admin role toggle, and soft-ban toggle. TypeScript clean; 52 tests pass.
+
+### Detail of changes made:
+- `src/app/admin/signers/page.tsx`: Next.js server page with `force-dynamic`. Gate checks `signers.isAdmin` via Clerk `userId`. Supports optional `?q=` search filtering by `displayName`, `locationText`, or `affiliation` (using `ilike`). Defaults to 50 most recent signers ordered by `createdAt`. Two inline server actions — `toggleAdminAction` (sets `isAdmin` true/false) and `toggleBanAction` (sets `softBannedAt` to `new Date()` or `null`), both re-check admin status server-side before acting. Each signer card shows display name, admin/soft-banned badges, location and affiliation, and action buttons for toggling admin role and ban status.
+
+### Potential concerns to address:
+- All prior concerns from Tasks 1–10 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 10: /admin/reports moderation queue)
 *(Most recent updates at top)*
 
