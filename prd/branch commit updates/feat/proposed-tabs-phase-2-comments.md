@@ -1,5 +1,29 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 16:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 2.11 complete. Extracted the non-readOnly render path out of `DocumentRenderer` into a new `InteractiveDoc` client component. `InteractiveDoc` wraps each sentence in `AnchorSentence` (count badges) and installs a `mouseup` listener that detects selections within `data-anchor-id` spans and dispatches a `selection-in-anchor` custom event. `DocumentRenderer` stays a server component; only the `readOnly=true` branch is unchanged.
+
+### Detail of changes made:
+- Created `src/components/InteractiveDoc.tsx`:
+  - `"use client"` component; accepts `document: ParsedDocument` and `anchorCounts: Record<string, number>`.
+  - `containerRef` attached to the `<article>` element. `useEffect` installs/cleans up a `mouseup` handler.
+  - `mouseup` handler: walks up from `sel.anchorNode` to find the nearest `data-anchor-id` attribute, then dispatches `selection-in-anchor` with `{ anchorId, selectedText, rect }` — rect from `range.getBoundingClientRect()`.
+  - Renders articles/paragraphs/sentences identical to the old non-readOnly branch, but sentences are now `<AnchorSentence>` elements (with count badges) instead of plain `<span>` elements.
+- Modified `src/components/DocumentRenderer.tsx`:
+  - Added `import { InteractiveDoc } from "./InteractiveDoc"`.
+  - Added `anchorCounts?: Record<string, number>` to Props (default `{}`).
+  - Non-readOnly return replaced with `<InteractiveDoc document={document} anchorCounts={anchorCounts} />`.
+  - `readOnly=true` branch left 100% unchanged.
+
+### Potential concerns to address:
+- `DocumentRenderer` callers that don't pass `anchorCounts` will get an empty map (badges show `+`). Task 2.12 will wire in real counts from the DB query.
+- `selection-in-anchor` event has no consumer yet — `HighlightPopover` will listen for it in Task 2.12.
+
+---
+
 ## Progress Update as of 2026-05-19 18:30 Pacific
 *(Most recent updates at top)*
 

@@ -1,4 +1,5 @@
 import type { ParsedDocument } from "@/lib/markdown/parse";
+import { InteractiveDoc } from "./InteractiveDoc";
 
 interface Props {
   document: ParsedDocument;
@@ -8,6 +9,11 @@ interface Props {
    * Use for /v/[version] archive pages.
    */
   readOnly?: boolean;
+  /**
+   * Map of anchorId → comment count, used by InteractiveDoc to show per-sentence badges.
+   * Only relevant when readOnly is false.
+   */
+  anchorCounts?: Record<string, number>;
 }
 
 function articleNumber(index: number): string {
@@ -15,7 +21,7 @@ function articleNumber(index: number): string {
   return String(index).padStart(2, "0");
 }
 
-export function DocumentRenderer({ document, readOnly = false }: Props) {
+export function DocumentRenderer({ document, anchorCounts = {}, readOnly = false }: Props) {
   if (readOnly) {
     return (
       <article className="mx-auto max-w-3xl">
@@ -77,31 +83,5 @@ export function DocumentRenderer({ document, readOnly = false }: Props) {
     );
   }
 
-  return (
-    <article className="prose prose-zinc max-w-none dark:prose-invert">
-      {document.articles.map((article) => (
-        <section key={article.id} id={article.id}>
-          {article.id === "preamble" ? (
-            <h1>{article.title}</h1>
-          ) : (
-            <h2>{article.title}</h2>
-          )}
-          {article.paragraphs.map((paragraph) => (
-            <p key={paragraph.id}>
-              {paragraph.sentences.map((sentence, idx) => (
-                <span
-                  key={sentence.id}
-                  data-anchor-id={sentence.id}
-                  className="anchored-sentence"
-                >
-                  {idx > 0 ? " " : ""}
-                  {sentence.text}
-                </span>
-              ))}
-            </p>
-          ))}
-        </section>
-      ))}
-    </article>
-  );
+  return <InteractiveDoc document={document} anchorCounts={anchorCounts} />;
 }
