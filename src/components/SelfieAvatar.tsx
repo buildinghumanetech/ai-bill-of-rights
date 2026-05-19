@@ -3,7 +3,7 @@ import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 type Size = "sm" | "md" | "lg";
 
 const DIMENSIONS: Record<Size, { px: number; classes: string }> = {
-  sm: { px: 36, classes: "h-9 w-9 text-sm" },
+  sm: { px: 40, classes: "h-10 w-10 text-sm" },
   md: { px: 120, classes: "h-[120px] w-[120px] text-3xl" },
   lg: { px: 360, classes: "h-[360px] w-[360px] text-7xl" },
 };
