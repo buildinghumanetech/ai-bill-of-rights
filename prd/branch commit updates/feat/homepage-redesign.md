@@ -1,5 +1,40 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 08:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Reverted the "wall behind articles" overlap pattern. The user found it
+visually confusing — they want the wall **contained in the upper image
+area** with the full 1→25 zoom happening inside the hero's sticky
+range, then articles flowing normally below with no wall behind them.
+HeroSection is now a single section that does the entire 1→25 zoom
+within a 220vh sticky range; articles + footer are siblings with
+solid backgrounds and no overlap.
+
+### Detail of changes made:
+- **`src/app/HeroSection.tsx`**: back to the 5×5 grid (25 images) with
+  `START_SCALE = 5`. At progress=0 only the center BHT whiteboard cell
+  is visible; at progress=1 the full 5×5 wall is visible. Section
+  height: 220vh (matching the original 3×3 hero's scroll budget —
+  more zoom packed into the same scroll length, so the change-per-
+  scroll-unit is more dramatic).
+- **`src/app/page.tsx`**: removed the `<WallBehindArticles>` wrapper.
+  The article section is back to solid `bg-white` and the footer
+  section to solid `bg-zinc-50` — no translucency, no backdrop-blur,
+  no overlap with the hero. Articles flow normally below the hero
+  once it unpins.
+- **`src/app/WallBehindArticles.tsx`**: deleted. Orphan file removed.
+
+### Potential concerns to address:
+- **Animation density at 220vh**: with the full 1→25 zoom in a 120vh
+  sticky range, each scroll-unit advances the zoom faster than the
+  original 1→9 did. If it feels too fast, bump section height up
+  (e.g., 280vh) to slow the animation. If it feels too slow, tighten
+  it (e.g., 180vh).
+
+---
+
 ## Progress Update as of [2026-05-19 07:45 Pacific]
 *(Most recent updates at top)*
 

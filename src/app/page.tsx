@@ -1,6 +1,5 @@
 import Link from "next/link";
 import HeroSection from "./HeroSection";
-import WallBehindArticles from "./WallBehindArticles";
 import FloatingSignButton from "./FloatingSignButton";
 import { getSignatureCount } from "@/lib/db/queries";
 
@@ -96,8 +95,7 @@ export default async function Home() {
 
       <HeroSection />
 
-      <WallBehindArticles>
-        <section className="bg-white/90 px-6 pb-32 pt-10 backdrop-blur-md sm:pt-14">
+      <section className="bg-white px-6 pb-32 pt-10 sm:pt-14">
           <p className="mx-auto mb-10 max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
             Join{" "}
             <Link
@@ -146,7 +144,7 @@ export default async function Home() {
           </ol>
         </section>
 
-        <section className="border-t border-zinc-200 bg-zinc-50/90 px-6 py-24 text-center backdrop-blur-md">
+      <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
           <div className="mx-auto max-w-2xl">
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
               Version 1.0.0 — a living document
@@ -166,7 +164,6 @@ export default async function Home() {
             </div>
           </div>
         </section>
-      </WallBehindArticles>
 
       <FloatingSignButton signatureCount={signatureCount} />
     </div>
