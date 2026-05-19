@@ -106,7 +106,8 @@ const articles = [
     number: "05",
     title: "You Have the Right to an Explanation",
     body: "When an AI system makes a consequential decision about you — your loan, your medical care, your content visibility, your job application — you have the right to know why, in plain language, and how to appeal it.",
-    pullQuote: null,
+    pullQuote:
+      "AI systems must explain their reasoning around consequential decisions in plain language.",
     connects: [
       {
         title: "HumaneBench Principle — Transparency",
@@ -126,7 +127,8 @@ const articles = [
     number: "06",
     title: "You Have the Right to Human Contact",
     body: "In any situation involving significant consequence — health, legal, financial, crisis — you have the right to reach a human being. AI systems may not be deployed as permanent gatekeepers that eliminate human access.",
-    pullQuote: "The loop stays open.",
+    pullQuote:
+      'Every AI agent has a "license plate" identifier that tracks it back to a human responsible for its actions.',
     connects: [
       {
         title: "HumaneBench Principle — Empowerment",
