@@ -19,7 +19,7 @@ type Step = "form" | "otp" | "done";
 type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
 
-const VERSION = "1.0.0";
+const VERSION = "0.0.1";
 
 interface Country {
   id: string;
@@ -197,7 +197,7 @@ export default function SignModal({ open, onClose }: Props) {
   }, [open]);
 
   // When the modal opens with a signed-in user, fetch whether they've
-  // already signed v1.0.0 so we can show the "already signed" view instead
+  // already signed v0.0.1 so we can show the "already signed" view instead
   // of asking them to sign again.
   useEffect(() => {
     if (!open) return;
@@ -904,7 +904,7 @@ export default function SignModal({ open, onClose }: Props) {
                     {
                       value: "minor",
                       label: "Minor revisions",
-                      hint: "v1.0.0 → v1.1.0",
+                      hint: "v0.0.1 → v0.1.0",
                     },
                     { value: "none", label: "None", hint: "" },
                   ] as const
