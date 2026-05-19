@@ -14,7 +14,7 @@ import { signConfirmation } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 
 type NameDisplayFormat = "initials" | "first-initial" | "full";
-type NotificationPreference = "major" | "minor" | "proposed";
+type NotificationPreference = "major" | "minor" | "none";
 
 export interface SignFromModalInput {
   firstName: string;
@@ -77,6 +77,35 @@ export async function recordSignatureFromModal(
     const fields = extractCapturedFields(h, {
       sessionUtc: new Date().toISOString(),
     });
+
+    // On Vercel, x-vercel-ip-* headers populate the geo fields. On
+    // localhost (or any non-Vercel environment) those headers are missing.
+    // Fall back to a public IP-geolocation service so signers in dev still
+    // see their actual city / region / country if they opt in.
+    if (
+      input.shareLocation &&
+      !fields.ip_geo_city &&
+      !fields.ip_geo_country
+    ) {
+      try {
+        const res = await fetch("https://ipapi.co/json/", {
+          headers: { "User-Agent": "ai-bill-of-rights-dev" },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            city?: string;
+            region?: string;
+            country_code?: string;
+          };
+          fields.ip_geo_city = data.city ?? "";
+          fields.ip_geo_region = data.region ?? "";
+          fields.ip_geo_country = data.country_code ?? "";
+        }
+      } catch (err) {
+        console.warn("[sign] geo fallback failed:", err);
+      }
+    }
 
     const locationText = input.shareLocation
       ? [fields.ip_geo_city, fields.ip_geo_region, fields.ip_geo_country]

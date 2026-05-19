@@ -1,5 +1,122 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 04:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Modal polish round: fixed the off-position segmented "Email / Phone SMS"
+slider, bolded the three section labels, hid "Show my name as" until
+both name fields are filled, renamed "Proposed revisions" → "None" in
+the notification options, added an IP-geolocation fallback so the
+"Share my approximate city & state" checkbox actually captures a value
+in local dev where Vercel's geo headers aren't present, and finished
+the prior round (subtitle CTA + WebP conversion).
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`** segmented control fix:
+  - Pill was anchored at the container edge (no `left` set, defaulted
+    to `0`) so it visibly sat 4px to the left of where the Email button
+    started. Now anchored with `left-1` (4px = the container's `p-1`).
+  - Phone-state transform was `translateX(calc(100% + 0.25rem))` which
+    over-shot the right slot by 4px. Now `translateX(100%)` (pure
+    100% of the pill's own width).
+  - The two buttons had natural widths driven by their content
+    ("Phone SMS" is wider than "Email"), so the 50/50 pill math
+    couldn't align cleanly. Added `min-w-[6rem]` + `text-center` to
+    each button so they share the same width.
+  - Pill now has `pointer-events-none` so it never intercepts clicks.
+- **`src/app/SignModal.tsx`** label + flow polish:
+  - "Verify me via", "Show my name as", and "Alert me when the AI
+    Bill of Rights is updated" labels all bumped from `font-medium
+    text-zinc-700` to `font-bold text-zinc-900`.
+  - The "Show my name as" fieldset is now gated behind
+    `firstName.trim() && lastName.trim()` — it doesn't render until
+    both are filled in, removing the awkward "Jane Doe" placeholder
+    preview from first paint. Previews always use the real name now.
+  - Notification options reshaped: previous third option "Proposed
+    revisions" replaced with "None — Don't notify me". Type and DB
+    enum updated to `["major", "minor", "none"]`. No data migration
+    needed because the column is plain `text` (the enum lives in
+    Drizzle's TypeScript layer only, not as a Postgres CHECK).
+- **`src/server/actions/sign-from-modal.ts`** geo fallback:
+  - After `extractCapturedFields()`, if `shareLocation` is true and
+    both `ip_geo_city` and `ip_geo_country` are empty (i.e. the
+    Vercel headers weren't present — typically because we're on
+    localhost), hits `https://ipapi.co/json/` server-side with
+    `cache: "no-store"` and a custom UA, parses `city`, `region`,
+    `country_code`, and fills the fields. Failures are swallowed and
+    logged so a flaky third-party doesn't break signing.
+  - This means in dev, signing now stamps the developer's real
+    city/region/country on their signer row when they opt in.
+- **`src/lib/db/schema.ts`**: notification_preference enum updated to
+  `["major", "minor", "none"]`. Default still `"major"`.
+- **`src/server/actions/profile.ts`**: `NotificationPreference` type
+  union updated to `"major" | "minor" | "none"`.
+- **`public/images/bht/MIT-Media-Lab-Panel.webp`** (new, 110KB):
+  converted from the prior 2.9MB PNG via sharp@0.34.5 at quality 82,
+  reached through `node_modules/.pnpm/sharp@0.34.5/.../sharp` since
+  sharp is a transitive Next.js dep (not a direct dep we can plain-
+  `require`).
+- **`public/images/bht/MIT-Media-Lab-Panel.png`**: deleted.
+- **`src/app/HeroSection.tsx`**: `IMAGES[7]` updated to the `.webp`
+  filename.
+- **`src/app/page.tsx`** subtitle:
+  - New `<p>` above the `<ol>` in the articles section: "Join [N]
+    other real people who have signed this AI Bill of Rights".
+    Bold + `text-2xl sm:text-3xl`, centered, with the count fragment
+    bold-blue and linked to /signers. Plural-aware: "1 other real
+    person who has", or "N other real people who have".
+  - Section top padding `pt-24 sm:pt-32` → `pt-10 sm:pt-14`; subtitle
+    bottom margin `mb-20 sm:mb-24` → `mb-10 sm:mb-14` so Article 01
+    surfaces ~140px earlier on scroll.
+
+### Potential concerns to address:
+- **ipapi.co rate limit** is ~30k requests/month free. Production
+  shouldn't hit it because Vercel headers populate. But if a
+  preview deploy bypasses headers for any reason, we could blow
+  through it. Easy to add a cache or switch to ip-api.com if needed.
+- **The "none" notification value never triggers an email**, so the
+  semantics are clean — but we still don't have a notification job
+  wired up at all yet, so this is forward-looking.
+
+---
+
+## Progress Update as of [2026-05-19 04:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added a centered, bold call-to-action subtitle above the first article
+("Join [N] other real people who have signed this AI Bill of Rights"
+with the count linking to /signers), tightened the vertical padding
+around it so the document copy starts sooner on scroll, and converted
+the heavy MIT panel PNG to WebP (2.9MB → 110KB) to keep the grid asset
+light.
+
+### Detail of changes made:
+- **`src/app/page.tsx`**: new `<p>` above the `<ol>` in the articles
+  section. Bold + `text-2xl sm:text-3xl`, centered, dark-zinc text, with
+  the count fragment wrapped in a `<Link href="/signers">` that's bold
+  blue. Plural handling: shows "other real person" + "who has" for
+  count === 1, otherwise "other real people" + "who have". Section's
+  top padding cut from `pt-24 sm:pt-32` to `pt-10 sm:pt-14`, and the
+  subtitle's bottom margin from `mb-20 sm:mb-24` to `mb-10 sm:mb-14`,
+  so Article 01 shows ~140px earlier on scroll.
+- **`public/images/bht/MIT-Media-Lab-Panel.webp`** (new, 110KB):
+  converted from the 2.9MB PNG via sharp 0.34.5 at quality 82. Sharp
+  isn't a direct dep but Next.js pulls it in transitively; invoked via
+  `require('node_modules/.pnpm/sharp@0.34.5/.../sharp')` from a one-shot
+  Node script.
+- **`public/images/bht/MIT-Media-Lab-Panel.png`**: deleted (replaced by
+  the WebP).
+- **`src/app/HeroSection.tsx`**: `IMAGES[7]` updated to the `.webp`
+  path.
+
+### Potential concerns to address:
+- The PNG was added in the previous commit (d45acf7) so its removal
+  here costs a touch of repo history bloat; not enough to matter.
+
+---
+
 ## Progress Update as of [2026-05-19 04:15 Pacific]
 *(Most recent updates at top)*
 

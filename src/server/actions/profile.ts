@@ -14,7 +14,7 @@ function getDb() {
   return _db;
 }
 
-export type NotificationPreference = "major" | "minor" | "proposed";
+export type NotificationPreference = "major" | "minor" | "none";
 
 export interface ProfileInput {
   clerkUserId: string;

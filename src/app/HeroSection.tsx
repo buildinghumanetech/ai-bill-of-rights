@@ -12,7 +12,7 @@ const IMAGES = [
   "/images/bht/682c343a20a8821d212445eb_49b8a28009289bc99847e7803987c40b_IMG_9691.webp",
   "/images/bht/6787b903dfc14c54318e85d1_IMG_2260_1.webp",
   "/images/bht/682c37725850458f4c325aa7_063c97599b82df3b628f42e9dffc986a_IMG_0344.webp",
-  "/images/bht/MIT-Media-Lab-Panel.png",
+  "/images/bht/MIT-Media-Lab-Panel.webp",
   "/images/bht/680a67d1ef8ec2948110caf1_e68ac228385ffdcc0ec44eaca54c6d0e_IMG_0140_1.webp",
 ];
 

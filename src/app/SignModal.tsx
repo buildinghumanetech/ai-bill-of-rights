@@ -63,7 +63,7 @@ export default function SignModal({ open, onClose }: Props) {
     "initials" | "first-initial" | "full"
   >("full");
   const [notificationPreference, setNotificationPreference] = useState<
-    "major" | "minor" | "proposed"
+    "major" | "minor" | "none"
   >("major");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -511,24 +511,24 @@ export default function SignModal({ open, onClose }: Props) {
               role="radiogroup"
               aria-label="Verification method"
             >
-              <span className="text-sm font-medium text-zinc-700">
+              <span className="text-sm font-bold text-zinc-900">
                 Verify me via
               </span>
               <div className="relative inline-flex rounded-full bg-zinc-100 p-1 text-sm">
                 <span
                   aria-hidden
-                  className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200 ${
-                    method === "phone"
-                      ? "translate-x-[calc(100%+0.25rem)]"
-                      : "translate-x-0"
-                  }`}
+                  className="pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200"
+                  style={{
+                    transform:
+                      method === "phone" ? "translateX(100%)" : "translateX(0)",
+                  }}
                 />
                 <button
                   type="button"
                   role="radio"
                   aria-checked={method === "email"}
                   onClick={() => setMethod("email")}
-                  className={`relative z-10 rounded-full px-4 py-1.5 font-medium transition-colors ${
+                  className={`relative z-10 min-w-[6rem] rounded-full px-4 py-1.5 text-center font-medium transition-colors ${
                     method === "email" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
@@ -539,7 +539,7 @@ export default function SignModal({ open, onClose }: Props) {
                   role="radio"
                   aria-checked={method === "phone"}
                   onClick={() => setMethod("phone")}
-                  className={`relative z-10 rounded-full px-4 py-1.5 font-medium transition-colors ${
+                  className={`relative z-10 min-w-[6rem] rounded-full px-4 py-1.5 text-center font-medium transition-colors ${
                     method === "phone" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
@@ -580,32 +580,27 @@ export default function SignModal({ open, onClose }: Props) {
               <span>Share my approximate city &amp; state</span>
             </label>
 
-            {/* Show my name as — radio with live preview */}
-            <fieldset className="mt-5">
-              <legend className="text-sm font-medium text-zinc-700">
-                Show my name as
-              </legend>
-              <div
-                className="mt-2 flex flex-col gap-1.5"
-                role="radiogroup"
-                aria-label="Name display format"
-              >
-                {(
-                  [
-                    { value: "initials", sample: "J*** D**" },
-                    { value: "first-initial", sample: "Jane D**" },
-                    { value: "full", sample: "Jane Doe" },
-                  ] as const
-                ).map((opt) => {
-                  const preview =
-                    firstName.trim() && lastName.trim()
-                      ? formatNamePreview(
-                          firstName,
-                          lastName,
-                          opt.value,
-                        )
-                      : opt.sample;
-                  return (
+            {/* Show my name as — only renders once both names are filled in */}
+            {firstName.trim() && lastName.trim() ? (
+              <fieldset className="mt-5">
+                <legend className="text-sm font-bold text-zinc-900">
+                  Show my name as
+                </legend>
+                <div
+                  className="mt-2 flex flex-col gap-1.5"
+                  role="radiogroup"
+                  aria-label="Name display format"
+                >
+                  {(
+                    [
+                      { value: "initials", hint: "(just initials show)" },
+                      {
+                        value: "first-initial",
+                        hint: "(first name plus initial)",
+                      },
+                      { value: "full", hint: "(full name)" },
+                    ] as const
+                  ).map((opt) => (
                     <label
                       key={opt.value}
                       className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
@@ -619,24 +614,20 @@ export default function SignModal({ open, onClose }: Props) {
                         className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
                       />
                       <span className="font-mono text-sm text-zinc-900">
-                        {preview}
+                        {formatNamePreview(firstName, lastName, opt.value)}
                       </span>
                       <span className="ml-1 text-xs text-zinc-500">
-                        {opt.value === "initials" &&
-                          "(just initials show)"}
-                        {opt.value === "first-initial" &&
-                          "(first name plus initial)"}
-                        {opt.value === "full" && "(full name)"}
+                        {opt.hint}
                       </span>
                     </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
 
             {/* Alert me when updated */}
             <fieldset className="mt-5">
-              <legend className="text-sm font-medium text-zinc-700">
+              <legend className="text-sm font-bold text-zinc-900">
                 Alert me when the AI Bill of Rights is updated
               </legend>
               <div
@@ -657,9 +648,9 @@ export default function SignModal({ open, onClose }: Props) {
                       hint: "v1.0.0 → v1.1.0",
                     },
                     {
-                      value: "proposed",
-                      label: "Proposed revisions",
-                      hint: "Pull requests against the document",
+                      value: "none",
+                      label: "None",
+                      hint: "Don't notify me",
                     },
                   ] as const
                 ).map((opt) => (

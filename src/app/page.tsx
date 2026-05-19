@@ -95,7 +95,19 @@ export default async function Home() {
 
       <HeroSection />
 
-      <section className="bg-white px-6 pb-32 pt-24 sm:pt-32">
+      <section className="bg-white px-6 pb-32 pt-10 sm:pt-14">
+        <p className="mx-auto mb-10 max-w-3xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
+          Join{" "}
+          <Link
+            href="/signers"
+            className="font-bold text-blue-600 hover:underline"
+          >
+            {signatureCount.toLocaleString()}{" "}
+            {signatureCount === 1 ? "other real person" : "other real people"}
+          </Link>{" "}
+          {signatureCount === 1 ? "who has" : "who have"} signed this AI Bill
+          of Rights
+        </p>
         <ol className="mx-auto max-w-3xl">
           {articles.map((article) => (
             <li
