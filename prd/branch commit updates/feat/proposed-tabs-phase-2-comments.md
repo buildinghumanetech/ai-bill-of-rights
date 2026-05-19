@@ -1,5 +1,26 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 18:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `src/components/CommentComposer.tsx` — a client-side form component (Task 2.8) that handles both authenticated comment submission and anonymous-then-OTP draft handoff. `tsc --noEmit` clean. `useSignUp` import removed (unused in this file).
+
+### Detail of changes made:
+- Created `src/components/CommentComposer.tsx`:
+  - Accepts `baseVersionId`, optional `anchorId`, `proposalId`, `parentCommentId`, `defaultBody`, `onSubmitted`, and `onCancel` props.
+  - For signed-in users: builds a `FormData` object and calls `submitCommentAction`, then calls `clearDraft()`, resets textarea, and triggers `router.refresh()`.
+  - For anonymous users: calls `saveDraft()` with a `kind: "comment"` payload (including `returnTo` = current path + `?draft=1`), then dispatches `open-sign-modal` CustomEvent to trigger the Clerk OTP modal.
+  - Error state displayed inline below the textarea as a red pill.
+  - Submit button label adapts: "Post" when signed in, "Sign in & post" when anonymous, "Saving…" during transition.
+  - Cancel button is conditionally rendered only when `onCancel` prop is provided.
+  - Removed `useSignUp` import — it was in the plan spec but not used in this file.
+
+### Potential concerns to address:
+- `open-sign-modal` CustomEvent consumer not yet wired — will be handled in Task 2.12 when the modal is integrated into the homepage.
+
+---
+
 ## Progress Update as of 2026-05-19 17:30 Pacific
 *(Most recent updates at top)*
 
