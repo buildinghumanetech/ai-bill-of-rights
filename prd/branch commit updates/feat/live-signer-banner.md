@@ -3,6 +3,22 @@
 ## Progress Update as of 2026-05-19 14:30 Pacific
 *(Most recent updates at top)*
 
+## Progress Update as of 2026-05-19 14:30 Pacific
+
+### Summary of changes since last update
+Implemented Task 1: added `listRecentSignersSince` DB query function in `src/lib/db/queries.ts` with 4 Vitest tests against pglite. All 4 new tests pass; the 2 pre-existing failures in `tests/server/revoke.test.ts` and `tests/server/sign.test.ts` are unrelated to this task.
+
+### Detail of changes made:
+- **`src/lib/db/queries.ts`**: Added `gt`, `and`, `isNull` to the drizzle-orm import. Added `RecentSignerEvent` interface (`id`, `displayName`, `locationText`, `signedAt`) and `SIXTY_MINUTES_MS` constant. Implemented `listRecentSignersSince(since: Date | null, db: any = null)` which joins `signatures` → `signers`, filters with `gt(signatures.signedAt, cutoff)` and `isNull(signers.softBannedAt)`, orders by `desc(signatures.signedAt)`. When `since` is `null`, `cutoff` defaults to 60 minutes ago.
+- **`tests/lib/db.queries.test.ts`**: Added `listRecentSignersSince` to the import. Added a new `describe("listRecentSignersSince")` block with a `seedSigner` helper that inserts a signer + consent record + signature in one call. Four tests cover: (1) `since=null` 60-minute window, (2) `since=<timestamp>` strictly-after cursor, (3) soft-banned exclusion, (4) descending order.
+- **`tests/_helpers/pglite-db.ts`**: No changes needed — `soft_banned_at` and `notification_preference` columns were already present in the test DDL.
+
+### Potential concerns to address:
+- **Pre-existing test failures** in `tests/server/revoke.test.ts` (`relation "reports" does not exist`) and `tests/server/sign.test.ts` (transaction rollback assertion) were failing before this task. These are not regressions from Task 1.
+- **`db` parameter position** differs from `listSignatures(db, opts)` — the new function uses `(since, db)` as specified in the plan for clarity. Future callers should be aware of this arg order.
+
+---
+
 ### Summary of changes since last update
 Owner reviewed the design spec and approved. Wrote the implementation plan at `docs/superpowers/plans/2026-05-19-live-signer-banner.md` — 10 tasks, all TDD-style with bite-sized steps and complete code. Ready to hand off to subagent-driven-development or executing-plans for implementation.
 
