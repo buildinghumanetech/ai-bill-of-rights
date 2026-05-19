@@ -8,9 +8,9 @@ export function signConfirmation(opts: {
     subject: `You signed the AI Bill of Rights v${opts.version}`,
     text: `Hi ${opts.displayName},
 
-You just signed v${opts.version} of the AI Bill of Rights. Thank you.
+You just signed v${opts.version} of the AI Bill of Rights. Thank you for helping ensure a future with AI that supports human flourishing.
 
-Your public page: ${opts.signerPageUrl}
+Share your public signature page so others can join you: ${opts.signerPageUrl}
 
 Your data, your choice — you can revoke any time:
 ${opts.revokeUrl}

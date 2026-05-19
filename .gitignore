@@ -43,3 +43,6 @@ next-env.d.ts
 # local agent/skill scratch
 .superpowers/
 .claude/settings.local.json
+
+# clerk configuration (can include secrets)
+/.clerk/
