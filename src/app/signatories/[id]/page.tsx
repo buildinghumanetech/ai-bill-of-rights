@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
 import {
   getSignerById,
   listSignaturesForSigner,
 } from "@/lib/db/queries";
 import { VerificationBadge } from "@/components/VerificationBadge";
+import { ShareSignature } from "@/components/ShareSignature";
 import SignTrigger from "../../SignTrigger";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +39,12 @@ export default async function SignerProfile({
   const signer = await getSignerById(id);
   if (!signer) notFound();
   const sigs = await listSignaturesForSigner(id);
+
+  const { userId } = await auth();
+  const isOwner = Boolean(userId) && userId === signer.clerkUserId;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+  const signatureUrl = `${siteUrl}/signatories/${signer.id}`;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32 sm:py-24">
@@ -91,7 +99,12 @@ export default async function SignerProfile({
         </ul>
       </section>
 
-      <section className="mt-14 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
+      <ShareSignature
+        displayName={signer.displayName}
+        signatureUrl={signatureUrl}
+      />
+
+      <section className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
         <h2 className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
           Add your name to the{" "}
           <Link
@@ -113,16 +126,18 @@ export default async function SignerProfile({
         </div>
       </section>
 
-      <p className="mt-14 text-center text-xs text-zinc-500">
-        Your data, your choice.{" "}
-        <Link
-          href="/account/revoke"
-          className="underline underline-offset-4"
-        >
-          Revoke your signature
-        </Link>{" "}
-        any time.
-      </p>
+      {isOwner ? (
+        <p className="mt-14 text-center text-xs text-zinc-500">
+          Your data, your choice.{" "}
+          <Link
+            href="/account/revoke"
+            className="underline underline-offset-4"
+          >
+            Remove your signature
+          </Link>{" "}
+          any time.
+        </p>
+      ) : null}
     </main>
   );
 }

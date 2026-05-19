@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   consentRecords,
@@ -46,8 +46,28 @@ export async function bootstrapAdminAction(): Promise<void> {
 export async function deleteSignerAction(signerId: string): Promise<void> {
   await requireAdminOrBootstrap();
   const db = getDb();
-  // Cascade manually since neon-http has no transaction support: delete
-  // dependent rows first, then the signer.
+  // Cascade manually since neon-http has no transaction support. Order
+  // matters for FK constraints; we delete children before parents.
+  //
+  // The production DB still has `comments`, `comment_upvotes`, `reports`
+  // tables left behind from an earlier Phase 3 db:push, even though those
+  // tables aren't in the current schema.ts (the Phase 3 PRs were closed).
+  // The FKs from those tables to `signers` were blocking the final
+  // DELETE FROM signers and 500ing the admin Delete button.
+  //
+  // We use IF EXISTS so this is a no-op if a future maintainer drops
+  // those tables for real.
+  await db.execute(sql`
+    DELETE FROM reports
+    WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
+       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
+  `);
+  await db.execute(sql`
+    DELETE FROM comment_upvotes
+    WHERE signer_id = ${signerId}
+       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
+  `);
+  await db.execute(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
   await db.delete(signatures).where(eq(signatures.signerId, signerId));
   await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
   await db.delete(signers).where(eq(signers.id, signerId));
@@ -65,6 +85,35 @@ export async function setAdminFlagAction(
     .set({ isAdmin: makeAdmin })
     .where(eq(signers.id, signerId));
   revalidatePath("/admin/signers");
+}
+
+export interface EditSignerInput {
+  signerId: string;
+  displayName: string;
+  affiliation: string;
+  locationText: string;
+}
+
+export async function editSignerAction(
+  input: EditSignerInput,
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdminOrBootstrap();
+  const displayName = input.displayName.trim();
+  if (!displayName) {
+    return { success: false, error: "Display name is required." };
+  }
+  await getDb()
+    .update(signers)
+    .set({
+      displayName,
+      affiliation: input.affiliation.trim() || null,
+      locationText: input.locationText.trim() || null,
+    })
+    .where(eq(signers.id, input.signerId));
+  revalidatePath("/admin/signers");
+  revalidatePath("/signers");
+  revalidatePath(`/signatories/${input.signerId}`);
+  return { success: true };
 }
 
 export interface AdminAddSignerInput {

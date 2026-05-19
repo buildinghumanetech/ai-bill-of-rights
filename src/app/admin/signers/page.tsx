@@ -197,6 +197,8 @@ export default async function AdminSignersPage() {
                     <AdminRowActions
                       signerId={row.id}
                       displayName={row.displayName}
+                      affiliation={row.affiliation}
+                      locationText={row.locationText}
                       isAdmin={row.isAdmin}
                     />
                   </td>
