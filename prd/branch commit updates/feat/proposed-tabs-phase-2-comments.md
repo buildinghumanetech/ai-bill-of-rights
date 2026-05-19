@@ -1,5 +1,31 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 18:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `src/components/CommentDrawer.tsx` — a client component (Task 2.10) that renders the right-side slide-in panel for per-anchor discussion. Listens for `anchor-open-comments` and `compose-comment` window events. `tsc --noEmit` clean.
+
+### Detail of changes made:
+- Created `src/components/CommentDrawer.tsx`:
+  - Props: `baseVersionId` and `commentsByAnchor: Record<string, CommentRow[]>` (pre-fetched at SSR time to avoid per-anchor round-trips).
+  - State: `openAnchor` (which anchor's drawer is visible) and `composeAnchor` (whether the inline composer is open).
+  - `useEffect` wires two window event listeners:
+    - `anchor-open-comments` → sets `openAnchor`, clears `composeAnchor` (view-only mode).
+    - `compose-comment` → sets both `openAnchor` and `composeAnchor` (opens drawer directly to compose).
+  - Returns `null` when `openAnchor` is null (drawer hidden).
+  - Layout: `fixed right-0 top-0 z-40` full-height panel, `sm:w-96` / `w-full max-w-md`.
+  - Header shows anchor ID in monospace + Close button.
+  - Body: scrollable `CommentThread` with SSR-fetched comments.
+  - Footer: toggling between `CommentComposer` and "Add a comment" button.
+  - `commentsByAnchor[openAnchor] ?? []` safely falls back to empty array if no comments pre-fetched.
+
+### Potential concerns to address:
+- Drawer does not re-fetch comments when opened — it uses the SSR snapshot. After `router.refresh()` (triggered by `CommentComposer` and `CommentThread`), the parent page will re-render and pass fresh `commentsByAnchor` down.
+- `anchor-open-comments` and `compose-comment` event emitters land in Task 2.11 (DocumentRenderer) and Task 2.6 (AnchorSentence) respectively.
+
+---
+
 ## Progress Update as of 2026-05-19 18:15 Pacific
 *(Most recent updates at top)*
 
