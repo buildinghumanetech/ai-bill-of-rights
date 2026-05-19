@@ -1,5 +1,91 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 05:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Major modal upgrade: "already signed" view that lets returning signers
+remove their signature instead of being asked to sign again,
+country-code dropdown (50 countries, US-default) for phone, Phone SMS
+flipped to be the left/default segmented option, the Article-01
+subtitle widened so it doesn't wrap, and notification-options labels
+cleaned up.
+
+### Detail of changes made:
+- **`src/server/actions/me.ts`** (new):
+  - `getMySignatureStatus(versionString = "1.0.0")` returns a tagged
+    union of `{state: "anonymous" | "no-signer" | "not-signed"} |
+    SignedStatus` where SignedStatus carries displayName,
+    verificationMethod, signedAt (ISO string for clean server→client
+    transit), and version. Signed-in users see "already signed"
+    only if a row exists for the *current* version — older versions
+    don't count.
+  - `removeMySignature()` hard-deletes the user's signatures →
+    consent_records → signer row (cascade manually because neon-http
+    has no transactions). After this the modal flips to the regular
+    form so the same Clerk session can re-sign with new preferences
+    if desired.
+- **`src/app/SignModal.tsx`** — already-signed view:
+  - New `signatureStatus` state (plus a `loading` intermediate). On
+    `open && isSignedIn`, fires `getMySignatureStatus()` once and
+    renders three branches in the form step: loading spinner,
+    "already signed" card, or the regular form.
+  - Already-signed card: emerald-tinted, shows `displayName`,
+    "Verified by Phone / Email — M/D/YY (v1.0.0)" line, then a red
+    `Remove my signature` button (window.confirm guard) and a
+    secondary `Sign out` button. After removal the status flips to
+    `not-signed` and the form re-renders, ready to sign again.
+- **`src/app/SignModal.tsx`** — country dropdown + Phone SMS default:
+  - New `COUNTRIES` constant inline with 50 entries — US first
+    (default), then sensible alpha-by-region grouping. Each row:
+    `{ id, code, flag, name }`. Multiple +1 countries are
+    distinguishable by `id` (US/CA).
+  - Replaced single `identifier` state with three: `email`,
+    `phoneDigits`, `countryId`. `selectedCountry` and `identifier`
+    are derived from these on each render so the rest of the flow
+    (signUp.create, signIn.create, server action) keeps working
+    unchanged. `friendlyIdentifier` is also derived for the OTP
+    step display so the user sees their input in the format they
+    entered it ("🇺🇸 +1 555 123 4567") instead of just E.164
+    (`+15551234567`).
+  - Form layout in phone mode now uses a native `<select>` for
+    country + a `<input type="tel">` for digits. Email mode is a
+    single `<input type="email">` with placeholder `me@email.com`.
+  - Default `method` flipped to `"phone"`. Segmented pill order
+    swapped so Phone SMS is the left/default option and Email
+    slides right. Pill transform direction matched
+    (`email → translateX(100%)`).
+  - Validation: phone path requires ≥7 digits (E.164 minimum-ish);
+    email path requires non-empty trimmed value.
+- **`src/app/SignModal.tsx`** — notification copy:
+  - "Major revisions" hint dropped the "(default)" trailing text
+    (still defaults via `useState("major")`).
+  - "None" option no longer renders a hint span (was empty string).
+- **`src/app/page.tsx`** — subtitle width:
+  - `max-w-3xl` → `max-w-5xl` on the "Join [N] other real people…"
+    subtitle so it stays on one line at most desktop widths. Still
+    wraps on small screens because of viewport constraint, which is
+    fine.
+
+### Potential concerns to address:
+- **Removing a signature also deletes the Clerk user's signer
+  metadata** but leaves their Clerk identity intact. They can sign
+  again on the same session. If we ever want full account deletion
+  too, that needs a separate Clerk admin API call.
+- **The country list is hand-curated** (50 entries). If we need
+  full ISO 3166 coverage, swap in a library like
+  `country-telephone-data` later. For an English-language
+  manifesto launch, 50 covers the practical set.
+- **`getMySignatureStatus` runs on every modal open** — a single
+  query, cheap, but if modal-open frequency spikes we should debounce
+  or cache for the session lifetime.
+- **`removeMySignature` doesn't revalidatePath** — the page caller
+  reloads via state change, but if the user navigates to /signers
+  the count won't refresh until next dynamic fetch. Acceptable
+  since /signers is force-dynamic, but worth noting.
+
+---
+
 ## Progress Update as of [2026-05-19 04:45 Pacific]
 *(Most recent updates at top)*
 

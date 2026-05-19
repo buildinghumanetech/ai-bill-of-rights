@@ -4,6 +4,11 @@ import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useClerk, useSignIn, useSignUp, useUser } from "@clerk/nextjs";
 import { recordSignatureFromModal } from "@/server/actions/sign-from-modal";
 import { sendInvitationsAction } from "@/server/actions/invite";
+import {
+  getMySignatureStatus,
+  removeMySignature,
+  type SignatureStatus,
+} from "@/server/actions/me";
 
 interface Props {
   open: boolean;
@@ -15,6 +20,76 @@ type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
 
 const VERSION = "1.0.0";
+
+interface Country {
+  id: string;
+  code: string;
+  flag: string;
+  name: string;
+}
+
+const COUNTRIES: ReadonlyArray<Country> = [
+  { id: "US", code: "+1", flag: "🇺🇸", name: "United States" },
+  { id: "CA", code: "+1", flag: "🇨🇦", name: "Canada" },
+  { id: "MX", code: "+52", flag: "🇲🇽", name: "Mexico" },
+  { id: "GB", code: "+44", flag: "🇬🇧", name: "United Kingdom" },
+  { id: "IE", code: "+353", flag: "🇮🇪", name: "Ireland" },
+  { id: "AU", code: "+61", flag: "🇦🇺", name: "Australia" },
+  { id: "NZ", code: "+64", flag: "🇳🇿", name: "New Zealand" },
+  { id: "DE", code: "+49", flag: "🇩🇪", name: "Germany" },
+  { id: "FR", code: "+33", flag: "🇫🇷", name: "France" },
+  { id: "ES", code: "+34", flag: "🇪🇸", name: "Spain" },
+  { id: "IT", code: "+39", flag: "🇮🇹", name: "Italy" },
+  { id: "PT", code: "+351", flag: "🇵🇹", name: "Portugal" },
+  { id: "NL", code: "+31", flag: "🇳🇱", name: "Netherlands" },
+  { id: "BE", code: "+32", flag: "🇧🇪", name: "Belgium" },
+  { id: "CH", code: "+41", flag: "🇨🇭", name: "Switzerland" },
+  { id: "AT", code: "+43", flag: "🇦🇹", name: "Austria" },
+  { id: "SE", code: "+46", flag: "🇸🇪", name: "Sweden" },
+  { id: "NO", code: "+47", flag: "🇳🇴", name: "Norway" },
+  { id: "DK", code: "+45", flag: "🇩🇰", name: "Denmark" },
+  { id: "FI", code: "+358", flag: "🇫🇮", name: "Finland" },
+  { id: "PL", code: "+48", flag: "🇵🇱", name: "Poland" },
+  { id: "GR", code: "+30", flag: "🇬🇷", name: "Greece" },
+  { id: "TR", code: "+90", flag: "🇹🇷", name: "Turkey" },
+  { id: "IL", code: "+972", flag: "🇮🇱", name: "Israel" },
+  { id: "AE", code: "+971", flag: "🇦🇪", name: "United Arab Emirates" },
+  { id: "SA", code: "+966", flag: "🇸🇦", name: "Saudi Arabia" },
+  { id: "EG", code: "+20", flag: "🇪🇬", name: "Egypt" },
+  { id: "ZA", code: "+27", flag: "🇿🇦", name: "South Africa" },
+  { id: "NG", code: "+234", flag: "🇳🇬", name: "Nigeria" },
+  { id: "KE", code: "+254", flag: "🇰🇪", name: "Kenya" },
+  { id: "IN", code: "+91", flag: "🇮🇳", name: "India" },
+  { id: "PK", code: "+92", flag: "🇵🇰", name: "Pakistan" },
+  { id: "BD", code: "+880", flag: "🇧🇩", name: "Bangladesh" },
+  { id: "ID", code: "+62", flag: "🇮🇩", name: "Indonesia" },
+  { id: "PH", code: "+63", flag: "🇵🇭", name: "Philippines" },
+  { id: "TH", code: "+66", flag: "🇹🇭", name: "Thailand" },
+  { id: "VN", code: "+84", flag: "🇻🇳", name: "Vietnam" },
+  { id: "MY", code: "+60", flag: "🇲🇾", name: "Malaysia" },
+  { id: "SG", code: "+65", flag: "🇸🇬", name: "Singapore" },
+  { id: "HK", code: "+852", flag: "🇭🇰", name: "Hong Kong" },
+  { id: "TW", code: "+886", flag: "🇹🇼", name: "Taiwan" },
+  { id: "JP", code: "+81", flag: "🇯🇵", name: "Japan" },
+  { id: "KR", code: "+82", flag: "🇰🇷", name: "South Korea" },
+  { id: "CN", code: "+86", flag: "🇨🇳", name: "China" },
+  { id: "BR", code: "+55", flag: "🇧🇷", name: "Brazil" },
+  { id: "AR", code: "+54", flag: "🇦🇷", name: "Argentina" },
+  { id: "CL", code: "+56", flag: "🇨🇱", name: "Chile" },
+  { id: "CO", code: "+57", flag: "🇨🇴", name: "Colombia" },
+  { id: "PE", code: "+51", flag: "🇵🇪", name: "Peru" },
+  { id: "RU", code: "+7", flag: "🇷🇺", name: "Russia" },
+  { id: "UA", code: "+380", flag: "🇺🇦", name: "Ukraine" },
+];
+
+function formatSignedDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+  });
+}
 
 function formatNamePreview(
   first: string,
@@ -56,8 +131,14 @@ export default function SignModal({ open, onClose }: Props) {
   const [step, setStep] = useState<Step>("form");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [method, setMethod] = useState<Method>("email");
-  const [identifier, setIdentifier] = useState("");
+  const [method, setMethod] = useState<Method>("phone");
+  const [email, setEmail] = useState("");
+  const [phoneDigits, setPhoneDigits] = useState("");
+  const [countryId, setCountryId] = useState("US");
+  const [signatureStatus, setSignatureStatus] = useState<
+    SignatureStatus | { state: "loading" } | null
+  >(null);
+  const [removing, setRemoving] = useState(false);
   const [shareLocation, setShareLocation] = useState(true);
   const [nameDisplayFormat, setNameDisplayFormat] = useState<
     "initials" | "first-initial" | "full"
@@ -107,8 +188,54 @@ export default function SignModal({ open, onClose }: Props) {
       setInviteInput("");
       setInvitePending(false);
       setInviteResult(null);
+      setSignatureStatus(null);
+      setRemoving(false);
     }
   }, [open]);
+
+  // When the modal opens with a signed-in user, fetch whether they've
+  // already signed v1.0.0 so we can show the "already signed" view instead
+  // of asking them to sign again.
+  useEffect(() => {
+    if (!open) return;
+    if (!isSignedIn) {
+      setSignatureStatus(null);
+      return;
+    }
+    setSignatureStatus({ state: "loading" });
+    let cancelled = false;
+    getMySignatureStatus(VERSION).then((status) => {
+      if (cancelled) return;
+      setSignatureStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isSignedIn]);
+
+  async function handleRemoveSignature() {
+    if (
+      !window.confirm(
+        "Remove your signature from the AI Bill of Rights? This deletes your signer record and is irreversible.",
+      )
+    ) {
+      return;
+    }
+    setRemoving(true);
+    try {
+      const res = await removeMySignature();
+      if (!res.success) {
+        setError(res.error ?? "Couldn't remove your signature.");
+        return;
+      }
+      // Refresh status so the form re-renders for a fresh sign attempt.
+      setSignatureStatus({ state: "not-signed" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't remove.");
+    } finally {
+      setRemoving(false);
+    }
+  }
 
   // Lock body scroll while open
   useEffect(() => {
@@ -301,10 +428,23 @@ export default function SignModal({ open, onClose }: Props) {
     }
   }
 
+  const selectedCountry =
+    COUNTRIES.find((c) => c.id === countryId) ?? COUNTRIES[0];
+  const identifier =
+    method === "email"
+      ? email.trim()
+      : `${selectedCountry.code}${phoneDigits.replace(/\D/g, "")}`;
+  const friendlyIdentifier =
+    method === "email"
+      ? email.trim()
+      : `${selectedCountry.flag} ${selectedCountry.code} ${phoneDigits}`;
+
   const isFormValid =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
-    identifier.trim().length > 0;
+    (method === "email"
+      ? email.trim().length > 0
+      : phoneDigits.replace(/\D/g, "").length >= 7);
 
   const shareUrl =
     signerId && typeof window !== "undefined"
@@ -448,7 +588,65 @@ export default function SignModal({ open, onClose }: Props) {
           </svg>
         </button>
 
-        {step === "form" && (
+        {step === "form" && signatureStatus?.state === "loading" && (
+          <div className="py-16 text-center text-sm text-zinc-500">
+            Checking your signature…
+          </div>
+        )}
+
+        {step === "form" && signatureStatus?.state === "signed" && (
+          <div>
+            <h2
+              id="sign-modal-title"
+              className="text-2xl font-semibold tracking-tight text-zinc-950"
+            >
+              You&apos;ve already signed this AI Bill of Rights as:
+            </h2>
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+              <div className="text-xl font-semibold">
+                {signatureStatus.displayName}
+              </div>
+              <div className="mt-1 text-sm">
+                Verified by{" "}
+                {signatureStatus.verificationMethod === "sms"
+                  ? "Phone"
+                  : "Email"}{" "}
+                — {formatSignedDate(signatureStatus.signedAt)} (v
+                {signatureStatus.version})
+              </div>
+            </div>
+
+            {error ? (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleRemoveSignature}
+                disabled={removing}
+                className="w-full rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {removing ? "Removing…" : "Remove my signature"}
+              </button>
+              <button
+                type="button"
+                onClick={() => signOut()}
+                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "form" &&
+          (signatureStatus === null ||
+            signatureStatus.state === "anonymous" ||
+            signatureStatus.state === "no-signer" ||
+            signatureStatus.state === "not-signed") && (
           <form onSubmit={handleFormSubmit} noValidate>
             <h2
               id="sign-modal-title"
@@ -520,20 +718,9 @@ export default function SignModal({ open, onClose }: Props) {
                   className="pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200"
                   style={{
                     transform:
-                      method === "phone" ? "translateX(100%)" : "translateX(0)",
+                      method === "email" ? "translateX(100%)" : "translateX(0)",
                   }}
                 />
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={method === "email"}
-                  onClick={() => setMethod("email")}
-                  className={`relative z-10 min-w-[6rem] rounded-full px-4 py-1.5 text-center font-medium transition-colors ${
-                    method === "email" ? "text-zinc-950" : "text-zinc-500"
-                  }`}
-                >
-                  Email
-                </button>
                 <button
                   type="button"
                   role="radio"
@@ -545,29 +732,67 @@ export default function SignModal({ open, onClose }: Props) {
                 >
                   Phone SMS
                 </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={method === "email"}
+                  onClick={() => setMethod("email")}
+                  className={`relative z-10 min-w-[6rem] rounded-full px-4 py-1.5 text-center font-medium transition-colors ${
+                    method === "email" ? "text-zinc-950" : "text-zinc-500"
+                  }`}
+                >
+                  Email
+                </button>
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="block">
-                <span className="sr-only">
-                  {method === "email" ? "Email address" : "Phone number"}
-                </span>
-                <input
-                  type={method === "email" ? "email" : "tel"}
-                  inputMode={method === "email" ? "email" : "tel"}
-                  autoComplete={method === "email" ? "email" : "tel"}
-                  placeholder={
-                    method === "email"
-                      ? "you@example.com"
-                      : "+1 555 123 4567"
-                  }
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </label>
+              {method === "email" ? (
+                <label className="block">
+                  <span className="sr-only">Email address</span>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="me@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </label>
+              ) : (
+                <div className="flex gap-2">
+                  <label className="block">
+                    <span className="sr-only">Country</span>
+                    <select
+                      value={countryId}
+                      onChange={(e) => setCountryId(e.target.value)}
+                      aria-label="Country"
+                      className="h-full rounded-lg border border-zinc-300 bg-white px-2 py-2.5 text-sm text-zinc-950 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.flag} {c.code} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block flex-1">
+                    <span className="sr-only">Phone number</span>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="555 123 4567"
+                      value={phoneDigits}
+                      onChange={(e) => setPhoneDigits(e.target.value)}
+                      required
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
 
             <label className="mt-5 flex items-start gap-2.5 text-sm text-zinc-700">
@@ -640,18 +865,14 @@ export default function SignModal({ open, onClose }: Props) {
                     {
                       value: "major",
                       label: "Major revisions",
-                      hint: "v2.0.0 → v3.0.0 (default)",
+                      hint: "v2.0.0 → v3.0.0",
                     },
                     {
                       value: "minor",
                       label: "Minor revisions",
                       hint: "v1.0.0 → v1.1.0",
                     },
-                    {
-                      value: "none",
-                      label: "None",
-                      hint: "Don't notify me",
-                    },
+                    { value: "none", label: "None", hint: "" },
                   ] as const
                 ).map((opt) => (
                   <label
@@ -669,9 +890,11 @@ export default function SignModal({ open, onClose }: Props) {
                       className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
                     />
                     <span>{opt.label}</span>
-                    <span className="ml-1 text-xs text-zinc-500">
-                      {opt.hint}
-                    </span>
+                    {opt.hint ? (
+                      <span className="ml-1 text-xs text-zinc-500">
+                        {opt.hint}
+                      </span>
+                    ) : null}
                   </label>
                 ))}
               </div>
@@ -711,7 +934,10 @@ export default function SignModal({ open, onClose }: Props) {
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
               We sent a 6-digit code to{" "}
-              <span className="font-medium text-zinc-900">{identifier}</span>.
+              <span className="font-medium text-zinc-900">
+                {friendlyIdentifier}
+              </span>
+              .
             </p>
 
             <input

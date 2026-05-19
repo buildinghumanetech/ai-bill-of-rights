@@ -96,7 +96,7 @@ export default async function Home() {
       <HeroSection />
 
       <section className="bg-white px-6 pb-32 pt-10 sm:pt-14">
-        <p className="mx-auto mb-10 max-w-3xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
+        <p className="mx-auto mb-10 max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
           Join{" "}
           <Link
             href="/signers"
