@@ -1,5 +1,36 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 14:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Owner reviewed the design spec and approved. Wrote the implementation plan at `docs/superpowers/plans/2026-05-19-live-signer-banner.md` — 10 tasks, all TDD-style with bite-sized steps and complete code. Ready to hand off to subagent-driven-development or executing-plans for implementation.
+
+### Detail of changes made:
+- **Plan saved to** `docs/superpowers/plans/2026-05-19-live-signer-banner.md`. Header includes the writing-plans skill convention (REQUIRED SUB-SKILL line, checkbox steps, file structure inventory at top).
+- **10 tasks** decomposing the spec, each ending in a green commit:
+  - Task 0 — orientation: read the Next.js 16 route handler + layout docs (no-commit). Mirrors the convention from Plan 1 to defend against stale training data.
+  - Task 1 — `listRecentSignersSince` query in `src/lib/db/queries.ts` with 4 Vitest tests against pglite (past-60-min filter, since-cursor filter, soft-banned exclusion, ordering desc).
+  - Task 2 — `GET /api/signers/recent` route handler with 4 tests (cold-start shape, since cursor pass-through, 400 on invalid since, 500 on DB error without leaking internals).
+  - Task 3 — pure reducer at `src/app/live-signers-reducer.ts` with 8 unit tests covering cold-start single-replay, regular FIFO queue, queue cap, no-displace-during-show, event-finished drain.
+  - Task 4 — `LiveSignersProvider` client component (no unit tests; logic is the tested reducer + glue). Owns 60s `setInterval` + `visibilitychange` handler + cursor ref.
+  - Task 5 — trivial `SignatureCount` client component (no tests, no commit by itself).
+  - Task 6 — `LiveSignerBanner` with phase-based animation state machine and a `globals.css` `prefers-reduced-motion` override.
+  - Task 7 — wire provider + banner into `src/app/layout.tsx`. Layout becomes async to call `getSignatureCount()` once per request; passes that as `initialCount` to the provider so first paint isn't zero.
+  - Task 8 — replace the three `{signatureCount.toLocaleString()}` usages across `page.tsx` and `FloatingSignButton.tsx` with `<SignatureCount />`. Notes the conflict points with hotfix PR #12 and which version to keep depending on merge order.
+  - Task 9 — manual smoke test checklist (cold-start, live sign during foreground, background-tab catch-up, quiet period, reduced-motion, mobile).
+- **Tests use the existing pglite pattern** (`tests/_helpers/pglite-db.ts`). Task 1 Step 1 also adds a defensive `soft_banned_at timestamptz` column to the test DDL if it's missing — drift between the Drizzle schema and the test DDL is a known maintenance burden, called out in the original Plan 1 progress log.
+- **Three classes of test coverage:** (1) DB query tests against pglite; (2) route handler tests with mocked queries via `vi.mock`; (3) pure reducer tests with no mocks. UI components (provider, banner, count) are explicitly not unit-tested; manual smoke in Task 9 covers them. This split matches the spec's testing section.
+- **Self-review at bottom of the plan** confirms spec coverage (all 12 sections), no placeholders, type consistency across tasks (the `LiveSignerEvent` type matches across reducer, provider, and banner; `signedAt` is `Date` in the DB query type and `string` on the wire/client, handled by NextResponse.json's automatic Date → ISO conversion).
+
+### Potential concerns to address:
+- **Hotfix PR #12 hasn't merged yet.** Tasks 1 and 8 touch files (`page.tsx`, `FloatingSignButton.tsx`) that #12 also modifies. Task 8 documents which version to keep depending on merge order. If #12 lands before this work starts, rebase onto main and the conflict resolves cleanly. If implementation starts before #12 merges, expect conflicts on those two files during the eventual rebase.
+- **Count grammar wobble at count=1.** Mid-page "Join X other real people who have signed" becomes grammatically incorrect when count=1 (says "1 other real people"). The plan accepts this and proposes a tiny `<JoinClause />` client component as a follow-up if needed. Total time at count=1 is moments per project lifetime, so deferred.
+- **Layout becomes dynamic.** Adding `await getSignatureCount()` in the root layout forces every page response to do a single `SELECT count(*)` against Postgres. Pages were already dynamic (`force-dynamic`), so no regression — but worth noting if static export is ever pursued. Decision: trade the count query (cheap, indexed) for one source of truth across the site.
+- **Implementation not started.** Plan written; spec reviewed and approved; no code yet. Next session should invoke subagent-driven-development (recommended) or executing-plans against this plan file.
+
+---
+
 ## Progress Update as of 2026-05-19 14:15 Pacific
 *(Most recent updates at top)*
 
