@@ -77,5 +77,10 @@ export function liveSignersReducer(
       }
       return { ...state, currentEvent: null };
     }
+
+    default: {
+      const _exhaustive: never = action;
+      return _exhaustive;
+    }
   }
 }

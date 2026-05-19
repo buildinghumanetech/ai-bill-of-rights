@@ -1,5 +1,20 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 14:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Addressed Task 3 code-review feedback: added exhaustiveness check to the reducer switch statement and tightened the queue-cap test assertion. All 8 reducer tests still pass.
+
+### Detail of changes made:
+- **`src/app/live-signers-reducer.ts`**: Added `default` clause to the `switch` using a `never` assertion (`const _exhaustive: never = action; return _exhaustive;`). TypeScript will now flag any unhandled action type at compile time rather than silently returning `undefined` at runtime.
+- **`tests/app/live-signers-reducer.test.ts`**: Changed the queue-cap assertion from `toBeLessThanOrEqual(QUEUE_CAP)` to `toBe(QUEUE_CAP)`. The scenario starts with empty state and 10 incoming signers; after draining one to `currentEvent`, exactly `QUEUE_CAP` (= 5) items must be in the queue — the looser assertion would have passed even with an empty queue.
+
+### Potential concerns to address:
+- Pre-existing test failures in `tests/server/revoke.test.ts` and `tests/server/sign.test.ts` remain unrelated to this branch.
+
+---
+
 ## Progress Update as of 2026-05-19 15:00 Pacific
 *(Most recent updates at top)*
 

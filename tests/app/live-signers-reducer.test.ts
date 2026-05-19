@@ -102,8 +102,8 @@ describe("liveSignersReducer", () => {
         count: 100,
         newSigners,
       });
-      // First drains to currentEvent; remaining queue length is at most QUEUE_CAP
-      expect(next.queue.length).toBeLessThanOrEqual(QUEUE_CAP);
+      // First drains to currentEvent; remaining queue length is exactly QUEUE_CAP
+      expect(next.queue.length).toBe(QUEUE_CAP);
     });
   });
 
