@@ -220,8 +220,8 @@ export default async function Home() {
         <h1 className="text-balance text-5xl font-semibold tracking-tight text-zinc-950 sm:text-7xl">
           The AI Bill of Rights
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-8 text-zinc-700 sm:text-xl">
-          <strong className="font-semibold text-zinc-950">
+        <p className="mx-auto mt-6 max-w-none text-pretty text-xl leading-8 text-zinc-700 sm:text-2xl">
+          <strong className="whitespace-nowrap font-semibold text-zinc-950">
             Nine commitments we&apos;re demanding from every AI company
           </strong>
           <br />

@@ -114,6 +114,11 @@ export default function HeroSection() {
                 priority={i === CENTER_INDEX}
                 sizes="20vw"
                 className="object-cover"
+                style={
+                  i === CENTER_INDEX
+                    ? { objectPosition: "center 25%" }
+                    : undefined
+                }
               />
             </div>
           ))}
