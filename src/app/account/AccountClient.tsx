@@ -154,7 +154,7 @@ export default function AccountClient({
           <p className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
             You currently have no signatures.{" "}
             <Link href="/" className="underline underline-offset-4">
-              Sign the AI Bill of Rights →
+              Sign the AI Bill of Rights
             </Link>
           </p>
         ) : (

@@ -105,7 +105,7 @@ export default async function SignersPage({
         {!loadFailed && signers.length > 0 ? (
           <div className="mt-8 flex flex-col items-center gap-2">
             <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
-              Sign the AI Bill of Rights →
+              Sign the AI Bill of Rights
             </SignTrigger>
             <p className="text-xs text-zinc-500">
               Add your name. Verified by email or phone.
