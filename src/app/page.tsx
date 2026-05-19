@@ -319,7 +319,7 @@ export default function Home() {
                 href="/v/0.0.1/as-code"
                 className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
               >
-                Building AI? Implement this in your code →
+                Building AI? Implement these principles in your code →
               </Link>
             </div>
           </div>
