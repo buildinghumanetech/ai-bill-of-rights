@@ -4,6 +4,32 @@
 *(Most recent updates at top)*
 
 ### Summary of changes since last update
+Task 2.13 complete. Added `hideCommentAction` and `unhideCommentAction` server actions to `src/server/actions/comments.ts`, and created `src/app/admin/comments/page.tsx` — a server-rendered admin moderation page that lists the 100 most recent comments with per-row Hide/Unhide form buttons. Admin gate uses `getCurrentAdmin()` with strict `ctx.state === "admin"` check.
+
+### Detail of changes made:
+- Modified `src/server/actions/comments.ts`:
+  - Added `import { getCurrentAdmin } from "@/lib/admin/check"` at the top (previously missing from this file).
+  - Appended `hideCommentAction(commentId, reason?)`: checks `ctx.state === "admin"`, updates `comments.hiddenAt` and `comments.hiddenReason`, revalidates `/` and `/admin/comments`.
+  - Appended `unhideCommentAction(commentId)`: same admin gate, sets both fields to `null`.
+  - Both use the lazy `getDb()` pattern already established in the file.
+- Created `src/app/admin/comments/page.tsx`:
+  - `export const dynamic = "force-dynamic"` to prevent caching.
+  - Two inline server actions (`handleHide`, `handleUnhide`) that delegate to the new action functions.
+  - Fetches top 100 comments via drizzle `innerJoin` with `signers` to get `displayName`; orders by `desc(comments.createdAt)`.
+  - Each list item shows author, anchor/proposal label, timestamp, body text, and a single toggle button (Hide/Unhide) via a `<form action={...}>` with a hidden `commentId` input.
+  - Hidden comments shown with `bg-zinc-50` background; visible with `bg-white`.
+  - Admin gate: if `ctx.state !== "admin"`, calls `notFound()`.
+
+### Potential concerns to address:
+- No pagination yet — hard-capped at 100 rows. Acceptable for now.
+- The `notFound()` guard only handles the strict "admin" state. States like "no-admins-yet" or "bootstrap" are treated the same as unauthenticated (404). This matches the self-review spec requirement.
+
+---
+
+## Progress Update as of 2026-05-19 16:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
 Task 2.12 complete. The homepage (`src/app/page.tsx`) now serves the AI Bill of Rights through `DocumentRenderer` with per-sentence anchor IDs and comment counts pulled from the DB, replacing the hardcoded `articles` array. `HighlightPopover` and `CommentDrawer` are slotted in as fixed-position overlays at the bottom of the root `<div>`.
 
 ### Detail of changes made:

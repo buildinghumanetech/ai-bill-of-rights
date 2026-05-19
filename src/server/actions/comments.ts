@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { comments, signers } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
+import { getCurrentAdmin } from "@/lib/admin/check";
 
 let _db: any | null = null;
 function getDb() {
@@ -98,5 +99,32 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   }
 
   revalidatePath("/");
+  return { ok: true };
+}
+
+export async function hideCommentAction(
+  commentId: string,
+  reason: string = "Admin hidden",
+): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await getCurrentAdmin();
+  if (ctx.state !== "admin") return { ok: false, error: "Forbidden." };
+  await getDb()
+    .update(comments)
+    .set({ hiddenAt: new Date(), hiddenReason: reason })
+    .where(eq(comments.id, commentId));
+  revalidatePath("/");
+  revalidatePath("/admin/comments");
+  return { ok: true };
+}
+
+export async function unhideCommentAction(commentId: string): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await getCurrentAdmin();
+  if (ctx.state !== "admin") return { ok: false, error: "Forbidden." };
+  await getDb()
+    .update(comments)
+    .set({ hiddenAt: null, hiddenReason: null })
+    .where(eq(comments.id, commentId));
+  revalidatePath("/");
+  revalidatePath("/admin/comments");
   return { ok: true };
 }
