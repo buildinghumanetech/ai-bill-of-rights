@@ -1,5 +1,22 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 8: comment components)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created four UI components: `CommentThread` (server), `CommentComposer` (client), `UpvoteButton` (client), `ReportModal` (client). TypeScript clean; 52 tests pass (no new tests in this task).
+
+### Detail of changes made:
+- `src/components/CommentThread.tsx`: Recursive server component that filters `comments` by `parentCommentId` at each depth level. Renders `VerificationBadge`, `UpvoteButton`, `ReportModal`, and `CommentComposer` per comment. Hidden comments show `[comment hidden by moderator]` placeholder. Replies past `maxDepth` (default 4) are collapsed inside a `<details>` accordion.
+- `src/components/CommentComposer.tsx`: Client form wired to `submitCommentAction`. Accepts optional `parentCommentId` for replies; passes `versionId`, `versionString`, `anchorId` as hidden inputs.
+- `src/components/UpvoteButton.tsx`: Client form wired to `submitUpvoteAction`. Renders a pill button showing the current `count`.
+- `src/components/ReportModal.tsx`: Client component using `useRef<HTMLDialogElement>` to open/close a native `<dialog>`. Form submits to `submitReportAction` with optional free-text reason.
+
+### Potential concerns to address:
+- All prior concerns from Tasks 1–7 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 7: comment query helpers)
 *(Most recent updates at top)*
 
