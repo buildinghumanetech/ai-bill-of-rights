@@ -1,5 +1,5 @@
-import { eq, count, desc, and, isNull, isNotNull } from "drizzle-orm";
-import { versions, signatures, signers, attestations } from "./schema";
+import { eq, count, desc, and, isNull, isNotNull, sql } from "drizzle-orm";
+import { versions, signatures, signers, attestations, comments, commentUpvotes, reports } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -162,4 +162,98 @@ export async function listPendingReviewAttestations(db: any = null) {
       ),
     )
     .orderBy(desc(attestations.claimedAt));
+}
+
+export interface CommentTreeItem {
+  id: string;
+  versionId: string;
+  anchorId: string;
+  body: string;
+  parentCommentId: string | null;
+  createdAt: Date;
+  hiddenAt: Date | null;
+  signerId: string;
+  displayName: string;
+  locationText: string | null;
+  affiliation: string | null;
+  verificationMethod: "email" | "sms";
+  upvoteCount: number;
+}
+
+export async function listCommentsForAnchor(
+  db: any = null,
+  versionId: string,
+  anchorId: string,
+): Promise<CommentTreeItem[]> {
+  const client = db ?? getDefaultDb();
+  const rows = await client
+    .select({
+      id: comments.id,
+      versionId: comments.versionId,
+      anchorId: comments.anchorId,
+      body: comments.body,
+      parentCommentId: comments.parentCommentId,
+      createdAt: comments.createdAt,
+      hiddenAt: comments.hiddenAt,
+      signerId: signers.id,
+      displayName: signers.displayName,
+      locationText: signers.locationText,
+      affiliation: signers.affiliation,
+      verificationMethod: signers.verificationMethod,
+      upvoteCount: sql<number>`(select count(*)::int from ${commentUpvotes} where ${commentUpvotes.commentId} = ${comments.id})`,
+    })
+    .from(comments)
+    .innerJoin(signers, eq(signers.id, comments.signerId))
+    .where(
+      and(
+        eq(comments.versionId, versionId),
+        eq(comments.anchorId, anchorId),
+      ),
+    )
+    .orderBy(comments.createdAt);
+  return rows as CommentTreeItem[];
+}
+
+export async function countCommentsByAnchor(
+  db: any = null,
+  versionId: string,
+): Promise<Record<string, number>> {
+  const client = db ?? getDefaultDb();
+  const rows = await client
+    .select({
+      anchorId: comments.anchorId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(comments)
+    .where(
+      and(
+        eq(comments.versionId, versionId),
+        isNull(comments.hiddenAt),
+      ),
+    )
+    .groupBy(comments.anchorId);
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.anchorId] = Number(r.count);
+  return out;
+}
+
+export async function listPendingReports(db: any = null) {
+  const client = db ?? getDefaultDb();
+  return client
+    .select({
+      reportId: reports.id,
+      commentId: reports.commentId,
+      reason: reports.reason,
+      createdAt: reports.createdAt,
+      commentBody: comments.body,
+      commentAnchorId: comments.anchorId,
+      commentVersion: versions.version,
+      reporterName: signers.displayName,
+    })
+    .from(reports)
+    .innerJoin(comments, eq(comments.id, reports.commentId))
+    .innerJoin(versions, eq(versions.id, comments.versionId))
+    .innerJoin(signers, eq(signers.id, reports.reporterSignerId))
+    .where(isNull(reports.resolvedAt))
+    .orderBy(desc(reports.createdAt));
 }

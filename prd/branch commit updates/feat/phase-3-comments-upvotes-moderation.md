@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 7: comment query helpers)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `listCommentsForAnchor`, `countCommentsByAnchor`, and `listPendingReports` to `src/lib/db/queries.ts`. Added `CommentTreeItem` interface. Added `tests/lib/db.queries.comments.test.ts` with 3 TDD tests. All 52 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/lib/db/queries.ts`: Updated top-level imports to include `sql` from `drizzle-orm` and `comments`, `commentUpvotes`, `reports` from schema. `listCommentsForAnchor` does an `innerJoin` on `signers` and a correlated subquery for `upvoteCount` via `sql<number>`. `countCommentsByAnchor` groups by `anchor_id` filtering out hidden comments (`isNull(hiddenAt)`). `listPendingReports` joins `reports → comments → versions → signers` filtering by `isNull(resolvedAt)`.
+- `tests/lib/db.queries.comments.test.ts`: 3 tests covering each exported query helper.
+
+### Potential concerns to address:
+- `listCommentsForAnchor` uses a correlated subquery for `upvoteCount`; fine for MVP but consider a LEFT JOIN with GROUP BY at scale.
+- All prior concerns from Tasks 1–6 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 6: report action with auto-soft-hide)
 *(Most recent updates at top)*
 
