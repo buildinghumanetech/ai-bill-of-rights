@@ -13,6 +13,8 @@ import {
   jsonb,
   boolean,
   uniqueIndex,
+  integer,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const versions = pgTable(
@@ -90,5 +92,71 @@ export const signatures = pgTable(
   },
   (t) => [
     uniqueIndex("signatures_signer_version_unique").on(t.signerId, t.versionId),
+  ],
+);
+
+// Selfies: optional photo per signer, admin-moderated. The active selfie
+// for a signer is the row matching status='approved' with all hidden/removed/
+// replaced timestamps NULL. The partial-unique index enforcing
+// "at most one active per signer" is hand-written in the migration SQL
+// (CREATE UNIQUE INDEX ... WHERE ...). Drizzle 0.36's partial-unique surface
+// is fragile — same trade-off as versions.is_current at the top of this file.
+export const selfies = pgTable(
+  "selfies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    signerId: uuid("signer_id")
+      .notNull()
+      .references(() => signers.id),
+    // 'pending' | 'approved' | 'rejected' | 'auto_hidden' | 'removed'
+    status: text("status").notNull(),
+    originalBlobUrl: text("original_blob_url").notNull(),
+    displayBlobUrl: text("display_blob_url").notNull(),
+    thumbnailBlobUrl: text("thumbnail_blob_url").notNull(),
+    // Always 'image/jpeg' in MVP (we re-encode originals to JPEG); column
+    // exists so future formats (e.g. AVIF) don't require a migration.
+    originalMime: text("original_mime").notNull(),
+    originalBytes: integer("original_bytes").notNull(),
+    // 'live' | 'upload'
+    captureMethod: text("capture_method").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedBy: uuid("reviewed_by"),
+    // 'not_a_face' | 'offensive' | 'imposter' | 'pii_overlay' | 'other'
+    rejectionReason: text("rejection_reason"),
+    rejectionNote: text("rejection_note"),
+    autoHiddenAt: timestamp("auto_hidden_at", { withTimezone: true }),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    replacedBySelfieId: uuid("replaced_by_selfie_id"),
+  },
+  (t) => [index("selfies_signer_id_idx").on(t.signerId)],
+);
+
+export const selfieReports = pgTable(
+  "selfie_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    selfieId: uuid("selfie_id")
+      .notNull()
+      .references(() => selfies.id),
+    reporterSignerId: uuid("reporter_signer_id")
+      .notNull()
+      .references(() => signers.id),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: uuid("resolved_by"),
+    // 'allowed' | 'hidden'
+    resolution: text("resolution"),
+  },
+  (t) => [
+    uniqueIndex("selfie_reports_selfie_reporter_unique").on(
+      t.selfieId,
+      t.reporterSignerId,
+    ),
   ],
 );

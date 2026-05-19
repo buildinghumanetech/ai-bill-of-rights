@@ -8,6 +8,20 @@
       "when": 1779138409813,
       "tag": "0000_ambitious_rage",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779138509813,
+      "tag": "0001_add_signer_notification_preference",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779238409813,
+      "tag": "0002_add_selfies",
+      "breakpoints": true
     }
   ]
 }
