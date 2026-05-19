@@ -4,7 +4,7 @@ import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { signers, consentRecords, signatures } from "@/lib/db/schema";
 import { recordSignature } from "@/server/actions/sign";
-import { anonymizeSigner } from "@/server/actions/revoke";
+import { deleteSigner } from "@/server/actions/revoke";
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -15,8 +15,8 @@ published_at: 2026-05-18
 x {#preamble-s-1}
 `;
 
-describe("anonymizeSigner", () => {
-  it("nulls out PII fields, sets revoked_at, and clears captured_fields", async () => {
+describe("deleteSigner", () => {
+  it("removes the signer row plus all dependent signatures and consent records", async () => {
     const db = await createTestDb();
     await syncVersions(db, [
       {
@@ -47,19 +47,22 @@ describe("anonymizeSigner", () => {
       capturedFields: { ip: "203.0.113.45" } as any,
     });
 
-    await anonymizeSigner(db, signer.id, 42);
+    await deleteSigner(db, signer.id);
 
-    const signerAfter = await db
+    const signersAfter = await db
       .select()
       .from(signers)
       .where(eq(signers.id, signer.id));
-    expect(signerAfter[0].displayName).toBe("Anonymized signer #42");
-    expect(signerAfter[0].affiliation).toBeNull();
-    expect(signerAfter[0].locationText).toBeNull();
-    const recordsAfter = await db.select().from(consentRecords);
-    expect(recordsAfter[0].revokedAt).not.toBeNull();
-    expect(recordsAfter[0].capturedFields).toBeNull();
-    const sigsAfter = await db.select().from(signatures);
-    expect(sigsAfter).toHaveLength(1);
+    expect(signersAfter).toHaveLength(0);
+    const recordsAfter = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+    expect(recordsAfter).toHaveLength(0);
+    const sigsAfter = await db
+      .select()
+      .from(signatures)
+      .where(eq(signatures.signerId, signer.id));
+    expect(sigsAfter).toHaveLength(0);
   });
 });
