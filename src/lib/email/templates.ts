@@ -20,6 +20,22 @@ ${opts.revokeUrl}
   };
 }
 
+export function signerNotification(opts: {
+  displayName: string;
+  signerPageUrl: string;
+}): { subject: string; text: string } {
+  return {
+    subject: `${opts.displayName} just signed the AI Bill of Rights`,
+    text: `Horray! ${opts.displayName} just signed the AI Bill of Rights!
+
+Here's their unique signatory URL: ${opts.signerPageUrl}
+(You can share this URL publicly with others)
+
+- Your AI for People tech team, aka DROdio :)
+`,
+  };
+}
+
 export function signInvitation(opts: {
   inviterName: string;
   inviterPageUrl: string;

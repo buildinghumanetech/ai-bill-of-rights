@@ -91,12 +91,15 @@ export async function deleteSigner(
   `);
   await db.delete(selfies).where(eq(selfies.signerId, signerId));
 
-  // 3) Legacy Phase 3 leftovers — these tables may exist in some production
-  //    DBs from a closed Phase 3 db:push but are NOT in the current schema
-  //    (and not in pglite test envs). We run the deletes inside try/catch so
-  //    a missing relation is treated as "nothing to delete" rather than an
-  //    error. PL/SQL DO-blocks would be cleaner but pglite doesn't support
-  //    parameter binding inside them.
+  // 3) Defensive cascade through legacy Phase 3 tables that may exist on
+  //    prod (left behind by an earlier db:push) but not on pglite or the
+  //    cleaned dev branch. tryDeleteLegacy swallows "relation does not
+  //    exist" as a no-op so a missing table is treated as nothing to delete.
+  //
+  //    Order matters: reports.comment_id → comments.id FK,
+  //    comment_upvotes.comment_id → comments.id FK. Both join tables must
+  //    be cleared of rows referencing this signer's comments BEFORE the
+  //    comments themselves are deleted.
   await tryDeleteLegacy(db, "reports", sql`
     DELETE FROM reports
     WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}

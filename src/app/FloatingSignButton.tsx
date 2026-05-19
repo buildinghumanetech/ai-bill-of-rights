@@ -3,15 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import SignModal from "./SignModal";
-
-interface Props {
-  signatureCount: number;
-}
+import SignatureCount from "./SignatureCount";
 
 const buttonClasses =
   "glass-button pointer-events-auto rounded-full bg-gradient-to-b from-blue-500/85 to-blue-700/85 px-8 py-3.5 text-sm font-semibold text-white backdrop-blur-md backdrop-saturate-150 transition-transform hover:scale-[1.03] sm:px-10 sm:py-4 sm:text-base";
 
-export default function FloatingSignButton({ signatureCount }: Props) {
+export default function FloatingSignButton() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -32,8 +29,7 @@ export default function FloatingSignButton({ signatureCount }: Props) {
             href="/signers"
             className="font-bold text-blue-600 hover:underline"
           >
-            {signatureCount.toLocaleString()}{" "}
-            {signatureCount === 1 ? "other" : "others"}
+            <SignatureCount /> others
           </Link>{" "}
           who have already signed
         </p>

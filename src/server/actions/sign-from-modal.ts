@@ -16,6 +16,18 @@ import { sendEmail } from "@/lib/email/send";
 type NameDisplayFormat = "initials" | "first-initial" | "full";
 type NotificationPreference = "major" | "minor" | "none";
 
+// Belt-and-suspenders: even though extractCapturedFields decodes Vercel's
+// URL-encoded geo headers, decode again right before write so any future
+// upstream change that re-introduces percent-encoding can't leak into the DB.
+function decodePercentEncoding(s: string): string {
+  if (!s.includes("%")) return s;
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 export interface SignFromModalInput {
   firstName: string;
   lastName: string;
@@ -108,9 +120,11 @@ export async function recordSignatureFromModal(
     }
 
     const locationText = input.shareLocation
-      ? [fields.ip_geo_city, fields.ip_geo_region, fields.ip_geo_country]
-          .filter(Boolean)
-          .join(", ") || null
+      ? decodePercentEncoding(
+          [fields.ip_geo_city, fields.ip_geo_region, fields.ip_geo_country]
+            .filter(Boolean)
+            .join(", "),
+        ) || null
       : null;
 
     const verificationMethod: "email" | "sms" =

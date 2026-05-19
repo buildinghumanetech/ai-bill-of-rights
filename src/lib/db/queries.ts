@@ -1,4 +1,4 @@
-import { eq, count, desc } from "drizzle-orm";
+import { eq, count, desc, gt, and, isNull } from "drizzle-orm";
 import { versions, signatures, signers } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
@@ -96,4 +96,33 @@ export async function listSignaturesForSigner(
     .where(eq(signatures.signerId, signerId))
     .orderBy(desc(signatures.signedAt));
   return rows;
+}
+
+export interface RecentSignerEvent {
+  id: string;
+  displayName: string;
+  locationText: string | null;
+  signedAt: Date;
+}
+
+const SIXTY_MINUTES_MS = 60 * 60 * 1000;
+
+export async function listRecentSignersSince(
+  since: Date | null,
+  db: any = null,
+): Promise<RecentSignerEvent[]> {
+  const client = db ?? getDefaultDb();
+  const cutoff = since ?? new Date(Date.now() - SIXTY_MINUTES_MS);
+  const rows = await client
+    .select({
+      id: signers.id,
+      displayName: signers.displayName,
+      locationText: signers.locationText,
+      signedAt: signatures.signedAt,
+    })
+    .from(signatures)
+    .innerJoin(signers, eq(signers.id, signatures.signerId))
+    .where(and(gt(signatures.signedAt, cutoff), isNull(signers.softBannedAt)))
+    .orderBy(desc(signatures.signedAt));
+  return rows as RecentSignerEvent[];
 }

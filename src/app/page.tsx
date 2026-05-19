@@ -1,7 +1,7 @@
 import Link from "next/link";
 import HeroSection from "./HeroSection";
 import FloatingSignButton from "./FloatingSignButton";
-import { getSignatureCount } from "@/lib/db/queries";
+import SignatureCount from "./SignatureCount";
 
 // Pastel pill palette. Tailwind sees these as full class strings so the
 // JIT will include them in the generated CSS. Pills are colored by a tiny
@@ -205,15 +205,7 @@ const articles = [
   },
 ];
 
-export default async function Home() {
-  let signatureCount = 0;
-  try {
-    signatureCount = await getSignatureCount();
-  } catch {
-    // DB not reachable (e.g. preview without DATABASE_URL) — fall back to 0
-    signatureCount = 0;
-  }
-
+export default function Home() {
   return (
     <div className="flex-1">
       <section className="bg-white px-6 pt-14 pb-10 text-center sm:pt-20 sm:pb-14">
@@ -230,7 +222,7 @@ export default async function Home() {
             href="/signers"
             className="font-bold text-blue-600 hover:underline"
           >
-            {signatureCount.toLocaleString()} signatures
+            <SignatureCount /> signatures
           </Link>{" "}
           to back them up.
         </p>
@@ -245,13 +237,9 @@ export default async function Home() {
               href="/signers"
               className="font-bold text-blue-600 hover:underline"
             >
-              {signatureCount.toLocaleString()}{" "}
-              {signatureCount === 1
-                ? "other real person"
-                : "other real people"}
+              <SignatureCount /> other real people
             </Link>{" "}
-            {signatureCount === 1 ? "who has" : "who have"} signed this AI
-            Bill of Rights
+            who have signed this AI Bill of Rights
           </p>
           <p className="mx-auto mb-10 mt-3 max-w-5xl text-center text-base leading-relaxed text-zinc-600 sm:mb-14">
             <Link
@@ -311,15 +299,20 @@ export default async function Home() {
           </ol>
         </section>
 
-      <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
+      <section className="border-t border-zinc-200 bg-zinc-50 px-6 pt-24 pb-40 text-center sm:pb-48">
           <div className="mx-auto max-w-2xl">
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
               Version 0.0.1 — a living document
             </p>
             <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
-              These nine commitments aren&apos;t a wishlist. They&apos;re the
-              line. Companies that won&apos;t agree to them are telling you
-              who they are.
+              These nine commitments aren&apos;t a wishlist.{" "}
+              <span className="sm:whitespace-nowrap">
+                They&apos;re the baseline.
+              </span>{" "}
+              <span className="sm:whitespace-nowrap">
+                Companies that won&apos;t agree to them are telling you who
+                they are.
+              </span>
             </p>
             <div className="mt-10 flex flex-col items-center gap-6">
               <Link
@@ -332,7 +325,7 @@ export default async function Home() {
           </div>
         </section>
 
-      <FloatingSignButton signatureCount={signatureCount} />
+      <FloatingSignButton />
     </div>
   );
 }
