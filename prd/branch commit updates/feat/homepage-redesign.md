@@ -1,5 +1,48 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 09:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Reworked /signers presentation: stopped overriding the user's chosen
+display-name format, moved Signed-at date to its own right-aligned
+column with "May 1, 2026 at 10:42am"-style formatting, added a Sign
+button at the bottom, and made "AI Bill of Rights" in the intro copy
+a link to the homepage.
+
+### Detail of changes made:
+- **`src/app/signers/page.tsx`**:
+  - Removed the `formatName(displayName)` helper. It was re-formatting
+    every signer's name into "First L." regardless of the format the
+    signer chose at sign-time, which truncated masked names (e.g.
+    "D***** O***" was being rendered as "D***** O."). Now the
+    column renders `signer.displayName` directly so initials-only
+    and first-plus-initial signers display their chosen masked form.
+  - Replaced the existing `Signed` column body (`v1.0.0` + ISO date)
+    with a new `formatSignedAt(date)` helper that returns e.g.
+    "May 1, 2026 at 10:42am" (`toLocaleDateString` for long-month
+    date, `toLocaleTimeString` with `hour12: true`, lowercased and
+    space-collapsed for the "am/pm" suffix). Column header renamed
+    "Signed" → "Signed at" and version is dropped from this cell.
+  - Intro paragraph: replaced "Every name below is a real person who
+    passed an email or phone verification step. Newest signers first."
+    with "Every name below is a real person who has signed the
+    [AI Bill of Rights]." with the bracketed phrase linking to `/`.
+  - Added a Sign CTA at the bottom of the populated table (uses the
+    existing `SignTrigger` component so the floating-button modal
+    opens). The CTA only renders when there is at least one signer
+    — the empty state already has its own Sign trigger inline.
+
+### Potential concerns to address:
+- `toLocaleDateString` / `toLocaleTimeString` run on the **server**
+  for this server-component page. The server typically runs in UTC,
+  so dates display in UTC unless a `timeZone` option is added. We
+  could pass the user's timezone via a header for accuracy, but for
+  now UTC is acceptable and the "at 10:42am" formatting doesn't
+  surface a timezone label.
+
+---
+
 ## Progress Update as of [2026-05-19 08:45 Pacific]
 *(Most recent updates at top)*
 

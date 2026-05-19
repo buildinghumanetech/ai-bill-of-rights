@@ -4,14 +4,21 @@ import SignTrigger from "../SignTrigger";
 
 export const dynamic = "force-dynamic";
 
-function formatName(displayName: string): string {
-  const trimmed = displayName.trim();
-  if (!trimmed) return "—";
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  const first = parts[0];
-  const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
-  return `${first} ${lastInitial}.`;
+function formatSignedAt(d: Date): string {
+  const date = d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const time = d
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  return `${date} at ${time}`;
 }
 
 function VerificationPill({
@@ -86,8 +93,14 @@ export default async function SignersPage({
           The people behind the signatures
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-7 text-zinc-700">
-          Every name below is a real person who passed an email or phone
-          verification step. Newest signers first.
+          Every name below is a real person who has signed the{" "}
+          <Link
+            href="/"
+            className="text-zinc-900 underline underline-offset-4 hover:text-blue-600"
+          >
+            AI Bill of Rights
+          </Link>
+          .
         </p>
       </header>
 
@@ -132,7 +145,7 @@ export default async function SignersPage({
                   scope="col"
                   className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-zinc-600"
                 >
-                  Signed
+                  Signed at
                 </th>
               </tr>
             </thead>
@@ -147,7 +160,7 @@ export default async function SignersPage({
                       href={`/signatories/${signer.signerId}`}
                       className="font-medium text-zinc-950 hover:text-blue-600 hover:underline"
                     >
-                      {formatName(signer.displayName)}
+                      {signer.displayName}
                     </Link>
                     {signer.affiliation ? (
                       <div className="mt-0.5 text-xs text-zinc-500">
@@ -164,10 +177,7 @@ export default async function SignersPage({
                     <VerificationPill method={signer.verificationMethod} />
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm text-zinc-500">
-                    <div>v{signer.version}</div>
-                    <div className="text-xs">
-                      {signer.signedAt.toISOString().slice(0, 10)}
-                    </div>
+                    {formatSignedAt(signer.signedAt)}
                   </td>
                 </tr>
               ))}
@@ -192,6 +202,17 @@ export default async function SignersPage({
           >
             Next →
           </Link>
+        </div>
+      ) : null}
+
+      {signers.length > 0 ? (
+        <div className="mt-16 flex flex-col items-center gap-3">
+          <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
+            Sign the AI Bill of Rights →
+          </SignTrigger>
+          <p className="text-xs text-zinc-500">
+            Add your name. Verified by email or phone.
+          </p>
         </div>
       ) : null}
     </main>
