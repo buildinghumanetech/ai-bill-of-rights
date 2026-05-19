@@ -1,5 +1,86 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 07:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Big architectural revision so the user reaches the article copy fast
+AND the 9-box keeps zooming out as they read: split the hero into two
+phases. HeroSection is now back to a quick 3×3 (1 image → 9-box,
+short 200vh section). After that, a new sticky `WallBehindArticles`
+holds the 5×5 grid behind the entire article + footer area and
+animates it from 9-box visible to full 25-box visible as the user
+scrolls through the articles. Plus: admin "Add signer" form now
+collects first/last name + display-format radio + contact value;
+pull-quote styling is bold (no italic).
+
+### Detail of changes made:
+- **`src/app/HeroSection.tsx`** reduced back to the 3×3 (9-image)
+  hero. 9 BHT images, IMG_9691 at center (index 4). Section height
+  200vh (was 260vh in the 5×5 build, even shorter than the original
+  220vh). `START_SCALE = 3` so at progress=0 the center cell fills
+  the viewport; at progress=1 the full 3×3 is visible. The 3×3 image
+  arrangement is identical to the inner 3×3 of the WallBehindArticles
+  5×5 so the visual transition between hero and wall is continuous.
+- **`src/app/WallBehindArticles.tsx`** (new client component):
+  Wraps its children (articles + footer) in a parent `<section>`
+  that hosts a sticky 5×5 grid at the back (`z-0`). The grid has
+  `transformOrigin: "50% 50%"` and `scale: 5/3 → 1` mapped from
+  scroll progress through the section. Children are pulled up
+  `-mt-[100vh]` to overlay the sticky wall starting from the section
+  top. Each child section uses `bg-white/90 backdrop-blur-md` (or
+  `bg-zinc-50/90 backdrop-blur-md` for the footer) so the wall
+  shows through faintly behind the text — not enough to harm
+  readability, enough to feel that the wall is the canvas behind
+  the manifesto.
+- **`src/app/page.tsx`**:
+  - Imports `WallBehindArticles`.
+  - Articles `<section>` and footer CTA `<section>` are both children
+    of the new `<WallBehindArticles>`. Articles container gets
+    `bg-white/90 backdrop-blur-md`; footer container gets
+    `bg-zinc-50/90 backdrop-blur-md`.
+  - Pull-quote `<blockquote>` style: dropped the `italic` class,
+    upgraded `font-medium` → `font-bold` per user request.
+- **`src/server/actions/admin.ts`**: `AdminAddSignerInput` extended
+  with optional `contactValue: string`. The server action writes the
+  contact value into `consent_records.captured_fields` as
+  `contact_value` (with `contact_method: "email" | "sms"` next to
+  it). This keeps it private to the consent record (not surfaced on
+  /signers, /signatories) but auditable by anyone with DB access —
+  exactly what the user wants for outreach lists later.
+- **`src/app/admin/signers/AdminAddSignerForm.tsx`** rewritten:
+  - First name + Last name fields replace the single Display name.
+  - New "Show their name as" radio (initials / first-initial / full)
+    that only renders once both names are filled (matches the public
+    SignModal UX). Selecting an option determines which formatted
+    string is stored as `signers.display_name`.
+  - Verified-by radio (Email / Phone). On change, the contact value
+    input resets and re-labels accordingly.
+  - New contact-value input (email/tel) sits right under the
+    verification radio with a note about being stored privately for
+    outreach.
+  - Affiliation + Location moved below.
+  - Submit composes the display name via `formatNamePreview` (same
+    logic as the public modal's `formatNamePreview`) and posts the
+    full payload including `contactValue`.
+
+### Potential concerns to address:
+- **`-mt-[100vh]` overlay**: works in practice because the sticky
+  wall takes 100vh of flow and the children come after; pulling
+  children up by 100vh lands them at the section top. If the user
+  ever switches to a non-sticky layout this offset stops making
+  sense — leave a comment in WallBehindArticles to explain.
+- **Articles' translucent background means low-bandwidth users
+  briefly see the wall before article text repaints**; not a
+  correctness issue but worth keeping in mind for perceived perf.
+- **Contact values in `consent_records.captured_fields`**: free-text
+  jsonb so admins can store malformed input. No validation past
+  trim. If we later want to do mass outreach, we should add a
+  proper sanitization pass or split contact_value into a typed
+  column.
+
+---
+
 ## Progress Update as of [2026-05-19 07:00 Pacific]
 *(Most recent updates at top)*
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HeroSection from "./HeroSection";
+import WallBehindArticles from "./WallBehindArticles";
 import FloatingSignButton from "./FloatingSignButton";
 import { getSignatureCount } from "@/lib/db/queries";
 
@@ -95,73 +96,77 @@ export default async function Home() {
 
       <HeroSection />
 
-      <section className="bg-white px-6 pb-32 pt-10 sm:pt-14">
-        <p className="mx-auto mb-10 max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
-          Join{" "}
-          <Link
-            href="/signers"
-            className="font-bold text-blue-600 hover:underline"
-          >
-            {signatureCount.toLocaleString()}{" "}
-            {signatureCount === 1 ? "other real person" : "other real people"}
-          </Link>{" "}
-          {signatureCount === 1 ? "who has" : "who have"} signed this AI Bill
-          of Rights
-        </p>
-        <ol className="mx-auto max-w-3xl">
-          {articles.map((article) => (
-            <li
-              key={article.number}
-              className="border-t border-zinc-200 py-16 first:border-t-0 sm:py-20"
-            >
-              <div className="flex flex-col gap-6 sm:flex-row sm:gap-12">
-                <div className="shrink-0">
-                  <span className="block font-mono text-sm text-zinc-400">
-                    Article
-                  </span>
-                  <span className="block font-mono text-5xl font-light tabular-nums text-zinc-900 sm:text-6xl">
-                    {article.number}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
-                    {article.title}
-                  </h2>
-                  <p className="mt-5 text-lg leading-relaxed text-zinc-700">
-                    {article.body}
-                  </p>
-                  {article.pullQuote && (
-                    <blockquote className="mt-6 border-l-2 border-zinc-900 pl-5 text-sm font-medium italic leading-snug text-zinc-900 sm:text-base">
-                      {article.pullQuote}
-                    </blockquote>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
-        <div className="mx-auto max-w-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-            Version 1.0.0 — a living document
-          </p>
-          <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
-            These nine commitments aren&apos;t a wishlist. They&apos;re the
-            line. Companies that won&apos;t agree to them are telling you who
-            they are.
-          </p>
-          <div className="mt-10 flex flex-col items-center gap-6">
+      <WallBehindArticles>
+        <section className="bg-white/90 px-6 pb-32 pt-10 backdrop-blur-md sm:pt-14">
+          <p className="mx-auto mb-10 max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
+            Join{" "}
             <Link
-              href="/v/1.0.0/as-code"
-              className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
+              href="/signers"
+              className="font-bold text-blue-600 hover:underline"
             >
-              Building AI? Implement this in your code →
-            </Link>
+              {signatureCount.toLocaleString()}{" "}
+              {signatureCount === 1
+                ? "other real person"
+                : "other real people"}
+            </Link>{" "}
+            {signatureCount === 1 ? "who has" : "who have"} signed this AI
+            Bill of Rights
+          </p>
+          <ol className="mx-auto max-w-3xl">
+            {articles.map((article) => (
+              <li
+                key={article.number}
+                className="border-t border-zinc-200 py-16 first:border-t-0 sm:py-20"
+              >
+                <div className="flex flex-col gap-6 sm:flex-row sm:gap-12">
+                  <div className="shrink-0">
+                    <span className="block font-mono text-sm text-zinc-400">
+                      Article
+                    </span>
+                    <span className="block font-mono text-5xl font-light tabular-nums text-zinc-900 sm:text-6xl">
+                      {article.number}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
+                      {article.title}
+                    </h2>
+                    <p className="mt-5 text-lg leading-relaxed text-zinc-700">
+                      {article.body}
+                    </p>
+                    {article.pullQuote && (
+                      <blockquote className="mt-6 border-l-2 border-zinc-900 pl-5 text-sm font-bold leading-snug text-zinc-900 sm:text-base">
+                        {article.pullQuote}
+                      </blockquote>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="border-t border-zinc-200 bg-zinc-50/90 px-6 py-24 text-center backdrop-blur-md">
+          <div className="mx-auto max-w-2xl">
+            <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
+              Version 1.0.0 — a living document
+            </p>
+            <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
+              These nine commitments aren&apos;t a wishlist. They&apos;re the
+              line. Companies that won&apos;t agree to them are telling you
+              who they are.
+            </p>
+            <div className="mt-10 flex flex-col items-center gap-6">
+              <Link
+                href="/v/1.0.0/as-code"
+                className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
+              >
+                Building AI? Implement this in your code →
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </WallBehindArticles>
 
       <FloatingSignButton signatureCount={signatureCount} />
     </div>

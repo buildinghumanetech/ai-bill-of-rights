@@ -72,6 +72,7 @@ export interface AdminAddSignerInput {
   affiliation: string;
   locationText: string;
   verificationMethod: "email" | "sms";
+  contactValue?: string;
   isAdmin: boolean;
   notificationPreference: "major" | "minor" | "none";
   versionString: string;
@@ -117,10 +118,15 @@ export async function adminAddSignerAction(
   const adminSigner =
     ctx.state === "admin" ? ctx.signer : ctx.state === "no-admins-yet" ? ctx.signer : null;
   const syntheticClerkId = `admin-added-${randomUUID()}`;
+  const contactValue = (input.contactValue ?? "").trim();
   const capturedFields = {
     source: "admin_added" as const,
     admin_signer_id: adminSigner?.id ?? null,
     added_at_utc: new Date().toISOString(),
+    contact_method: input.verificationMethod,
+    // Stored privately on the consent record for outreach — never surfaced
+    // publicly via signers/signatories views.
+    contact_value: contactValue || null,
   };
 
   const [signer] = await db

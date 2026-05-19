@@ -5,14 +5,38 @@ import { adminAddSignerAction } from "@/server/actions/admin";
 
 const VERSION = "1.0.0";
 
+type NameDisplayFormat = "initials" | "first-initial" | "full";
+
+function formatNamePreview(
+  first: string,
+  last: string,
+  format: NameDisplayFormat,
+): string {
+  const f = first.trim();
+  const l = last.trim();
+  if (format === "full") return `${f} ${l}`.trim();
+  const maskedLast = l
+    ? `${l[0].toUpperCase()}${"*".repeat(Math.max(0, l.length - 1))}`
+    : "";
+  if (format === "first-initial") return `${f} ${maskedLast}`.trim();
+  const maskedFirst = f
+    ? `${f[0].toUpperCase()}${"*".repeat(Math.max(0, f.length - 1))}`
+    : "";
+  return `${maskedFirst} ${maskedLast}`.trim();
+}
+
 export default function AdminAddSignerForm() {
   const [open, setOpen] = useState(false);
-  const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [nameDisplayFormat, setNameDisplayFormat] =
+    useState<NameDisplayFormat>("full");
   const [affiliation, setAffiliation] = useState("");
   const [locationText, setLocationText] = useState("");
   const [verificationMethod, setVerificationMethod] = useState<
     "email" | "sms"
   >("email");
+  const [contactValue, setContactValue] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [notificationPreference, setNotificationPreference] = useState<
     "major" | "minor" | "none"
@@ -21,10 +45,13 @@ export default function AdminAddSignerForm() {
   const [pending, startTransition] = useTransition();
 
   function reset() {
-    setDisplayName("");
+    setFirstName("");
+    setLastName("");
+    setNameDisplayFormat("full");
     setAffiliation("");
     setLocationText("");
     setVerificationMethod("email");
+    setContactValue("");
     setIsAdmin(false);
     setNotificationPreference("major");
     setError(null);
@@ -33,16 +60,22 @@ export default function AdminAddSignerForm() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!displayName.trim()) {
-      setError("Display name is required.");
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("First and last name are required.");
       return;
     }
+    const displayName = formatNamePreview(
+      firstName,
+      lastName,
+      nameDisplayFormat,
+    );
     startTransition(async () => {
       const res = await adminAddSignerAction({
         displayName,
         affiliation,
         locationText,
         verificationMethod,
+        contactValue,
         isAdmin,
         notificationPreference,
         versionString: VERSION,
@@ -55,6 +88,8 @@ export default function AdminAddSignerForm() {
       setOpen(false);
     });
   }
+
+  const namesReady = firstName.trim() && lastName.trim();
 
   if (!open) {
     return (
@@ -89,24 +124,125 @@ export default function AdminAddSignerForm() {
         </button>
       </div>
       <p className="mt-1 text-xs text-zinc-500">
-        Bypasses Clerk OTP. The signer is recorded as verified by whichever
-        method you select — your word, on your account.
+        Bypasses Clerk OTP. The contact value below is stored privately on
+        the consent record (for outreach), not shown publicly.
       </p>
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="text-xs font-medium text-zinc-700">
-            Display name <span className="text-red-600">*</span>
+            First name <span className="text-red-600">*</span>
           </span>
           <input
             type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
             required
-            placeholder="Daniel O."
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </label>
+        <label className="block">
+          <span className="text-xs font-medium text-zinc-700">
+            Last name <span className="text-red-600">*</span>
+          </span>
+          <input
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+      </div>
+
+      {namesReady ? (
+        <fieldset className="mt-5">
+          <legend className="text-xs font-medium text-zinc-700">
+            Show their name as
+          </legend>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {(["initials", "first-initial", "full"] as const).map(
+              (value) => (
+                <label
+                  key={value}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-sm text-zinc-800 hover:bg-zinc-50"
+                >
+                  <input
+                    type="radio"
+                    name="admin-name-format"
+                    value={value}
+                    checked={nameDisplayFormat === value}
+                    onChange={() => setNameDisplayFormat(value)}
+                    className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                  />
+                  <span className="font-mono text-sm text-zinc-900">
+                    {formatNamePreview(firstName, lastName, value)}
+                  </span>
+                </label>
+              ),
+            )}
+          </div>
+        </fieldset>
+      ) : null}
+
+      <fieldset className="mt-5">
+        <legend className="text-xs font-medium text-zinc-700">
+          Verified by
+        </legend>
+        <div className="mt-2 flex flex-wrap gap-4 text-sm">
+          {(
+            [
+              { v: "email", label: "Email" },
+              { v: "sms", label: "Phone" },
+            ] as const
+          ).map((opt) => (
+            <label
+              key={opt.v}
+              className="flex cursor-pointer items-center gap-2"
+            >
+              <input
+                type="radio"
+                name="verification-method"
+                value={opt.v}
+                checked={verificationMethod === opt.v}
+                onChange={() => {
+                  setVerificationMethod(opt.v);
+                  setContactValue(""); // reset when method changes
+                }}
+                className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+              />
+              <span>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <label className="mt-3 block">
+        <span className="text-xs font-medium text-zinc-700">
+          {verificationMethod === "email"
+            ? "Email address (for outreach)"
+            : "Phone number (for outreach)"}
+        </span>
+        <input
+          type={verificationMethod === "email" ? "email" : "tel"}
+          inputMode={verificationMethod === "email" ? "email" : "tel"}
+          autoComplete={verificationMethod === "email" ? "email" : "tel"}
+          value={contactValue}
+          onChange={(e) => setContactValue(e.target.value)}
+          placeholder={
+            verificationMethod === "email"
+              ? "someone@example.com"
+              : "+1 555 123 4567"
+          }
+          className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        />
+        <span className="mt-1 block text-xs text-zinc-500">
+          Stored privately on the consent record for outreach. Not shown
+          publicly.
+        </span>
+      </label>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="text-xs font-medium text-zinc-700">
             Affiliation
@@ -119,7 +255,7 @@ export default function AdminAddSignerForm() {
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </label>
-        <label className="block sm:col-span-2">
+        <label className="block">
           <span className="text-xs font-medium text-zinc-700">Location</span>
           <input
             type="text"
@@ -130,27 +266,6 @@ export default function AdminAddSignerForm() {
           />
         </label>
       </div>
-
-      <fieldset className="mt-5">
-        <legend className="text-xs font-medium text-zinc-700">
-          Verified by
-        </legend>
-        <div className="mt-2 flex flex-wrap gap-4 text-sm">
-          {(["email", "sms"] as const).map((v) => (
-            <label key={v} className="flex cursor-pointer items-center gap-2">
-              <input
-                type="radio"
-                name="verification-method"
-                value={v}
-                checked={verificationMethod === v}
-                onChange={() => setVerificationMethod(v)}
-                className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
-              />
-              <span>{v === "email" ? "Email" : "Phone"}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
 
       <fieldset className="mt-5">
         <legend className="text-xs font-medium text-zinc-700">
