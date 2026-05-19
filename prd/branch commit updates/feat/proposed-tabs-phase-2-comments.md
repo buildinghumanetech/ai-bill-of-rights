@@ -4,6 +4,25 @@
 *(Most recent updates at top)*
 
 ### Summary of changes since last update
+Added `toggleCommentUpvote` (pure data-layer toggle) and `toggleCommentUpvoteAction` (auth + soft-ban Next.js Server Action) with full TDD (red → green). This is Task 2.4 of 14. Full suite: 54 passed (17 test files). `tsc --noEmit` clean.
+
+### Detail of changes made:
+- Created `src/server/actions/upvotes.ts`:
+  - `toggleCommentUpvote(db, { commentId, signerId })` — pure data-layer function. Checks for an existing row in `commentUpvotes`; if present, deletes it and returns `{ state: "removed" }`; if absent, inserts and returns `{ state: "upvoted" }`. No auth or revalidation — keeps it testable in isolation.
+  - `toggleCommentUpvoteAction(commentId)` — Next.js Server Action. Calls `auth()` from Clerk, looks up signer (returns error if missing), enforces `softBannedAt`, delegates to `toggleCommentUpvote`, calls `revalidatePath("/")`, returns `{ ok, state?, error? }`.
+  - Uses the same lazy `getDb()` pattern (require-on-first-call) as other server actions to avoid instantiating the Neon client during tests.
+- Created `tests/server/upvotes.test.ts` — 2 tests: insert-on-first-call returns `"upvoted"` and row exists; second call deletes and returns `"removed"` with zero rows remaining. Uses `createTestDb()` + `syncVersions()` + seeded comment row, following the pattern established in `comments.test.ts`.
+
+### Potential concerns to address:
+- `revalidatePath("/")` is still a broad invalidation; a future task could narrow this once document routing is finalized.
+- `toggleCommentUpvote` accepts `db: any`, consistent with the rest of the codebase.
+
+---
+
+## Progress Update as of 2026-05-19 16:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
 Added `createComment` (pure data-layer insert) and `submitCommentAction` (auth + rate-limit + soft-ban Next.js Server Action) with full TDD (red → green). This is Task 2.3 of 14. Full suite: 52 passed (16 test files). `tsc --noEmit` clean.
 
 ### Detail of changes made:
