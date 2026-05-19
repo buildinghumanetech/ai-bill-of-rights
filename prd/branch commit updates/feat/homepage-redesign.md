@@ -1189,7 +1189,7 @@ deleting signers and granting admin to others. Branched off `main` at
   `HeroSection.tsx`'s `IMAGES` array.
 - **Environment & infra (not in commit):**
   - `RESEND_API_KEY` set in local `.env.local` (and verified working —
-    test send to `drodio@gmail.com` returned a valid Resend id).
+    test send to the project owner's inbox returned a valid Resend id).
   - `RESEND_FROM_EMAIL` set to `AI Bill of Rights
     <signature@ai-for-people.org>`; domain verified in Resend after
     Cloudflare DNS records were added.
