@@ -25,6 +25,8 @@ export interface SignFromModalResult {
   success: boolean;
   error?: string;
   alreadySigned?: boolean;
+  signerId?: string;
+  displayName?: string;
 }
 
 export async function recordSignatureFromModal(
@@ -113,7 +115,7 @@ export async function recordSignatureFromModal(
       console.error("[email] confirmation send failed:", err);
     }
 
-    return { success: true };
+    return { success: true, signerId: profile.id, displayName };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return { success: false, error: msg };

@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useClerk, useSignIn, useSignUp, useUser } from "@clerk/nextjs";
 import { recordSignatureFromModal } from "@/server/actions/sign-from-modal";
+import { sendInvitationsAction } from "@/server/actions/invite";
 
 interface Props {
   open: boolean;
@@ -44,6 +45,17 @@ export default function SignModal({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [flow, setFlow] = useState<Flow>("signUp");
+  const [signerId, setSignerId] = useState<string | null>(null);
+  const [signerName, setSignerName] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  const [inviteEmails, setInviteEmails] = useState<string[]>([]);
+  const [inviteInput, setInviteInput] = useState("");
+  const [invitePending, setInvitePending] = useState(false);
+  const [inviteResult, setInviteResult] = useState<
+    | { kind: "success"; sent: number; failed: number }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +76,13 @@ export default function SignModal({ open, onClose }: Props) {
       setCode("");
       setError(null);
       setLoading(false);
+      setSignerId(null);
+      setSignerName("");
+      setCopied(false);
+      setInviteEmails([]);
+      setInviteInput("");
+      setInvitePending(false);
+      setInviteResult(null);
     }
   }, [open]);
 
@@ -100,6 +119,8 @@ export default function SignModal({ open, onClose }: Props) {
           setError(res.error ?? "We couldn't record your signature.");
           return;
         }
+        if (res.signerId) setSignerId(res.signerId);
+        if (res.displayName) setSignerName(res.displayName);
         setStep("done");
         return;
       }
@@ -244,6 +265,8 @@ export default function SignModal({ open, onClose }: Props) {
         setError(res.error ?? "We couldn't record your signature.");
         return;
       }
+      if (res.signerId) setSignerId(res.signerId);
+      if (res.displayName) setSignerName(res.displayName);
       setStep("done");
     } catch (err) {
       setError(clerkErrorMessage(err));
@@ -256,6 +279,115 @@ export default function SignModal({ open, onClose }: Props) {
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
     identifier.trim().length > 0;
+
+  const shareUrl =
+    signerId && typeof window !== "undefined"
+      ? `${window.location.origin}/signatories/${signerId}`
+      : "";
+
+  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
+
+  async function copyShareUrl() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail under non-secure contexts; fall back to select.
+      const input = document.getElementById(
+        "share-url-input",
+      ) as HTMLInputElement | null;
+      input?.select();
+    }
+  }
+
+  function tryAddInviteEmail(raw: string): boolean {
+    const trimmed = raw.trim().toLowerCase().replace(/[,;]+$/, "");
+    if (!trimmed) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return false;
+    if (inviteEmails.includes(trimmed)) return false;
+    setInviteEmails([...inviteEmails, trimmed]);
+    return true;
+  }
+
+  function handleInviteKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === "," || e.key === ";" || e.key === " ") {
+      e.preventDefault();
+      if (tryAddInviteEmail(inviteInput)) {
+        setInviteInput("");
+      }
+    } else if (
+      e.key === "Backspace" &&
+      inviteInput.length === 0 &&
+      inviteEmails.length > 0
+    ) {
+      setInviteEmails(inviteEmails.slice(0, -1));
+    }
+  }
+
+  function removeInviteEmail(email: string) {
+    setInviteEmails(inviteEmails.filter((x) => x !== email));
+  }
+
+  async function handleSendInvites() {
+    // Flush whatever is in the input box first.
+    const finalList = [...inviteEmails];
+    const pendingTrimmed = inviteInput.trim().toLowerCase().replace(/[,;]+$/, "");
+    if (
+      pendingTrimmed &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pendingTrimmed) &&
+      !finalList.includes(pendingTrimmed)
+    ) {
+      finalList.push(pendingTrimmed);
+    }
+    if (finalList.length === 0) {
+      setInviteResult({
+        kind: "error",
+        message: "Add at least one email address first.",
+      });
+      return;
+    }
+    setInvitePending(true);
+    setInviteResult(null);
+    try {
+      const res = await sendInvitationsAction(finalList);
+      if (res.error) {
+        setInviteResult({ kind: "error", message: res.error });
+      } else {
+        setInviteResult({
+          kind: "success",
+          sent: res.sent,
+          failed: res.failed.length,
+        });
+        setInviteEmails([]);
+        setInviteInput("");
+      }
+    } catch (err) {
+      setInviteResult({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Failed to send.",
+      });
+    } finally {
+      setInvitePending(false);
+    }
+  }
+
+  const twitterHref = shareUrl
+    ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        shareText,
+      )}&url=${encodeURIComponent(shareUrl)}`
+    : "#";
+  const linkedinHref = shareUrl
+    ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+        shareUrl,
+      )}`
+    : "#";
+  const emailHref = shareUrl
+    ? `mailto:?subject=${encodeURIComponent(
+        "Sign the AI Bill of Rights",
+      )}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`
+    : "#";
 
   return (
     <div
@@ -509,39 +641,172 @@ export default function SignModal({ open, onClose }: Props) {
         )}
 
         {step === "done" && (
-          <div className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
-              <svg
-                className="h-7 w-7 text-emerald-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2.4"
+          <div>
+            <div className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+                <svg
+                  className="h-6 w-6 text-emerald-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+              <h2
+                id="sign-modal-title"
+                className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+                Thank you for signing
+                {signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}
+              </h2>
+              <p className="mt-2 text-sm text-zinc-600">
+                Your name is now on v{VERSION}. The fight gets easier every
+                time another person signs — help us spread it.
+              </p>
             </div>
-            <h2
-              id="sign-modal-title"
-              className="mt-5 text-2xl font-semibold tracking-tight text-zinc-950"
-            >
-              Thank you for signing.
-            </h2>
-            <p className="mt-2 text-sm text-zinc-600">
-              Your name has been added to v{VERSION} of the AI Bill of Rights.
-              We just sent a confirmation to your{" "}
-              {method === "email" ? "email" : "phone"}.
-            </p>
+
+            {signerId ? (
+              <>
+                {/* Share link section */}
+                <div className="mt-7 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <label
+                    htmlFor="share-url-input"
+                    className="block text-xs font-medium uppercase tracking-[0.18em] text-zinc-500"
+                  >
+                    Your shareable link
+                  </label>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      id="share-url-input"
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="flex-1 truncate rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={copyShareUrl}
+                      className="shrink-0 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
+                    >
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <a
+                      href={twitterHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-center text-xs font-medium text-white hover:bg-zinc-700"
+                    >
+                      Share on X
+                    </a>
+                    <a
+                      href={linkedinHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 rounded-lg bg-[#0a66c2] px-3 py-2 text-center text-xs font-medium text-white hover:bg-[#0a55a3]"
+                    >
+                      LinkedIn
+                    </a>
+                    <a
+                      href={emailHref}
+                      className="flex-1 rounded-lg bg-zinc-200 px-3 py-2 text-center text-xs font-medium text-zinc-900 hover:bg-zinc-300"
+                    >
+                      Email
+                    </a>
+                  </div>
+                </div>
+
+                {/* Invite by email section */}
+                <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                    Or invite specific people
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Add emails (Enter or comma to separate). We&apos;ll send a
+                    short note inviting each one to sign.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5 rounded-lg border border-zinc-300 bg-white p-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                    {inviteEmails.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20"
+                      >
+                        {email}
+                        <button
+                          type="button"
+                          onClick={() => removeInviteEmail(email)}
+                          className="ml-0.5 text-blue-500 hover:text-blue-800"
+                          aria-label={`Remove ${email}`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="email"
+                      inputMode="email"
+                      placeholder={
+                        inviteEmails.length === 0
+                          ? "someone@example.com"
+                          : ""
+                      }
+                      value={inviteInput}
+                      onChange={(e) => setInviteInput(e.target.value)}
+                      onKeyDown={handleInviteKeyDown}
+                      onBlur={() => {
+                        if (tryAddInviteEmail(inviteInput)) {
+                          setInviteInput("");
+                        }
+                      }}
+                      className="flex-1 min-w-[8rem] border-0 bg-transparent px-1 py-0.5 text-sm text-zinc-950 outline-none placeholder:text-zinc-400"
+                    />
+                  </div>
+                  {inviteResult?.kind === "success" ? (
+                    <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                      Sent {inviteResult.sent}
+                      {inviteResult.failed > 0
+                        ? `, ${inviteResult.failed} failed`
+                        : ""}
+                      .
+                    </p>
+                  ) : null}
+                  {inviteResult?.kind === "error" ? (
+                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {inviteResult.message}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleSendInvites}
+                    disabled={
+                      invitePending ||
+                      (inviteEmails.length === 0 &&
+                        inviteInput.trim().length === 0)
+                    }
+                    className="mt-3 w-full rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {invitePending
+                      ? "Sending…"
+                      : "Share my signature and invite others to sign"}
+                  </button>
+                </div>
+              </>
+            ) : null}
+
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 w-full rounded-full bg-zinc-900 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-zinc-700"
+              className="mt-5 w-full text-center text-sm text-zinc-500 hover:text-zinc-800"
             >
-              Done
+              Close
             </button>
           </div>
         )}

@@ -1,5 +1,71 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-18 18:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Replaced the bare "Thank you for signing" state of SignModal with a full
+share flow: copy-to-clipboard for the signer's `/signatories/[id]` URL,
+X / LinkedIn / Email share buttons, and a multi-email pill input for
+sending invitation emails via Resend. Also reworked `/signatories/[id]`
+into a real shareable landing page with a prominent Sign CTA so traffic
+from social posts converts into more signers.
+
+### Detail of changes made:
+- **`src/server/actions/sign-from-modal.ts`**: extended `SignFromModalResult`
+  to include `signerId` and `displayName`. The modal needs both — the ID
+  to build the share URL, the name to personalize the success copy.
+- **`src/lib/email/templates.ts`**: added `signInvitation(opts)` returning
+  `{ subject, text }`. Subject: `"{inviterName} invited you to sign the
+  AI Bill of Rights"`. Body links to `siteUrl` for reading + signing
+  and to `inviterPageUrl` so recipients see who invited them.
+- **`src/server/actions/invite.ts`** (new): `sendInvitationsAction(emails)`.
+  Requires Clerk auth + an existing signer row (so unsigned visitors
+  can't spam invites). Dedupes and lowercases the email list, drops
+  malformed entries via a basic regex, caps at 25 emails per request,
+  then renders the template once and sends in parallel via Resend.
+  Failures per-email are logged + returned in `failed: string[]` so the
+  UI can surface partial failures.
+- **`src/app/SignModal.tsx`**: the "done" step is now a two-card layout:
+  1. **Share link card** with the live `/signatories/[id]` URL,
+     copy-to-clipboard (falls back to manual select if Clipboard API is
+     blocked), and three pre-filled share buttons (X intent, LinkedIn,
+     mailto).
+  2. **Invite-by-email card** with a pill input. Enter/comma/semicolon
+     adds a pill, backspace on empty input removes the last pill. Each
+     pill has its own remove (✕). Submit flushes any unconfirmed input
+     into the list, calls `sendInvitationsAction`, and shows either
+     "Sent N, M failed." or an inline error.
+- **`src/app/signatories/[id]/page.tsx`** rebuilt as a public landing:
+  - Adds `generateMetadata` for OG / Twitter card so social previews
+    render the signer's name and a one-line pitch.
+  - Existing version list and revocation footer kept.
+  - Adds a prominent `SignTrigger`-driven CTA card ("Add your name to
+    the AI Bill of Rights — Nine commitments we're demanding from
+    every AI company. {Name} signed — you can too.") with a blue
+    rounded button that opens the same SignModal. Wraps the trigger
+    with a "read full document first" fallback link.
+
+### Potential concerns to address:
+- **Invitation rate limiting is just a per-request cap (25).** There's
+  no per-user-per-hour ceiling, so a determined signer could send
+  thousands of invites by re-submitting. Acceptable for launch;
+  consider adding a daily counter table later.
+- **No tracking of which invites convert.** The invitation email links
+  to the homepage with no referral param — we can't tell which signer
+  drove which new signature. Easy add: append `?ref=signerId` to the
+  invite link and stamp it on the new signer's record.
+- **Email validation is basic regex.** Doesn't catch e.g. "+aliases" in
+  ways some providers reject, doesn't reject role addresses. Resend
+  rejects truly malformed addresses on send, so we're not creating
+  spam — just a poor UX for typos.
+- **Copy-to-clipboard requires HTTPS or localhost** for the Clipboard
+  API. On previous Vercel preview URLs (HTTPS) this is fine; on any
+  HTTP origin it falls back to selecting the input text, which is OK
+  but easy to miss.
+
+---
+
 ## Progress Update as of [2026-05-18 18:00 Pacific]
 *(Most recent updates at top)*
 
