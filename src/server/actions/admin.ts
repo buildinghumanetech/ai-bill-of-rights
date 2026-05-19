@@ -55,19 +55,28 @@ export async function deleteSignerAction(signerId: string): Promise<void> {
   // The FKs from those tables to `signers` were blocking the final
   // DELETE FROM signers and 500ing the admin Delete button.
   //
-  // We use IF EXISTS so this is a no-op if a future maintainer drops
-  // those tables for real.
-  await db.execute(sql`
+  // Wrap each defensive DELETE in try/catch so "relation does not exist" is
+  // a no-op (pglite tests + cleaned dev branches have no such tables; prod
+  // still does).
+  async function tryExec(stmt: ReturnType<typeof sql>): Promise<void> {
+    try {
+      await db.execute(stmt);
+    } catch (err) {
+      const msg = (err as Error).message ?? "";
+      if (!/does not exist|undefined_table/i.test(msg)) throw err;
+    }
+  }
+  await tryExec(sql`
     DELETE FROM reports
     WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
        OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
   `);
-  await db.execute(sql`
+  await tryExec(sql`
     DELETE FROM comment_upvotes
     WHERE signer_id = ${signerId}
        OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
   `);
-  await db.execute(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
+  await tryExec(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
   await db.delete(signatures).where(eq(signatures.signerId, signerId));
   await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
   await db.delete(signers).where(eq(signers.id, signerId));
