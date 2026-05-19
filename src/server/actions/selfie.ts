@@ -170,6 +170,10 @@ export async function submitSelfieAction(
     });
     revalidatePath("/account");
     revalidatePath(`/signatories/${signer.id}`);
+    // Best-effort admin notification — never blocks the user's submission.
+    notifyAdminOfNewSelfie(signer.displayName).catch((err) => {
+      console.error("[selfie] admin notification failed:", err);
+    });
     return { success: true, selfieId };
   } catch (err) {
     return {
@@ -177,6 +181,21 @@ export async function submitSelfieAction(
       error: err instanceof Error ? err.message : "Couldn't submit photo.",
     };
   }
+}
+
+const ADMIN_NOTIFICATION_EMAIL = "hello@ai-for-people.org";
+
+async function notifyAdminOfNewSelfie(displayName: string): Promise<void> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const reviewUrl = `${siteUrl}/admin/selfies`;
+  const { selfieSubmittedAdminNotification } = await import(
+    "@/lib/email/templates"
+  );
+  const { sendEmail } = await import("@/lib/email/send");
+  await sendEmail({
+    to: ADMIN_NOTIFICATION_EMAIL,
+    ...selfieSubmittedAdminNotification({ displayName, reviewUrl }),
+  });
 }
 
 // =====================================================================

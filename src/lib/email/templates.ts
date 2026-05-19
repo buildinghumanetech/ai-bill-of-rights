@@ -38,6 +38,23 @@ ${opts.inviterName}'s signature: ${opts.inviterPageUrl}
   };
 }
 
+export function selfieSubmittedAdminNotification(opts: {
+  displayName: string;
+  reviewUrl: string;
+}): { subject: string; text: string } {
+  return {
+    subject: `${opts.displayName} submitted a selfie for you to approve`,
+    text: `${opts.displayName} wants to add selfie to their profile.
+
+You'll need to approve it before it goes live.
+
+${opts.reviewUrl}
+
+- Your tech specialist, aka DROdio :)
+`,
+  };
+}
+
 export function selfieApproved(opts: {
   displayName: string;
   signerPageUrl: string;
