@@ -1,7 +1,25 @@
 # Branch Progress: feat/live-signer-banner
 
-## Progress Update as of 2026-05-19 18:00 Pacific
+## Progress Update as of 2026-05-19 15:45 Pacific
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+Post-PR addition: when a sign completes, also notify the team at `hello@ai-for-people.org` so the AI for People crew knows about every new signer in real time without watching the site. New `signerNotification` template in `src/lib/email/templates.ts` and a second `try/catch` block in `submitSignAction` that sends to the team inbox independently of the signer-confirmation email — so a failure on either side doesn't suppress the other. Two new unit tests for the template (subject + body shape). PR #17 was already open; this commit gets pushed to update it.
+
+### Detail of changes made:
+- **`src/lib/email/templates.ts`**: Added `signerNotification({ displayName, signerPageUrl })` exporting `{ subject, text }` matching the existing template shape. Subject: `"<name> just signed the AI Bill of Rights"`. Body uses the exact copy the owner specified, including the "Horray!" greeting and the `- Your AI for People tech team, aka DROdio :)` signoff.
+- **`src/server/actions/sign.ts`**: Extracted `signerPageUrl` to a local constant (it was already constructed for the signer-confirmation email; the team email uses the same value). Added a second `try/catch` block after the signer-confirmation block that imports `signerNotification` + `sendEmail` and sends to `hello@ai-for-people.org`. Two failure modes are intentionally independent — a bad signer email shouldn't hide the team notification, and a transient Resend hiccup on the team send shouldn't block the signer-confirmation from going out.
+- **`tests/lib/email.templates.test.ts`** (NEW): Two unit tests covering subject text and body content (signer name, signatory URL, signoff). The existing email module had no test file; this establishes the pattern.
+- **No infra changes**: reuses the same Resend client and `RESEND_API_KEY` env var. When the API key is unset, `sendEmail` already logs a warning and no-ops — both emails degrade gracefully in environments without Resend credentials.
+
+### Potential concerns to address:
+- **`hello@ai-for-people.org` is hardcoded.** YAGNI for now; if the destination ever changes, refactor to a `TEAM_NOTIFICATION_EMAIL` env var. Documented as a one-line change.
+- **Resend send latency adds to the sign action's response time.** Each email send is an outbound HTTP call inside the server action. Two now instead of one. In practice Resend's send API is fast (<1s typical) and the redirect happens *after* both sends complete. If a Resend hang ever causes UX issues, both sends are now structured to be moved to a background job (e.g., Vercel Queues) without changing call sites — just extract the two `try/catch` blocks into a function and dispatch it instead.
+- **No test asserts the team email was actually sent.** The existing `tests/server/sign.test.ts` doesn't test email behavior at all — emails are dynamically imported and the Resend client is gated on `RESEND_API_KEY`. Adding an integration test would require either mocking the dynamic import or refactoring sign.ts to inject email senders. Deferred — the template is tested, the call site is small, and Task 9's manual smoke (with real Resend credentials) is the real verification.
+
+---
+
+## Progress Update as of 2026-05-19 18:00 Pacific
 
 ### Summary of changes since last update
 Task 8 complete: all three `{signatureCount.toLocaleString()}` usages replaced with `<SignatureCount />`. `page.tsx` drops its own DB fetch and `async` keyword; `FloatingSignButton.tsx` loses its `Props` interface and `signatureCount` parameter. A fourth site (`src/app/v/[version]/page.tsx`) was not in the plan but also passed `signatureCount` to `FloatingSignButton` — fixed there too to unblock the type-check. TypeScript type-check and `pnpm build` both pass clean.
