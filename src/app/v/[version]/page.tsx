@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getVersionByString, getSignatureCount } from "@/lib/db/queries";
+import { getVersionByString } from "@/lib/db/queries";
 import { DocumentRenderer } from "@/components/DocumentRenderer";
 import { VersionBanner } from "@/components/VersionBanner";
 import FloatingSignButton from "@/app/FloatingSignButton";
@@ -19,13 +19,6 @@ export default async function VersionPage({
     notFound();
   }
   const parsed = row.parsedJson as unknown as ParsedDocument;
-
-  let signatureCount = 0;
-  try {
-    signatureCount = await getSignatureCount();
-  } catch {
-    signatureCount = 0;
-  }
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -51,7 +44,7 @@ export default async function VersionPage({
         </p>
       </section>
 
-      <FloatingSignButton signatureCount={signatureCount} />
+      <FloatingSignButton />
     </main>
   );
 }
