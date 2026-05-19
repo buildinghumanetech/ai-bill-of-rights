@@ -143,6 +143,12 @@ export default async function SignersPage({
                 </th>
                 <th
                   scope="col"
+                  className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600"
+                >
+                  Version
+                </th>
+                <th
+                  scope="col"
                   className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-zinc-600"
                 >
                   Signed at
@@ -175,6 +181,14 @@ export default async function SignersPage({
                   </td>
                   <td className="whitespace-nowrap px-6 py-4">
                     <VerificationPill method={signer.verificationMethod} />
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm">
+                    <Link
+                      href={`/v/${signer.version}`}
+                      className="font-mono text-zinc-700 underline-offset-4 hover:text-blue-600 hover:underline"
+                    >
+                      v{signer.version}
+                    </Link>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm text-zinc-500">
                     {formatSignedAt(signer.signedAt)}
