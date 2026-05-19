@@ -133,13 +133,19 @@ export async function submitSelfie(
   }
 }
 
-export async function submitSelfieAction(formData: FormData): Promise<void> {
+export type SubmitSelfieResult =
+  | { success: true; selfieId: string }
+  | { success: false; error: string };
+
+export async function submitSelfieAction(
+  formData: FormData,
+): Promise<SubmitSelfieResult> {
   const { userId } = await auth();
-  if (!userId) redirect("/");
+  if (!userId) return { success: false, error: "Sign in required." };
 
   const file = formData.get("photo");
   if (!(file instanceof File)) {
-    throw new Error("No photo provided");
+    return { success: false, error: "No photo provided" };
   }
   const captureMethodRaw = String(formData.get("captureMethod") ?? "upload");
   const captureMethod = captureMethodRaw === "live" ? "live" : "upload";
@@ -149,20 +155,28 @@ export async function submitSelfieAction(formData: FormData): Promise<void> {
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
-  if (signerRows.length === 0) redirect("/");
+  if (signerRows.length === 0) {
+    return { success: false, error: "No signer profile found." };
+  }
   const signer = signerRows[0];
 
   const arrayBuf = await file.arrayBuffer();
-  await submitSelfie(getDb(), {
-    signerId: signer.id,
-    buffer: Buffer.from(arrayBuf),
-    mime: file.type || "application/octet-stream",
-    captureMethod,
-  });
-
-  revalidatePath("/account");
-  revalidatePath(`/signatories/${signer.id}`);
-  redirect("/account?selfie=submitted");
+  try {
+    const { selfieId } = await submitSelfie(getDb(), {
+      signerId: signer.id,
+      buffer: Buffer.from(arrayBuf),
+      mime: file.type || "application/octet-stream",
+      captureMethod,
+    });
+    revalidatePath("/account");
+    revalidatePath(`/signatories/${signer.id}`);
+    return { success: true, selfieId };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Couldn't submit photo.",
+    };
+  }
 }
 
 // =====================================================================

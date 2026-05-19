@@ -1,17 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitSelfieAction } from "@/server/actions/selfie";
 
 interface Props {
-  /** post-sign: heading and disclaimer shown. account: parent provides context. */
-  context: "post-sign" | "account";
+  /**
+   * - post-sign: own card with heading + disclaimer (used on /sign/complete).
+   * - account: own card, parent provides the heading (used in <SelfieCard/>).
+   * - modal: NO outer card and NO heading — parent (e.g. the sign-confirmation
+   *   modal) provides both. Disclaimer still shown inline near the buttons.
+   */
+  context: "post-sign" | "account" | "modal";
 }
 
 type Stage =
   | { kind: "choose" }
   | { kind: "live"; stream: MediaStream }
   | { kind: "preview"; blob: Blob; previewUrl: string; captureMethod: "live" | "upload" }
+  | { kind: "submitted" }
   | { kind: "error"; message: string };
 
 // Lazy initial check: getUserMedia presence doesn't change after mount, so we
@@ -24,6 +31,7 @@ function detectCameraSupport(): boolean {
 }
 
 export function SelfieCapture({ context }: Props) {
+  const router = useRouter();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [pending, startTransition] = useTransition();
   const [cameraSupported, setCameraSupported] = useState<boolean>(
@@ -121,25 +129,26 @@ export function SelfieCapture({ context }: Props) {
       }),
     );
     form.set("captureMethod", stage.captureMethod);
+    const previewUrl = stage.previewUrl;
     startTransition(async () => {
-      try {
-        await submitSelfieAction(form);
-        // submitSelfieAction redirects on success — execution shouldn't
-        // continue past this line. The setStage below covers the
-        // unlikely case where the action returns without redirecting.
-        URL.revokeObjectURL(stage.previewUrl);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // Next.js wraps redirects as errors with a special type; we don't
-        // want to show those as failures.
-        if (msg.includes("NEXT_REDIRECT")) return;
-        setStage({ kind: "error", message: friendlyError(msg) });
+      const res = await submitSelfieAction(form);
+      if (res.success) {
+        URL.revokeObjectURL(previewUrl);
+        setStage({ kind: "submitted" });
+        // Refresh server-rendered parents (e.g. SelfieCard on /account)
+        // so they pick up the new pending row.
+        router.refresh();
+      } else {
+        setStage({ kind: "error", message: friendlyError(res.error) });
       }
     });
   }
 
+  const containerClass =
+    context === "modal" ? "" : "rounded-2xl border border-zinc-200 bg-white p-6";
+
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6">
+    <div className={containerClass}>
       {context === "post-sign" ? (
         <>
           <h2 className="text-xl font-semibold text-zinc-950">
@@ -154,7 +163,7 @@ export function SelfieCapture({ context }: Props) {
       ) : null}
 
       {stage.kind === "choose" ? (
-        <div className={context === "post-sign" ? "mt-5" : ""}>
+        <div className={context === "post-sign" ? "mt-5" : context === "modal" ? "" : ""}>
           <div className="flex flex-col gap-3 sm:flex-row">
             {cameraSupported ? (
               <button
@@ -243,6 +252,14 @@ export function SelfieCapture({ context }: Props) {
               Choose different
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {stage.kind === "submitted" ? (
+        <div className="rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span className="font-medium">Photo submitted!</span> An admin will
+          review it shortly. We&apos;ll email you once it&apos;s live on your
+          profile.
         </div>
       ) : null}
 
