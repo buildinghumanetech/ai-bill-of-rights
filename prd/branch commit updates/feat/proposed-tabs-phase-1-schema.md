@@ -1,5 +1,19 @@
 # Branch Progress: feat/proposed-tabs-phase-1-schema
 
+## Progress Update as of 2026-05-19 15:15 Pacific (Task 1.4 — smoke-test new schema tables in pglite)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `tests/lib/db.proposed-edits-schema.test.ts` to smoke-test the 5 new tables introduced in Task 1.1 (`proposed_edits`, `proposal_upvotes`, `comments`, `comment_upvotes`, `endorsements`). The test file seeds a version via `syncVersions` and a signer via direct insert, then verifies: (1) a `proposed_edit` with `status='pending'` can be inserted and upvoted, (2) a `comment` anchored to a sentence anchor can be inserted and upvoted, and (3) an `endorsement` round-trips correctly with `convertedToVersionId` null. All 3 tests pass.
+
+### Detail of changes made:
+- **`tests/lib/db.proposed-edits-schema.test.ts`** (new): Three `it` blocks covering `proposed_edits`+`proposal_upvotes`, `comments`+`comment_upvotes`, and `endorsements`. Uses `createTestDb()` from `tests/_helpers/pglite-db.ts` and `syncVersions` from `src/lib/db/sync.ts`. Each test calls the shared `seed()` helper to get a fresh isolated DB with one version and one signer.
+
+### Potential concerns to address:
+- No concerns. All 3 new tests pass alongside the existing 25 tests.
+
+---
+
 ## Progress Update as of 2026-05-19 15:00 Pacific (fix C-2 test for non-transactional sign flow)
 *(Most recent updates at top)*
 
