@@ -61,17 +61,23 @@ export default function WallBehindArticles({ children }: Props) {
     let raf = 0;
     let queued = false;
 
+    // Compress the zoom animation into the first ~150vh of scroll within
+    // the section so the user sees a meaningful zoom-out as they read the
+    // first few articles, instead of a barely-perceptible drift spread
+    // across the entire article column.
+    const ANIM_RANGE_VH = 150;
+
     const update = () => {
       queued = false;
       if (!sectionRef.current) return;
       const rect = sectionRef.current.getBoundingClientRect();
       const vh = window.innerHeight;
-      const stickyRange = sectionRef.current.offsetHeight - vh;
-      if (stickyRange <= 0) {
+      const range = (ANIM_RANGE_VH * vh) / 100;
+      if (range <= 0) {
         setProgress(0);
         return;
       }
-      const p = Math.max(0, Math.min(1, -rect.top / stickyRange));
+      const p = Math.max(0, Math.min(1, -rect.top / range));
       setProgress(p);
     };
 
@@ -124,11 +130,14 @@ export default function WallBehindArticles({ children }: Props) {
         </div>
       </div>
 
-      {/* Articles overlay — pulled up by one viewport so it starts at the
-          section's top, in front of the sticky wall. Each child section is
-          expected to bring its own background (translucent if it wants the
-          wall to peek through). */}
-      <div className="relative z-10 -mt-[100vh]">{children}</div>
+      {/* Articles overlay — pulled up by one viewport via inline style so
+          it starts at the section's top, in front of the sticky wall.
+          Using inline style instead of `-mt-[100vh]` because some Tailwind
+          JIT configurations don't always emit the arbitrary-value class
+          for negative viewport units. */}
+      <div className="relative z-10" style={{ marginTop: "-100vh" }}>
+        {children}
+      </div>
     </section>
   );
 }

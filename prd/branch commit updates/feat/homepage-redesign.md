@@ -1,5 +1,48 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 07:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Fix to WallBehindArticles so the zoom is actually perceptible. The
+`-mt-[100vh]` Tailwind class apparently wasn't being emitted (the
+arbitrary-value JIT path is finicky with negative viewport units), so
+the article overlay was rendering below the wall rather than on top of
+it — the wall stayed pinned at viewport top with no overlay to scroll
+over it, and the zoom appeared to be "stuck". Switched to an inline
+`style={{ marginTop: "-100vh" }}` so the overlay reliably lands on
+top of the wall. Also compressed the zoom animation from "spread over
+the full section's scroll range" to a fixed ~150vh of scroll so the
+9→25 transition lands within the first couple articles' worth of
+scroll instead of dragging across the whole column.
+
+### Detail of changes made:
+- **`src/app/WallBehindArticles.tsx`**:
+  - Children container: `-mt-[100vh]` Tailwind class → inline
+    `style={{ marginTop: "-100vh" }}`. Verified via curl that the
+    rendered HTML now contains `margin-top:-100vh`.
+  - Progress calculation: previously `stickyRange =
+    sectionRef.offsetHeight - vh`, which gives a sticky range equal
+    to (articles_height − 100vh). For a tall articles column that
+    range is multiple viewports, so each scroll-unit moved the
+    progress only fractionally. Now uses a fixed `ANIM_RANGE_VH =
+    150` (so progress reaches 1 after ~150vh of scrolling into the
+    section). After progress hits 1, the wall stays at the full
+    25-box state while the user finishes reading the remaining
+    articles.
+
+### Potential concerns to address:
+- **Wall sits at scale=1 for the back half of the article column** —
+  if the user wants the zoom-out to continue across the full
+  article column instead of finishing in the first ~150vh, bump
+  `ANIM_RANGE_VH` up (e.g., 300) or remove the clamp entirely.
+- **`-mt-[100vh]` shouldn't actually fail** in a well-configured
+  Tailwind 4 install. The inline-style workaround sidesteps it but
+  if we ever audit the Tailwind config and prefer a class, that's
+  a minor cleanup.
+
+---
+
 ## Progress Update as of [2026-05-19 07:30 Pacific]
 *(Most recent updates at top)*
 
