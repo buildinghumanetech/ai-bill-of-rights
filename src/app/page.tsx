@@ -239,7 +239,7 @@ export default async function Home() {
       <HeroSection />
 
       <section className="bg-white px-6 pb-32 pt-10 sm:pt-14">
-          <p className="mx-auto mb-10 max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:mb-14 sm:text-3xl">
+          <p className="mx-auto max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:text-3xl">
             Join{" "}
             <Link
               href="/signers"
@@ -252,6 +252,14 @@ export default async function Home() {
             </Link>{" "}
             {signatureCount === 1 ? "who has" : "who have"} signed this AI
             Bill of Rights
+          </p>
+          <p className="mx-auto mb-10 mt-3 max-w-5xl text-center text-base leading-relaxed text-zinc-600 sm:mb-14">
+            <Link
+              href="/about"
+              className="text-zinc-700 underline underline-offset-4 hover:text-blue-600"
+            >
+              Who created this?
+            </Link>
           </p>
           <ol className="mx-auto max-w-3xl">
             {articles.map((article) => (
