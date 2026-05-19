@@ -1,5 +1,26 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 15:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Implemented Task 4: `LiveSignersProvider` client component at `src/app/LiveSignersProvider.tsx`. The provider wraps `useReducer` (using the reducer from Task 3) with polling logic (60s interval + visibility-change catch-up) and exposes `count`, `currentEvent`, and `onEventFinished` via React Context. TypeScript type-check passes with no errors.
+
+### Detail of changes made:
+- **`src/app/LiveSignersProvider.tsx`** (new): `"use client"` component. Exports `LiveSignersProvider` and `useLiveSigners` hook. Key design points:
+  - `useReducer` initialized via `initialLiveSignersState(initialCount)` — count seeds from the server-rendered prop so first paint is never zero.
+  - `cursorRef` mirrors `state.latestSignedAt` via a `useEffect`. This lets the polling closure read the latest cursor without being in its dependency array, so the `setInterval` is never restarted when state changes.
+  - `isFirstPollRef` distinguishes the immediate cold-start poll from subsequent interval polls; flipped to `false` after first dispatch.
+  - `poll` is a `useCallback` with an empty dep array (safe because it reads only refs). It builds the URL with or without `?since=`, validates the response shape via `isValidPollResponse`, then dispatches `poll-response`.
+  - Mount `useEffect`: fires `poll()` immediately, starts 60s `setInterval` (skips if tab hidden), and adds `visibilitychange` listener that polls on becoming visible. Cleans up both on unmount.
+  - Context value: `{ count, currentEvent, onEventFinished }` — the three fields the banner and count component need.
+
+### Potential concerns to address:
+- The provider is not yet rendered anywhere — wired into the root layout in Task 7. No smoke test is possible until then.
+- Pre-existing test failures in `tests/server/revoke.test.ts` and `tests/server/sign.test.ts` remain unrelated to this branch.
+
+---
+
 ## Progress Update as of 2026-05-19 14:45 Pacific
 *(Most recent updates at top)*
 
