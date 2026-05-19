@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { listSignatures, type SignerListItem } from "@/lib/db/queries";
+import {
+  getSignerCount,
+  listSignatures,
+  type SignerListItem,
+} from "@/lib/db/queries";
 import { getActiveSelfiesForSigners } from "@/lib/selfie/queries";
 import { SelfieAvatar } from "@/components/SelfieAvatar";
 import SignTrigger from "../SignTrigger";
@@ -66,12 +70,16 @@ export default async function SignersPage({
   const limit = 100;
 
   let rows: SignerListItem[] = [];
+  let totalSignerCount = 0;
   let loadFailed = false;
   try {
-    rows = await listSignatures(undefined, {
-      limit,
-      offset: (pageNum - 1) * limit,
-    });
+    [rows, totalSignerCount] = await Promise.all([
+      listSignatures(undefined, {
+        limit,
+        offset: (pageNum - 1) * limit,
+      }),
+      getSignerCount(),
+    ]);
   } catch {
     loadFailed = true;
   }
@@ -94,8 +102,11 @@ export default async function SignersPage({
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
       <header className="mb-12 text-center">
-        <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-          Verified signers
+        <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+          <span className="font-bold text-zinc-900">
+            {totalSignerCount.toLocaleString()}
+          </span>{" "}
+          <span className="font-medium">Verified signers</span>
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">
           The people behind the signatures

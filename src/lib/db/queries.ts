@@ -32,6 +32,11 @@ export async function getSignatureCount(db: any = getDefaultDb()): Promise<numbe
   return Number(rows[0]?.value ?? 0);
 }
 
+export async function getSignerCount(db: any = getDefaultDb()): Promise<number> {
+  const rows = await db.select({ value: count() }).from(signers);
+  return Number(rows[0]?.value ?? 0);
+}
+
 export interface SignerListItem {
   signerId: string;
   displayName: string;
