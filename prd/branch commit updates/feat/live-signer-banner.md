@@ -1,5 +1,20 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 17:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Task 7 complete: `src/app/layout.tsx` made async, `getSignatureCount()` called server-side with a try/catch fallback to 0, `LiveSignersProvider` and `LiveSignerBanner` wired in. TypeScript type-check and `pnpm build` both pass clean (all 38 pages generated, every route dynamic as expected).
+
+### Detail of changes made:
+- **`src/app/layout.tsx`**: Converted to `async function`, added imports for `getSignatureCount`, `LiveSignersProvider`, and `LiveSignerBanner`. The DB call is wrapped in try/catch so a missing env or DB error gracefully falls back to `initialCount = 0` rather than crashing the build. `MyAccountButton`, `LiveSignerBanner`, and `{children}` are all nested inside `<LiveSignersProvider initialCount={initialCount}>` so all consumers can reach `useLiveSigners()`.
+- `.env.local` was absent from the worktree; symlinked from the main repo dir to unblock the build. The Clerk publishableKey and DATABASE_URL errors that appeared on the first build attempt were both due to the missing symlink — not a code issue.
+
+### Potential concerns to address:
+- The worktree lacks its own `.env.local`; the symlink to the main repo's file works for local dev and build but any CI runner that checks out only the worktree ref will need the env vars provisioned separately. This is a pre-existing condition, not introduced by Task 7.
+
+---
+
 ## Progress Update as of 2026-05-19 16:15 Pacific
 *(Most recent updates at top)*
 
