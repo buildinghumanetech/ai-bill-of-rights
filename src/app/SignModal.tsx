@@ -165,10 +165,11 @@ export default function SignModal({ open, onClose }: Props) {
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Close on Escape
+  // Close on Escape. Use the DOM KeyboardEvent (not React's synthetic
+  // event imported above) — addEventListener expects globalThis.KeyboardEvent.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);

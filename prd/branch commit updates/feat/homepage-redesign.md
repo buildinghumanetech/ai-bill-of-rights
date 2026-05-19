@@ -1,5 +1,31 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 09:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Fixed a Vercel build failure: SignModal's Escape-key listener typed
+its handler as `KeyboardEvent`, but `KeyboardEvent` was imported from
+`react` (React's synthetic event), while `window.addEventListener
+("keydown", …)` expects the DOM `KeyboardEvent` from lib.dom. Local
+dev didn't catch this because Turbopack skips full type-checking;
+Vercel's production build did.
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`**: the `onKey` handler in the Escape-key
+  `useEffect` now types `e` as `globalThis.KeyboardEvent` so it
+  matches the DOM addEventListener signature. The React-side
+  `KeyboardEvent` import (used elsewhere for the OTP-input keydown
+  handler) stays as-is. Ran a full `pnpm build` locally to confirm
+  TypeScript passes and all 29 `/resources/[slug]` pages pre-render.
+
+### Potential concerns to address:
+- Consider running `pnpm build` (not just `pnpm dev`) before
+  pushing future changes — Turbopack dev doesn't run the type-
+  checker the same way production does.
+
+---
+
 ## Progress Update as of [2026-05-19 09:00 Pacific]
 *(Most recent updates at top)*
 
