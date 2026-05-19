@@ -1,5 +1,24 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 16:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `createComment` (pure data-layer insert) and `submitCommentAction` (auth + rate-limit + soft-ban Next.js Server Action) with full TDD (red → green). This is Task 2.3 of 14. Full suite: 52 passed (16 test files). `tsc --noEmit` clean.
+
+### Detail of changes made:
+- Created `src/server/actions/comments.ts`:
+  - `createComment(db, input)` — pure data-layer function (no `auth()`, no `revalidatePath`). Trims body, throws `/empty/i` if blank, throws `/anchor.*or.*proposal/i` if both or neither of `anchorId`/`proposalId` are set, then inserts into `comments` and returns `{ id }`.
+  - `submitCommentAction(formData)` — Next.js Server Action. Calls `auth()` from Clerk, looks up signer row (returns error if none), enforces `softBannedAt`, runs `enforceRateLimit` (20 comments/hour window), then delegates to `createComment`. Calls `revalidatePath("/")` on success. Returns `{ ok, error? }` (never throws to the client).
+  - Uses the lazy `getDb()` pattern (require-on-first-call) to keep tests from instantiating the Neon client, consistent with `sign.ts`, `me.ts`, etc.
+- Created `tests/server/comments.test.ts` — 3 tests covering: successful insert + body trim, empty-body rejection, and missing-anchor validation. Uses `createTestDb()` + `syncVersions()` following the established pattern in `sign.test.ts`.
+
+### Potential concerns to address:
+- `revalidatePath("/")` is a broad cache invalidation — a future improvement would revalidate only the relevant document path once routing is finalized.
+- `createComment` accepts `db: any` (consistent with the rest of the codebase). A typed Drizzle db type could be introduced as a follow-up.
+
+---
+
 ## Progress Update as of 2026-05-19 16:15 Pacific
 *(Most recent updates at top)*
 
