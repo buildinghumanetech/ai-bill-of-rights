@@ -39,32 +39,31 @@ export async function recordSignature(
   }
   const versionRow = versionRows[0];
 
-  // Wrap both inserts in a transaction so an orphan consent_records row is
-  // never left behind if the signatures insert fails (e.g. unique-constraint
-  // double-submit). Production uses Neon serverless HTTP which supports
-  // db.transaction(); pglite-backed tests also expose the method (C-2 fix).
-  return db.transaction(async (tx: any) => {
-    const [record] = await tx
-      .insert(consentRecords)
-      .values({
-        signerId: input.signerId,
-        consentTextHash: input.consentTextHash,
-        capturedFields: input.capturedFields as unknown as object,
-      })
-      .returning({ id: consentRecords.id });
+  // The Neon HTTP driver does not support db.transaction(); we insert
+  // consent first, then the signature. If the signatures insert fails (e.g.
+  // unique-constraint double-submit) the orphan consent_records row is
+  // acceptable — it can be swept by a periodic job. Atomic semantics here
+  // would require switching to the neon-serverless WebSocket driver.
+  const [record] = await db
+    .insert(consentRecords)
+    .values({
+      signerId: input.signerId,
+      consentTextHash: input.consentTextHash,
+      capturedFields: input.capturedFields as unknown as object,
+    })
+    .returning({ id: consentRecords.id });
 
-    const [sig] = await tx
-      .insert(signatures)
-      .values({
-        signerId: input.signerId,
-        versionId: versionRow.id,
-        versionHashAtSigning: versionRow.markdownHash,
-        consentRecordId: record.id,
-      })
-      .returning({ id: signatures.id });
+  const [sig] = await db
+    .insert(signatures)
+    .values({
+      signerId: input.signerId,
+      versionId: versionRow.id,
+      versionHashAtSigning: versionRow.markdownHash,
+      consentRecordId: record.id,
+    })
+    .returning({ id: signatures.id });
 
-    return { signatureId: sig.id };
-  });
+  return { signatureId: sig.id };
 }
 
 export async function submitSignAction(formData: FormData): Promise<void> {

@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.glass-button {
+  box-shadow:
+    0 12px 32px -6px rgba(37, 99, 235, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.4) inset;
+}
