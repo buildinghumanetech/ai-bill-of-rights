@@ -13,6 +13,7 @@ import {
   jsonb,
   boolean,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const versions = pgTable(
@@ -136,7 +137,7 @@ export const proposalUpvotes = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex("proposal_upvotes_pk").on(t.proposalId, t.signerId),
+    uniqueIndex("proposal_upvotes_proposal_signer_unique").on(t.proposalId, t.signerId),
   ],
 );
 
@@ -152,7 +153,7 @@ export const comments = pgTable("comments", {
     .notNull()
     .references(() => signers.id),
   body: text("body").notNull(),
-  parentCommentId: uuid("parent_comment_id"),
+  parentCommentId: uuid("parent_comment_id").references((): AnyPgColumn => comments.id),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -173,7 +174,9 @@ export const commentUpvotes = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("comment_upvotes_pk").on(t.commentId, t.signerId)],
+  (t) => [
+    uniqueIndex("comment_upvotes_comment_signer_unique").on(t.commentId, t.signerId),
+  ],
 );
 
 export const endorsements = pgTable(
