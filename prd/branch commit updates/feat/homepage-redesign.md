@@ -1,5 +1,33 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 04:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Swapped the bottom-center cell in the 3×3 hero grid from the Singularity
+University talk shot to a new MIT Media Lab Panel photo with a slide
+("Baseline Results Across 15 Models") visible behind the panelists —
+better thematic fit for the AI Bill of Rights site.
+
+### Detail of changes made:
+- **`public/images/bht/MIT-Media-Lab-Panel.png`** (new, 2.9MB): added a
+  copy of the file the user dropped into the main checkout. Renamed
+  from "MIT Media Lab Panel.png" → "MIT-Media-Lab-Panel.png" so the
+  path doesn't need URL encoding in the `IMAGES` array.
+- **`src/app/HeroSection.tsx`**: `IMAGES[7]` (the bottom-center cell of
+  the 3×3 grid; index 4 is the hero center) now points to
+  `MIT-Media-Lab-Panel.png` instead of the Singularity University jpg.
+  Grid layout, animation math, and other slots are unchanged.
+
+### Potential concerns to address:
+- **The PNG is 2.9MB unoptimized.** Next/Image will resize it for the
+  cell (sizes="33vw") so the served bytes will be smaller, but the
+  source file is now the heaviest asset in `public/`. If repo bloat
+  becomes a concern, convert to AVIF/WebP — `cwebp -q 80` will likely
+  bring it under 500KB with no visible loss in the small grid cell.
+
+---
+
 ## Progress Update as of [2026-05-18 18:45 Pacific]
 *(Most recent updates at top)*
 
