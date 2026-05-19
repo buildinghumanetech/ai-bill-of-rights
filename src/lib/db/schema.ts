@@ -45,6 +45,13 @@ export const signers = pgTable("signers", {
   verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
   isAdmin: boolean("is_admin").notNull().default(false),
   softBannedAt: timestamp("soft_banned_at", { withTimezone: true }),
+  // Notification preference for document updates: 'major' (default) = only
+  // major revisions, 'minor' = major + minor, 'none' = no notifications.
+  notificationPreference: text("notification_preference", {
+    enum: ["major", "minor", "none"],
+  })
+    .notNull()
+    .default("major"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

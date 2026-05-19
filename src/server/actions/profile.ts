@@ -14,12 +14,15 @@ function getDb() {
   return _db;
 }
 
+export type NotificationPreference = "major" | "minor" | "none";
+
 export interface ProfileInput {
   clerkUserId: string;
   displayName: string;
   affiliation: string | null;
   locationText: string | null;
   verificationMethod: "email" | "sms";
+  notificationPreference?: NotificationPreference;
 }
 
 export async function upsertSignerProfile(
@@ -32,6 +35,8 @@ export async function upsertSignerProfile(
     .where(eq(signers.clerkUserId, input.clerkUserId))
     .limit(1);
 
+  const notificationPreference = input.notificationPreference ?? "major";
+
   if (existing.length > 0) {
     await db
       .update(signers)
@@ -40,6 +45,7 @@ export async function upsertSignerProfile(
         affiliation: input.affiliation,
         locationText: input.locationText,
         verificationMethod: input.verificationMethod,
+        notificationPreference,
       })
       .where(eq(signers.clerkUserId, input.clerkUserId));
     return { id: existing[0].id };
@@ -53,6 +59,7 @@ export async function upsertSignerProfile(
       affiliation: input.affiliation,
       locationText: input.locationText,
       verificationMethod: input.verificationMethod,
+      notificationPreference,
       verifiedAt: new Date(),
     })
     .returning({ id: signers.id });
