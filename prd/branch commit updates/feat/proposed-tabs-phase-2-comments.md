@@ -1,5 +1,26 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 18:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added `src/components/CommentThread.tsx` — a client component (Task 2.9) that renders a threaded list of comments with one-level reply nesting and per-comment upvote. `tsc --noEmit` clean.
+
+### Detail of changes made:
+- Created `src/components/CommentThread.tsx`:
+  - Accepts `comments: CommentRow[]`, `baseVersionId`, optional `anchorId` and `proposalId`.
+  - Builds a `childrenByParent` map from `c.parentCommentId` to support tree rendering without recursive DB queries.
+  - `renderComment(c, depth)` returns `React.ReactNode` — renders author name, body, Upvote and Reply buttons.
+  - Reply button only shown at `depth < 1` (one level of nesting max); clicking toggles `replyingTo` state.
+  - Inline `CommentComposer` shown when `replyingTo === c.id`; `onSubmitted`/`onCancel` both clear the reply state.
+  - `handleUpvote` calls `toggleCommentUpvoteAction` then `router.refresh()` to sync server state.
+  - Empty state: renders "No comments yet." paragraph.
+
+### Potential concerns to address:
+- `renderComment` uses `key={c.id}` inside the function body — React may not reconcile correctly if the function is re-called without a stable list. This is fine for Phase 2 but worth converting to a proper component in Phase 3.
+
+---
+
 ## Progress Update as of 2026-05-19 18:00 Pacific
 *(Most recent updates at top)*
 
