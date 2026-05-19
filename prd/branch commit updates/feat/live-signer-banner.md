@@ -1,5 +1,22 @@
 # Branch Progress: feat/live-signer-banner
 
+## Progress Update as of 2026-05-19 16:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Addressed three quality-review items on Task 6 (`LiveSignerBanner`): added `aria-hidden="true"` to the decorative arrow span, removed the dead `transition-transform` Tailwind class (shadowed by the inline `style.transition` string), and added an explanatory comment on the `onClick` handler. TypeScript type-check passes clean. The reviewer's fourth suggestion — removing `rendered` from Effect 2's dependency array — was deliberately NOT applied; see plan notes for why `rendered` is required there.
+
+### Detail of changes made:
+- **`src/app/LiveSignerBanner.tsx`**:
+  - `<span className="ml-1 text-zinc-400" aria-hidden="true">→</span>` — screen readers no longer announce the Unicode rightwards arrow.
+  - Removed `transition-transform` from the Link's `className`; the inline `style.transition` string fully owns the transition. The `hover:scale-[1.02]` Tailwind class stays (it sets the `scale` CSS property which the inline transition string animates).
+  - Added comment above `onClick`: `// Trigger exit early; the timeline effect cancels the in-flight enter/hold timer on re-run.`
+
+### Potential concerns to address:
+- `rendered` remains in Effect 2's dependency array intentionally — removing it would prevent the enter→hold timer from starting after the provider drains the next queued event (because `phase` stays `"enter"` across the reset and no phase-change triggers the effect without `rendered` in the deps).
+
+---
+
 ## Progress Update as of 2026-05-19 16:00 Pacific
 *(Most recent updates at top)*
 

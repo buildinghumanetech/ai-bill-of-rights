@@ -62,8 +62,9 @@ export default function LiveSignerBanner() {
     >
       <Link
         href={`/signatories/${rendered.id}`}
+        // Trigger exit early; the timeline effect cancels the in-flight enter/hold timer on re-run.
         onClick={() => setPhase("exit")}
-        className="glass-banner pointer-events-auto inline-flex max-w-[90vw] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-zinc-900/5 bg-white/70 px-4 py-2 text-sm text-zinc-800 shadow-lg shadow-zinc-900/10 backdrop-blur-md backdrop-saturate-150 transition-transform hover:scale-[1.02]"
+        className="glass-banner pointer-events-auto inline-flex max-w-[90vw] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-zinc-900/5 bg-white/70 px-4 py-2 text-sm text-zinc-800 shadow-lg shadow-zinc-900/10 backdrop-blur-md backdrop-saturate-150 hover:scale-[1.02]"
         style={{
           transform,
           opacity,
@@ -81,7 +82,7 @@ export default function LiveSignerBanner() {
         ) : (
           <span className="text-zinc-600">just signed</span>
         )}
-        <span className="ml-1 text-zinc-400">→</span>
+        <span className="ml-1 text-zinc-400" aria-hidden="true">→</span>
       </Link>
     </div>
   );
