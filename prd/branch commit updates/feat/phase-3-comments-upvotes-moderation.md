@@ -1,5 +1,22 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 6: report action with auto-soft-hide)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/server/actions/reports.ts` with `reportComment`, `resolveReport`, and `submitReportAction`. Added `tests/server/reports.test.ts` with 2 TDD tests (creates report row, auto-hides at 5-report threshold). All 49 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/server/actions/reports.ts`: `reportComment` inserts a report row, then counts unresolved reports for the comment; if count >= 5 and the comment isn't already hidden, sets `hiddenAt` + `hiddenReason = "auto: threshold of reports"`. `resolveReport` marks a report resolved with a resolution value. `submitReportAction` is the Next.js Server Action wired to Clerk auth and signer lookup, delegates to `reportComment`, then `revalidatePath`.
+- `tests/server/reports.test.ts`: 2 tests covering single-report insertion and auto-hide trigger at exactly 5 reports.
+
+### Potential concerns to address:
+- No deduplication guard (same signer can file multiple reports on the same comment). Could add a unique index on `(comment_id, reporter_signer_id)` if needed.
+- `submitReportAction` does not check `softBannedAt` (same pre-existing concern as comments/upvotes).
+- All prior concerns from Tasks 1–5 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 5: upvote toggle action)
 *(Most recent updates at top)*
 
