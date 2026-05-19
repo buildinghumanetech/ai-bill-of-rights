@@ -1042,8 +1042,10 @@ export default function SignModal({ open, onClose }: Props) {
                 {signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}
               </h2>
               <p className="mt-2 text-sm text-zinc-600">
-                Your name is now on v{VERSION}. The fight gets easier every
-                time another person signs — help us spread it.
+                Your name is now on v{VERSION}.
+                <br />
+                AI companies pay more attention every time another person
+                signs — help us spread it.
               </p>
             </div>
 

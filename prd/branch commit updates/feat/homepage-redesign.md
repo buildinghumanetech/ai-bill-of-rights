@@ -1,5 +1,25 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 05:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+One-line copy tweak on the post-sign "Thank you" state: replaced "The
+fight gets easier" with "AI companies pay more attention" and broke
+the success message onto two lines so the v1.0.0 confirmation sits
+above the call-to-action sentence.
+
+### Detail of changes made:
+- **`src/app/SignModal.tsx`**: the success-state `<p>` now reads
+  "Your name is now on v1.0.0." on line 1 and "AI companies pay more
+  attention every time another person signs — help us spread it." on
+  line 2 (split via a `<br />`).
+
+### Potential concerns to address:
+- None — pure copy change, no logic touched.
+
+---
+
 ## Progress Update as of [2026-05-19 05:30 Pacific]
 *(Most recent updates at top)*
 
