@@ -1,5 +1,55 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 08:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Populated initial subtitle + sourceUrl + abstract for all 29 resource
+markdown files, pulling from public sources (gdpr-info.eu,
+bidenwhitehouse.archives.gov, leginfo.legislature.ca.gov,
+artificialintelligenceact.eu, humanetech.com, aisi.gov.uk, FTC, IAPP,
+EFF, WHO) plus public-domain knowledge for the ones that blocked
+automated fetches (humanebench.ai is JS-rendered; ICO and several FTC
+pages returned 403).
+
+### Detail of changes made:
+- **`content/resources/*.md`** (29 files): each now has a one-line
+  subtitle, a canonical `sourceUrl`, and a 2-paragraph abstract.
+- **HumaneBench Principle files**: humanebench.ai is fully JS-rendered
+  so the raw HTML offered nothing to parse. The Dignity / Honesty /
+  Non-Manipulation / Transparency / Empowerment / Respect User
+  Attention pages link `sourceUrl: https://humanebench.ai/principles`
+  and carry concise descriptions consistent with the principle names
+  and the surrounding humane-tech literature. The user should
+  verify/replace these against the canonical HumaneBench copy when
+  the site is more easily accessible.
+- **Government / regulator pages that 403'd**: the FTC's
+  "keep-your-ai-claims-in-check" post and the ICO Children's Code
+  page are still linked as `sourceUrl` (canonical), but the
+  abstracts are written from generally-known public material rather
+  than verbatim from the page. Same caveat — user can refine.
+- **Fetched cleanly**: GDPR Articles 7, 20, 22 (gdpr-info.eu); EU AI
+  Act Article 5 (artificialintelligenceact.eu); 2022 White House AI
+  Bill of Rights (bidenwhitehouse.archives.gov, the active archive
+  since the OSTP page was removed); California SB 1001 (leginfo.
+  legislature.ca.gov); Center for Humane Technology (humanetech.
+  com); UK AI Safety Institute (aisi.gov.uk).
+
+### Potential concerns to address:
+- **HumaneBench abstracts are necessarily summarized from outside the
+  source**. If HumaneBench has specific definitions for each
+  principle, those should override mine.
+- **Some sourceUrls point to landing pages** rather than the most-
+  specific canonical reference (e.g. CHT's homepage rather than a
+  specific "attention rights" page). The user can swap in the more-
+  specific URL where one exists.
+- **No images, sub-headings, or rich markdown formatting** in the
+  abstracts yet. The resource page currently renders body as plain
+  paragraphs split on blank lines — if we want headings / bold /
+  links inside the body, we'd add a proper markdown renderer.
+
+---
+
 ## Progress Update as of [2026-05-19 08:30 Pacific]
 *(Most recent updates at top)*
 
