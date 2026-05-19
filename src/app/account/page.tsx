@@ -26,8 +26,14 @@ export default async function AccountPage({
       <main className="mx-auto w-full max-w-xl px-6 py-12">
         <h1 className="text-2xl font-semibold">Account</h1>
         <p className="mt-4 text-zinc-600">
-          You haven&apos;t completed a profile yet. Visit the document and sign
-          to create one.
+          Sign or edit the{" "}
+          <Link
+            href="/"
+            className="font-semibold text-blue-600 underline-offset-4 hover:underline"
+          >
+            AI Bill of Rights
+          </Link>{" "}
+          to create an account.
         </p>
       </main>
     );

@@ -1,15 +1,28 @@
-"use client";
-
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { signers } from "@/lib/db/schema";
 
 /**
  * Floating "My Account" pill in the top-right of every page when the
- * viewer is signed in via Clerk. Hidden for anonymous visitors.
+ * viewer is signed in via Clerk AND has an existing signer row in our
+ * DB. Hidden for anonymous visitors and for authenticated Clerk users
+ * who have not yet signed (no /account to show them).
  */
-export function MyAccountButton() {
-  const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded || !isSignedIn) return null;
+export async function MyAccountButton() {
+  const { userId } = await auth();
+  if (!userId) return null;
+  try {
+    const rows = await db
+      .select({ id: signers.id })
+      .from(signers)
+      .where(eq(signers.clerkUserId, userId))
+      .limit(1);
+    if (rows.length === 0) return null;
+  } catch {
+    return null;
+  }
 
   return (
     <Link

@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { signers, signatures, consentRecords } from "@/lib/db/schema";
@@ -16,13 +16,28 @@ function getDb() {
  * user-facing revoke flow (their own row) and also exposed for tests.
  *
  * The neon-http driver does not support transactions, so we cascade
- * manually in FK-safe order: signatures → consent_records → signers.
+ * manually in FK-safe order. Production DB still has Phase 3 tables
+ * (comments, comment_upvotes, reports) left over from an earlier
+ * db:push — those FKs would block the signers delete if we didn't
+ * clean them up here. The raw SQL is a no-op if those tables don't
+ * exist.
  */
 export async function deleteSigner(
   dbClient: any = null,
   signerId: string,
 ): Promise<void> {
   const db = dbClient ?? getDb();
+  await db.execute(sql`
+    DELETE FROM reports
+    WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
+       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
+  `);
+  await db.execute(sql`
+    DELETE FROM comment_upvotes
+    WHERE signer_id = ${signerId}
+       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
+  `);
+  await db.execute(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
   await db.delete(signatures).where(eq(signatures.signerId, signerId));
   await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
   await db.delete(signers).where(eq(signers.id, signerId));

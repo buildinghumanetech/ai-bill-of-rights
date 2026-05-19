@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useClerk, useSignIn, useSignUp, useUser } from "@clerk/nextjs";
 import { recordSignatureFromModal } from "@/server/actions/sign-from-modal";
 import { sendInvitationsAction } from "@/server/actions/invite";
@@ -127,6 +128,7 @@ export default function SignModal({ open, onClose }: Props) {
     useSignIn();
   const { user, isSignedIn } = useUser();
   const { signOut } = useClerk();
+  const router = useRouter();
 
   const [step, setStep] = useState<Step>("form");
   const [firstName, setFirstName] = useState("");
@@ -273,6 +275,7 @@ export default function SignModal({ open, onClose }: Props) {
         if (res.signerId) setSignerId(res.signerId);
         if (res.displayName) setSignerName(res.displayName);
         setStep("done");
+        router.refresh();
         return;
       }
 
@@ -419,6 +422,7 @@ export default function SignModal({ open, onClose }: Props) {
       if (res.signerId) setSignerId(res.signerId);
       if (res.displayName) setSignerName(res.displayName);
       setStep("done");
+      router.refresh();
     } catch (err) {
       setError(clerkErrorMessage(err));
     } finally {
