@@ -1,5 +1,19 @@
 # Branch Progress: feat/proposed-tabs-phase-1-schema
 
+## Progress Update as of 2026-05-19 14:45 Pacific (bug fix — notification_preference)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Fixed a pre-existing pglite test helper bug: the `signers` CREATE TABLE in `tests/_helpers/pglite-db.ts` was missing the `notification_preference` column that `schema.ts` defines (added via the 0001 migration). This caused 8 test failures (`column "notification_preference" of relation "signers" does not exist`) across `sign.test.ts`, `profile.test.ts`, `revoke.test.ts`, and `db.queries.test.ts`. After adding the column, 24 of 25 tests pass. The one remaining failure (`rolls back consent_records when signatures insert fails`) is a pre-existing unrelated transaction-rollback test and is not caused by this change.
+
+### Detail of changes made:
+- **`tests/_helpers/pglite-db.ts`**: Added `notification_preference text not null default 'major' check (notification_preference in ('major','minor','none'))` to the `signers` DDL block, immediately before `created_at`. Mirrors the production schema definition in `schema.ts` and the `0001_add_comments_and_proposed_edits.sql` migration's `ALTER TABLE signers ADD COLUMN notification_preference`.
+
+### Potential concerns to address:
+- One test still fails: `sign.test.ts > recordSignature > rolls back consent_records when signatures insert fails (double-submit)`. It asserts a transaction rollback that pglite may not fully emulate. This is pre-existing and out of scope for this branch.
+
+---
+
 ## Progress Update as of 2026-05-19 14:45 Pacific
 *(Most recent updates at top)*
 
