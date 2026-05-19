@@ -18,6 +18,7 @@ export default async function RevokePage() {
         <li>Delete your signature from every version of the AI Bill of Rights you signed.</li>
         <li>Delete your name, location, and affiliation from the public signers list.</li>
         <li>Delete the consent records and any private fingerprint fields we captured.</li>
+        <li>Delete any photo you uploaded, including all backup copies.</li>
         <li>Free up your email/phone so you can sign again later if you want.</li>
       </ul>
       <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">

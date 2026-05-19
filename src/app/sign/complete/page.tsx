@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { signers } from "@/lib/db/schema";
+import { SelfieCapture } from "@/components/SelfieCapture";
+import { getLatestSelfieForSigner } from "@/lib/selfie/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +24,15 @@ export default async function CompletePage({
     .limit(1);
   const signer = rows[0];
 
+  // Hide the capture block if this signer has already submitted a photo
+  // (covers "they came back to /sign/complete after submitting").
+  const existingSelfie = signer
+    ? await getLatestSelfieForSigner(signer.id)
+    : null;
+  const showCapture = signer && !existingSelfie;
+
   return (
-    <main className="mx-auto w-full max-w-xl px-6 py-24 text-center">
+    <main className="mx-auto w-full max-w-xl px-6 py-16 text-center">
       <h1 className="text-4xl font-semibold tracking-tight">Signed.</h1>
       <p className="mt-4 text-lg text-zinc-700 dark:text-zinc-300">
         Thank you, {signer?.displayName ?? "friend"}. You signed v{version}.
@@ -44,6 +53,20 @@ export default async function CompletePage({
           See everyone who has signed
         </Link>
       </div>
+
+      {showCapture ? (
+        <div className="mt-12 text-left">
+          <SelfieCapture context="post-sign" />
+          <div className="mt-3 text-center">
+            <Link
+              href={signer ? `/signatories/${signer.id}` : "/signatories"}
+              className="text-sm text-zinc-500 underline-offset-4 hover:underline"
+            >
+              Skip for now
+            </Link>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

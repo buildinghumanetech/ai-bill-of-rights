@@ -8,6 +8,7 @@ import {
   removeMySignatureForVersionAction,
   updateMyProfileAction,
 } from "@/server/actions/account";
+import { SelfieCard, type SelfieCardData } from "@/components/SelfieCard";
 
 interface Signature {
   version: string;
@@ -20,6 +21,7 @@ interface Props {
   initialLocationText: string | null;
   verificationMethod: string;
   signatures: Signature[];
+  selfieCard: SelfieCardData;
 }
 
 export default function AccountClient({
@@ -28,6 +30,7 @@ export default function AccountClient({
   initialLocationText,
   verificationMethod,
   signatures: initialSignatures,
+  selfieCard,
 }: Props) {
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [affiliation, setAffiliation] = useState(initialAffiliation ?? "");
@@ -142,6 +145,8 @@ export default function AccountClient({
           </button>
         </div>
       </form>
+
+      <SelfieCard initial={selfieCard} />
 
       <section className="mt-10">
         <h2 className="text-xl font-semibold text-zinc-950">Your signatures</h2>

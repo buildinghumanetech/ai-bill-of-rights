@@ -5,6 +5,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { signers } from "@/lib/db/schema";
 import { listSignaturesForSigner } from "@/lib/db/queries";
+import { getLatestSelfieForSigner } from "@/lib/selfie/queries";
+import type { SelfieCardData } from "@/components/SelfieCard";
+import type { RejectionReason } from "@/lib/selfie/policy";
 import AccountClient from "./AccountClient";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +43,41 @@ export default async function AccountPage({
   }
   const signer = rows[0];
   const sigs = await listSignaturesForSigner(signer.id);
+  const latestSelfie = await getLatestSelfieForSigner(signer.id);
   const { revoked } = await searchParams;
+
+  let selfieCard: SelfieCardData = { status: "none" };
+  if (latestSelfie) {
+    let status: SelfieCardData["status"] = "none";
+    if (latestSelfie.status === "pending") {
+      status = "pending";
+    } else if (
+      latestSelfie.status === "approved" &&
+      !latestSelfie.autoHiddenAt &&
+      !latestSelfie.removedAt &&
+      !latestSelfie.replacedBySelfieId
+    ) {
+      status = "approved";
+    } else if (latestSelfie.status === "approved" && latestSelfie.autoHiddenAt) {
+      status = "auto_hidden";
+    } else if (latestSelfie.status === "rejected") {
+      status = "rejected";
+    }
+    // Show the card only when there's a meaningful state to show. If the
+    // latest row is "removed" or replaced-by, fall through to status:"none".
+    if (status !== "none") {
+      selfieCard = {
+        status,
+        thumbnailUrl: latestSelfie.thumbnailBlobUrl,
+        rejectionReason:
+          (latestSelfie.rejectionReason as RejectionReason | null) ?? null,
+        submittedAt: latestSelfie.submittedAt.toISOString(),
+        reviewedAt: latestSelfie.reviewedAt
+          ? latestSelfie.reviewedAt.toISOString()
+          : null,
+      };
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32">
@@ -86,6 +123,7 @@ export default async function AccountPage({
           version: s.version,
           signedAt: s.signedAt.toISOString(),
         }))}
+        selfieCard={selfieCard}
       />
     </main>
   );

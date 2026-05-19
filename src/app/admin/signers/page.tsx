@@ -83,6 +83,17 @@ export default async function AdminSignersPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12">
+      <nav className="mb-4 flex gap-4 text-sm">
+        <Link href="/admin/signers" className="font-medium text-zinc-900">
+          Signers
+        </Link>
+        <Link
+          href="/admin/selfies"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Selfies
+        </Link>
+      </nav>
       <header className="mb-8 flex items-end justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">

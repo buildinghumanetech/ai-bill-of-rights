@@ -18,6 +18,16 @@ export interface CapturedFields {
   signing_session_utc: string;
 }
 
+function decodeHeaderValue(raw: string | null): string {
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // Malformed encoding — keep raw rather than throw.
+    return raw;
+  }
+}
+
 export function extractCapturedFields(
   headers: Headers,
   context: {
@@ -35,9 +45,12 @@ export function extractCapturedFields(
 
   return {
     ip,
-    ip_geo_city: headers.get("x-vercel-ip-city") ?? "",
-    ip_geo_region: headers.get("x-vercel-ip-country-region") ?? "",
-    ip_geo_country: headers.get("x-vercel-ip-country") ?? "",
+    // Vercel URL-encodes city names in x-vercel-ip-city so multi-word and
+    // non-ASCII names survive header transit ("Menlo%20Park", "S%C3%A3o%20Paulo").
+    // Decode here so downstream code never sees percent-encoding.
+    ip_geo_city: decodeHeaderValue(headers.get("x-vercel-ip-city")),
+    ip_geo_region: decodeHeaderValue(headers.get("x-vercel-ip-country-region")),
+    ip_geo_country: decodeHeaderValue(headers.get("x-vercel-ip-country")),
     user_agent_raw: ua,
     browser_name: browser.name ?? "",
     browser_version: browser.version ?? "",
