@@ -1,5 +1,25 @@
 # Branch Progress: feat/proposed-tabs-phase-1-schema
 
+## Progress Update as of 2026-05-19 13:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Generated the Drizzle migration SQL (`drizzle/0001_add_comments_and_proposed_edits.sql`) and applied it to the dev Neon branch. The migration creates all five new tables (`comment_upvotes`, `comments`, `endorsements`, `proposal_upvotes`, `proposed_edits`), renames `comments.version_id → base_version_id`, adds the `notification_preference` column to `signers` (which was in an orphaned SQL file not tracked by the journal), and creates the three unique indexes (`comment_upvotes_comment_signer_unique`, `endorsements_signer_base_unique`, `proposal_upvotes_proposal_signer_unique`). Removed the orphaned `drizzle/0001_add_signer_notification_preference.sql` file whose content was absorbed into the new migration. Applied DDL directly via the Neon serverless driver to work around drizzle-kit's interactive TTY prompts in a non-TTY environment.
+
+### Detail of changes made:
+- **`drizzle/0001_add_comments_and_proposed_edits.sql`** (new): Full migration SQL with 5 CREATE TABLE statements, all foreign key constraints, and 3 unique indexes. Includes the self-FK `comments_parent_comment_id_comments_id_fk` and the `signers.notification_preference` column alter.
+- **`drizzle/meta/_journal.json`** (updated): Added entry `{ idx: 1, tag: "0001_add_comments_and_proposed_edits" }`.
+- **`drizzle/meta/0001_snapshot.json`** (new): Drizzle snapshot of all 9 tables at this migration point.
+- **`drizzle/0001_add_signer_notification_preference.sql`** (deleted): Was an orphaned file not referenced in the journal. Its content is now absorbed into the 0001 migration above — `notification_preference` was part of the schema diff because the 0000 snapshot didn't include it.
+- **Dev Neon branch** (`ep-bold-cherry-...`): DDL applied via Neon serverless driver. All five new tables confirmed present. Stale `attestations` and `reports` tables dropped. `comments.version_id` renamed to `base_version_id`. All FKs and unique indexes added.
+
+### Potential concerns to address:
+- `db:push` is unusable in non-TTY (CI/scripted) environments because drizzle-kit prompts interactively for table/column create-vs-rename disambiguation. Future migrations involving renames will need the same direct-DDL workaround or a proper TTY session. Consider adding a `db:migrate` script using `drizzle-kit migrate` once migration tracking is set up.
+- The dev Neon DB had stale `attestations` and `reports` tables (1 row in attestations). These were dropped as part of the push — they are not referenced by any current schema or application code.
+- The orphaned `0001_add_signer_notification_preference.sql` file had already been applied to the dev DB via a prior push session; the rename was already safe.
+
+---
+
 ## Progress Update as of 2026-05-19 10:15 Pacific
 *(Most recent updates at top)*
 
