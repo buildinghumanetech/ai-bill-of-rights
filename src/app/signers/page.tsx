@@ -157,12 +157,6 @@ export default async function SignersPage({
                   scope="col"
                   className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600"
                 >
-                  Verification
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600"
-                >
                   Version
                 </th>
                 <th
@@ -179,7 +173,7 @@ export default async function SignersPage({
                   key={signer.signerId}
                   className="transition-colors hover:bg-zinc-50"
                 >
-                  <td className="whitespace-nowrap px-6 py-4">
+                  <td className="px-6 py-4">
                     <Link
                       href={`/signatories/${signer.signerId}`}
                       className="group flex items-center gap-3"
@@ -199,6 +193,9 @@ export default async function SignersPage({
                             {signer.affiliation}
                           </div>
                         ) : null}
+                        <div className="mt-1.5">
+                          <VerificationPill method={signer.verificationMethod} />
+                        </div>
                       </div>
                     </Link>
                   </td>
@@ -206,9 +203,6 @@ export default async function SignersPage({
                     {signer.locationText || (
                       <span className="text-zinc-400">—</span>
                     )}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <VerificationPill method={signer.verificationMethod} />
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm">
                     <Link
