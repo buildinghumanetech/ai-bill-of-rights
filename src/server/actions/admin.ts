@@ -67,6 +67,35 @@ export async function setAdminFlagAction(
   revalidatePath("/admin/signers");
 }
 
+export interface EditSignerInput {
+  signerId: string;
+  displayName: string;
+  affiliation: string;
+  locationText: string;
+}
+
+export async function editSignerAction(
+  input: EditSignerInput,
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdminOrBootstrap();
+  const displayName = input.displayName.trim();
+  if (!displayName) {
+    return { success: false, error: "Display name is required." };
+  }
+  await getDb()
+    .update(signers)
+    .set({
+      displayName,
+      affiliation: input.affiliation.trim() || null,
+      locationText: input.locationText.trim() || null,
+    })
+    .where(eq(signers.id, input.signerId));
+  revalidatePath("/admin/signers");
+  revalidatePath("/signers");
+  revalidatePath(`/signatories/${input.signerId}`);
+  return { success: true };
+}
+
 export interface AdminAddSignerInput {
   displayName: string;
   affiliation: string;
