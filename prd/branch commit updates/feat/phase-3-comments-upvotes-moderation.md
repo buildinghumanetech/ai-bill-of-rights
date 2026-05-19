@@ -1,5 +1,19 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 10: /admin/reports moderation queue)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/app/admin/reports/page.tsx` — a server-rendered admin page listing all pending (unresolved) comment reports with Hide and Allow actions. TypeScript clean; 52 tests pass.
+
+### Detail of changes made:
+- `src/app/admin/reports/page.tsx`: Next.js server page with `force-dynamic`. Gate checks `signers.isAdmin` via Clerk `userId`. Lists pending reports from `listPendingReports()`. Two inline server actions — `hideAction` (calls `hideComment` + `resolveReport("hidden")`) and `allowAction` (calls `resolveReport("allowed")`), both re-check admin status server-side before acting. Each report card shows version, anchor ID, comment body, reporter name, reason, and timestamp. Redirects back to `/admin/reports` after each action.
+
+### Potential concerns to address:
+- All prior concerns from Tasks 1–9 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 9: wire hover-to-comment drawer into /v/[version])
 *(Most recent updates at top)*
 
