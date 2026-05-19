@@ -1,5 +1,21 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 5: upvote toggle action)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/server/actions/upvotes.ts` with `toggleUpvote` and `submitUpvoteAction`. Added `tests/server/upvotes.test.ts` with 2 TDD tests (first call adds, second removes). All 47 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/server/actions/upvotes.ts`: `toggleUpvote` helper accepts optional `dbClient` (for testing), looks up existing upvote via `and(eq(commentId), eq(signerId))`, deletes if found (returns `{ upvoted: false }`), or inserts new row (returns `{ upvoted: true }`). `submitUpvoteAction` is the Server Action wired to Clerk auth, signer lookup, delegates to `toggleUpvote`, then `revalidatePath`.
+- `tests/server/upvotes.test.ts`: 2 tests covering toggle logic (add on first, remove on second).
+
+### Potential concerns to address:
+- `submitUpvoteAction` does not check `softBannedAt` (same pre-existing concern as comments). Trivial one-liner fix.
+- All prior concerns from Tasks 1–4 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 4: comment server actions)
 *(Most recent updates at top)*
 
