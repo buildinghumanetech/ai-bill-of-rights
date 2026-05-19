@@ -1,5 +1,59 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 08:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added a "Connects to" pill row on each article that links to a new
+`/resources/[slug]` route. Each pill is a clickable page driven by a
+blog-style markdown file in `content/resources/`. Article 1's three
+pills from the original Google Doc are wired up — HumaneBench
+Principle (Dignity), GDPR Article 7, and emerging state-level AI
+legislation. Articles 2-9 have empty connects arrays pending content
+from the user.
+
+### Detail of changes made:
+- **`content/resources/*.md`** (3 new files): one per Article 1 pill,
+  with frontmatter (`title`, `subtitle`, `sourceUrl`) and a body
+  section. Currently only `title` is filled in; the user will
+  populate the rest.
+  - `humanebench-principle-dignity.md`
+  - `gdpr-article-7.md`
+  - `emerging-state-ai-legislation.md`
+- **`src/lib/resources.ts`** (new): minimal frontmatter parser
+  (regex-based, no `gray-matter` dependency needed) plus
+  `listResourceSlugs()` and `getResource(slug)`. Reads from
+  `content/resources/*.md` via `node:fs`.
+- **`src/app/resources/[slug]/page.tsx`** (new): the resource page.
+  Uses `generateStaticParams()` to pre-render every resource at build
+  time. Layout: "← AI Bill of Rights" back-link, then a header card
+  with title / optional subtitle / optional Source URL, then the body
+  rendered as paragraphs (split on double-newline). When the body is
+  empty, shows a placeholder pointing the user to the markdown file
+  to edit. `generateMetadata` populates `<title>` and the OG/Twitter
+  description.
+- **`src/app/page.tsx`**:
+  - Extended Article 1's data with a `connects: [{ title, slug }]`
+    array of the three pills from the original Google Doc.
+  - New conditional render below the article body: an inline row
+    starting with "Connects to" label, followed by rounded-full
+    pill links to each `/resources/[slug]`. Hover state highlights
+    the pill. Articles 2-9 don't render this block because their
+    `connects` is undefined.
+
+### Potential concerns to address:
+- **Articles 2-9 have no pills yet**. The user is expected to provide
+  the pill lists per article (similar to Article 1's three).
+- **Markdown body rendering is very minimal** — split on blank lines,
+  no headings/lists/inline-formatting beyond paragraphs. If the user
+  wants richer markdown (h2 sections, links inside body, lists), we
+  can swap in `remark`/`remark-html` later.
+- **`generateStaticParams` reads from disk at build time**, so adding
+  a new resource markdown file requires a fresh build/deploy to
+  surface it via the static path. In dev mode this isn't an issue.
+
+---
+
 ## Progress Update as of [2026-05-19 08:00 Pacific]
 *(Most recent updates at top)*
 

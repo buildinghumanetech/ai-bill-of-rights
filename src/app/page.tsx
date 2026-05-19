@@ -11,6 +11,17 @@ const articles = [
     title: "Your Data Belongs to You",
     body: "No AI company may use your conversations, your images, or your behavioral data to train their models without your explicit, informed, revocable consent. Opt-out is not consent. Buried checkboxes are not consent.",
     pullQuote: 'The default is "No LLM training on my data"',
+    connects: [
+      {
+        title: "HumaneBench Principle — Dignity",
+        slug: "humanebench-principle-dignity",
+      },
+      { title: "GDPR Article 7", slug: "gdpr-article-7" },
+      {
+        title: "Emerging state-level AI legislation in California, Colorado",
+        slug: "emerging-state-ai-legislation",
+      },
+    ],
   },
   {
     number: "02",
@@ -137,6 +148,22 @@ export default async function Home() {
                         {article.pullQuote}
                       </blockquote>
                     )}
+                    {article.connects && article.connects.length > 0 ? (
+                      <div className="mt-6 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                          Connects to
+                        </span>
+                        {article.connects.map((pill) => (
+                          <Link
+                            key={pill.slug}
+                            href={`/resources/${pill.slug}`}
+                            className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900"
+                          >
+                            {pill.title}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </li>
