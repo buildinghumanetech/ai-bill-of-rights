@@ -1,5 +1,20 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 3: DB-backed rate-limit enforcer)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `src/lib/ratelimit/enforce.ts` with the `enforceRateLimit` function and `RateLimitError` class. Added `tests/lib/ratelimit.enforce.test.ts` with 2 TDD tests (allow below limit, throw at/above limit). All 41 tests pass; TypeScript clean.
+
+### Detail of changes made:
+- `src/lib/ratelimit/enforce.ts`: pure utility that counts rows in a sliding window using Drizzle `and(eq, gte)` with a `count(*)::int` aggregate. Throws `RateLimitError` when `count >= limit`, returns `{ allowed: true }` otherwise. Accepts a generic `RateLimitOptions` interface so it works for comments, upvotes, or any future table.
+- `tests/lib/ratelimit.enforce.test.ts`: seeds a fresh PGlite DB per test, verifies the happy path (no comments → allowed) and the blocking path (5 comments inserted → throws `RateLimitError`).
+
+### Potential concerns to address:
+- None introduced by this task. Existing concerns from prior entries still apply (soft-ban not enforced at submit time; N+1 listCommentsForAnchor; full-payload drawer; unused AnchorMarker.tsx).
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 2: migration generated and applied)
 *(Most recent updates at top)*
 
