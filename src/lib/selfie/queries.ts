@@ -91,7 +91,7 @@ export async function countUnresolvedReports(
   return Number(rows[0]?.value ?? 0);
 }
 
-export interface LatestSelfieForSigner extends SelfieRow {}
+export type LatestSelfieForSigner = SelfieRow;
 
 /**
  * Most-recent selfie for a signer, regardless of status. Used on /account

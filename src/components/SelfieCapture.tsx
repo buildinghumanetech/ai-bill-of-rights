@@ -14,18 +14,23 @@ type Stage =
   | { kind: "preview"; blob: Blob; previewUrl: string; captureMethod: "live" | "upload" }
   | { kind: "error"; message: string };
 
+// Lazy initial check: getUserMedia presence doesn't change after mount, so we
+// can compute it once during render (works in SSR too — returns true on the
+// server, which falls back to the actual check on the client via startLive's
+// try/catch).
+function detectCameraSupport(): boolean {
+  if (typeof navigator === "undefined") return true;
+  return Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
 export function SelfieCapture({ context }: Props) {
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [pending, startTransition] = useTransition();
-  const [cameraSupported, setCameraSupported] = useState(true);
+  const [cameraSupported, setCameraSupported] = useState<boolean>(
+    detectCameraSupport,
+  );
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setCameraSupported(false);
-    }
-  }, []);
 
   // Stop the camera stream and revoke any blob URL when transitioning out.
   useEffect(() => {
