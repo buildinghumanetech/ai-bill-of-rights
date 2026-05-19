@@ -22,12 +22,12 @@ const IMAGES = [
   "/images/wall/IMG_1772.webp",
   "/images/bht/67658e6d5bbf6d25065cae74_IMG_2832__1_.avif",
   "/images/bht/67658e6f7d20eca9f6bf046f_IMG_6431.avif",
-  "/images/bht/67658e702ebdb35ccbcb3876_IMG_7831.avif",
+  "/images/bht/682c343a20a8821d212445eb_49b8a28009289bc99847e7803987c40b_IMG_9691.webp",
   "/images/wall/IMG_0751.webp",
-  // Row 2 — outer, BHT, HERO (whiteboard), BHT, outer
+  // Row 2 — outer, BHT, HERO (IMG_7831), BHT, outer
   "/images/wall/IMG_1794.webp",
   "/images/bht/67658e7075ea3ce7f7a94474_IMG_7825.avif",
-  "/images/bht/682c343a20a8821d212445eb_49b8a28009289bc99847e7803987c40b_IMG_9691.webp",
+  "/images/bht/67658e702ebdb35ccbcb3876_IMG_7831.avif",
   "/images/bht/6787b903dfc14c54318e85d1_IMG_2260_1.webp",
   "/images/wall/IMG_1797.webp",
   // Row 3 — outer, BHT, MIT panel (BHT), BHT, outer
@@ -114,6 +114,11 @@ export default function HeroSection() {
                 priority={i === CENTER_INDEX}
                 sizes="20vw"
                 className="object-cover"
+                style={
+                  i === CENTER_INDEX
+                    ? { objectPosition: "center 25%" }
+                    : undefined
+                }
               />
             </div>
           ))}

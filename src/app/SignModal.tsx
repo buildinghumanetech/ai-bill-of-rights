@@ -555,7 +555,7 @@ export default function SignModal({ open, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/60 px-3 py-4 backdrop-blur-sm sm:px-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -563,7 +563,7 @@ export default function SignModal({ open, onClose }: Props) {
     >
       <div
         ref={dialogRef}
-        className="relative w-full max-w-md rounded-2xl bg-white p-7 shadow-2xl sm:p-8"
+        className="relative my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -734,14 +734,14 @@ export default function SignModal({ open, onClose }: Props) {
             </div>
 
             <div
-              className="mt-5 flex items-center justify-between gap-4"
+              className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
               role="radiogroup"
               aria-label="Verification method"
             >
               <span className="text-sm font-bold text-zinc-900">
                 Verify me via
               </span>
-              <div className="relative inline-flex rounded-lg bg-zinc-100 p-1 text-sm">
+              <div className="relative inline-flex w-full rounded-lg bg-zinc-100 p-1 text-sm sm:w-auto">
                 <span
                   aria-hidden
                   className="pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-white shadow-sm ring-1 ring-zinc-200 transition-transform duration-200"
@@ -755,7 +755,7 @@ export default function SignModal({ open, onClose }: Props) {
                   role="radio"
                   aria-checked={method === "phone"}
                   onClick={() => setMethod("phone")}
-                  className={`relative z-10 min-w-[6rem] rounded-md px-4 py-1.5 text-center font-medium transition-colors ${
+                  className={`relative z-10 flex-1 rounded-md px-4 py-1.5 text-center font-medium transition-colors sm:min-w-[6rem] sm:flex-none ${
                     method === "phone" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >
@@ -766,7 +766,7 @@ export default function SignModal({ open, onClose }: Props) {
                   role="radio"
                   aria-checked={method === "email"}
                   onClick={() => setMethod("email")}
-                  className={`relative z-10 min-w-[6rem] rounded-md px-4 py-1.5 text-center font-medium transition-colors ${
+                  className={`relative z-10 flex-1 rounded-md px-4 py-1.5 text-center font-medium transition-colors sm:min-w-[6rem] sm:flex-none ${
                     method === "email" ? "text-zinc-950" : "text-zinc-500"
                   }`}
                 >

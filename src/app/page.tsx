@@ -106,7 +106,8 @@ const articles = [
     number: "05",
     title: "You Have the Right to an Explanation",
     body: "When an AI system makes a consequential decision about you — your loan, your medical care, your content visibility, your job application — you have the right to know why, in plain language, and how to appeal it.",
-    pullQuote: null,
+    pullQuote:
+      "AI systems must explain their reasoning around consequential decisions in plain language.",
     connects: [
       {
         title: "HumaneBench Principle — Transparency",
@@ -126,7 +127,8 @@ const articles = [
     number: "06",
     title: "You Have the Right to Human Contact",
     body: "In any situation involving significant consequence — health, legal, financial, crisis — you have the right to reach a human being. AI systems may not be deployed as permanent gatekeepers that eliminate human access.",
-    pullQuote: "The loop stays open.",
+    pullQuote:
+      'Every AI agent has a "license plate" identifier that tracks it back to a human responsible for its actions.',
     connects: [
       {
         title: "HumaneBench Principle — Empowerment",
@@ -218,8 +220,8 @@ export default async function Home() {
         <h1 className="text-balance text-5xl font-semibold tracking-tight text-zinc-950 sm:text-7xl">
           The AI Bill of Rights
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-8 text-zinc-700 sm:text-xl">
-          <strong className="font-semibold text-zinc-950">
+        <p className="mx-auto mt-6 max-w-none text-pretty text-xl leading-8 text-zinc-700 sm:text-2xl">
+          <strong className="whitespace-nowrap font-semibold text-zinc-950">
             Nine commitments we&apos;re demanding from every AI company
           </strong>
           <br />

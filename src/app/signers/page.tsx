@@ -102,6 +102,16 @@ export default async function SignersPage({
           </Link>
           .
         </p>
+        {!loadFailed && signers.length > 0 ? (
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
+              Sign the AI Bill of Rights →
+            </SignTrigger>
+            <p className="text-xs text-zinc-500">
+              Add your name. Verified by email or phone.
+            </p>
+          </div>
+        ) : null}
       </header>
 
       {loadFailed ? (
@@ -119,7 +129,7 @@ export default async function SignersPage({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-zinc-200">
             <thead className="bg-zinc-50">
               <tr>
@@ -219,16 +229,6 @@ export default async function SignersPage({
         </div>
       ) : null}
 
-      {signers.length > 0 ? (
-        <div className="mt-16 flex flex-col items-center gap-3">
-          <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
-            Sign the AI Bill of Rights →
-          </SignTrigger>
-          <p className="text-xs text-zinc-500">
-            Add your name. Verified by email or phone.
-          </p>
-        </div>
-      ) : null}
     </main>
   );
 }
