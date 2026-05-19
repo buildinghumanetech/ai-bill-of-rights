@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { signers } from "@/lib/db/schema";
 import { listSignaturesForSigner } from "@/lib/db/queries";
+import AccountClient from "./AccountClient";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +25,9 @@ export default async function AccountPage({
     return (
       <main className="mx-auto w-full max-w-xl px-6 py-12">
         <h1 className="text-2xl font-semibold">Account</h1>
-        <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-          You haven&apos;t completed a profile yet. Visit the document and sign to
-          create one.
+        <p className="mt-4 text-zinc-600">
+          You haven&apos;t completed a profile yet. Visit the document and sign
+          to create one.
         </p>
       </main>
     );
@@ -35,47 +37,50 @@ export default async function AccountPage({
   const { revoked } = await searchParams;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
-      <h1 className="text-3xl font-semibold tracking-tight">Account</h1>
+    <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32">
+      {signer.isAdmin ? (
+        <Link
+          href="/admin"
+          className="fixed right-4 top-16 z-40 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 shadow-md ring-1 ring-amber-200 hover:bg-amber-100"
+        >
+          <svg
+            className="h-3.5 w-3.5"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden
+          >
+            <path
+              d="M8 1.5l1.5 4h4l-3.25 2.5 1.25 4-3.5-2.5L4.5 12l1.25-4L2.5 5.5h4z"
+              fill="currentColor"
+            />
+          </svg>
+          Admin
+        </Link>
+      ) : null}
+
+      <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
+        Account
+      </p>
+      <h1 className="mt-2 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">
+        {signer.displayName}
+      </h1>
+
       {revoked ? (
-        <p className="mt-4 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200">
-          Your data has been revoked. Your public signature is now anonymized.
+        <p className="mt-4 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          Your signatures and profile have been deleted.
         </p>
       ) : null}
-      <section className="mt-8">
-        <h2 className="text-xl font-semibold">Public profile</h2>
-        <dl className="mt-4 grid grid-cols-3 gap-y-2 text-sm">
-          <dt className="text-zinc-500">Display name</dt>
-          <dd className="col-span-2">{signer.displayName}</dd>
-          <dt className="text-zinc-500">Location</dt>
-          <dd className="col-span-2">{signer.locationText ?? "—"}</dd>
-          <dt className="text-zinc-500">Affiliation</dt>
-          <dd className="col-span-2">{signer.affiliation ?? "—"}</dd>
-          <dt className="text-zinc-500">Verification</dt>
-          <dd className="col-span-2">{signer.verificationMethod}</dd>
-        </dl>
-      </section>
-      <section className="mt-10">
-        <h2 className="text-xl font-semibold">Your signatures</h2>
-        <ul className="mt-3 flex flex-col gap-2">
-          {sigs.map((s: { version: string; signedAt: Date }) => (
-            <li
-              key={s.version + s.signedAt.toISOString()}
-              className="rounded-md border border-zinc-200 px-4 py-2 text-sm dark:border-zinc-800"
-            >
-              v{s.version} — signed {s.signedAt.toISOString().slice(0, 10)}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="mt-10">
-        <a
-          href="/account/revoke"
-          className="text-sm font-medium text-red-700 underline-offset-4 hover:underline dark:text-red-400"
-        >
-          Revoke my data
-        </a>
-      </section>
+
+      <AccountClient
+        initialDisplayName={signer.displayName}
+        initialAffiliation={signer.affiliation}
+        initialLocationText={signer.locationText}
+        verificationMethod={signer.verificationMethod}
+        signatures={sigs.map((s: { version: string; signedAt: Date }) => ({
+          version: s.version,
+          signedAt: s.signedAt.toISOString(),
+        }))}
+      />
     </main>
   );
 }

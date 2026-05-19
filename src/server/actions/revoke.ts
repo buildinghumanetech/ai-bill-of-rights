@@ -3,54 +3,29 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { signers, consentRecords } from "@/lib/db/schema";
+import { signers, signatures, consentRecords } from "@/lib/db/schema";
 
-// Lazy db (same pattern as other server actions / queries)
 let _db: any | null = null;
 function getDb() {
   if (!_db) _db = (require("@/lib/db") as { db: any }).db;
   return _db;
 }
 
-export async function anonymizeSigner(
+/**
+ * Fully removes a signer and every dependent row. Used by the
+ * user-facing revoke flow (their own row) and also exposed for tests.
+ *
+ * The neon-http driver does not support transactions, so we cascade
+ * manually in FK-safe order: signatures → consent_records → signers.
+ */
+export async function deleteSigner(
   dbClient: any = null,
   signerId: string,
-  sequenceNumber: number,
 ): Promise<void> {
   const db = dbClient ?? getDb();
-  // Wrap both updates in a transaction so they succeed or fail atomically.
-  // Production Neon HTTP and pglite both support db.transaction() (C-2 fix).
-  await db.transaction(async (tx: any) => {
-    await tx
-      .update(signers)
-      .set({
-        displayName: `Anonymized signer #${sequenceNumber}`,
-        affiliation: null,
-        locationText: null,
-      })
-      .where(eq(signers.id, signerId));
-
-    await tx
-      .update(consentRecords)
-      .set({
-        revokedAt: new Date(),
-        capturedFields: null,
-      })
-      .where(eq(consentRecords.signerId, signerId));
-  });
-}
-
-async function nextSequenceNumber(dbClient: any = null): Promise<number> {
-  const db = dbClient ?? getDb();
-  const rows = await db.select({ name: signers.displayName }).from(signers);
-  let max = 0;
-  for (const r of rows) {
-    const m = r.name?.match?.(/^Anonymized signer #(\d+)$/);
-    if (m) {
-      max = Math.max(max, Number(m[1]));
-    }
-  }
-  return max + 1;
+  await db.delete(signatures).where(eq(signatures.signerId, signerId));
+  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
+  await db.delete(signers).where(eq(signers.id, signerId));
 }
 
 export async function submitRevokeAction(): Promise<void> {
@@ -58,12 +33,11 @@ export async function submitRevokeAction(): Promise<void> {
   if (!userId) redirect("/");
   const db = getDb();
   const rows = await db
-    .select()
+    .select({ id: signers.id })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
   if (rows.length === 0) redirect("/");
-  const seq = await nextSequenceNumber(db);
-  await anonymizeSigner(db, rows[0].id, seq);
+  await deleteSigner(db, rows[0].id);
   redirect("/account?revoked=1");
 }

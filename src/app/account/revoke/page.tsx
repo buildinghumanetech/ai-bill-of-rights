@@ -9,16 +9,16 @@ export default async function RevokePage() {
   return (
     <main className="mx-auto w-full max-w-xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight text-red-700 dark:text-red-400">
-        Revoke your data
+        Remove your signature
       </h1>
       <p className="mt-6 text-zinc-700 dark:text-zinc-300">
-        Revoking will:
+        This will permanently:
       </p>
       <ul className="mt-3 list-disc pl-6 text-zinc-700 dark:text-zinc-300">
-        <li>Replace your public display name with &quot;Anonymized signer #N&quot;.</li>
-        <li>Clear your public location and affiliation.</li>
-        <li>Delete the IP, browser, and other private fields we captured.</li>
-        <li>Leave your signature itself attached to the version you signed.</li>
+        <li>Delete your signature from every version of the AI Bill of Rights you signed.</li>
+        <li>Delete your name, location, and affiliation from the public signers list.</li>
+        <li>Delete the consent records and any private fingerprint fields we captured.</li>
+        <li>Free up your email/phone so you can sign again later if you want.</li>
       </ul>
       <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
         This is irreversible. Are you sure?
@@ -28,7 +28,7 @@ export default async function RevokePage() {
           type="submit"
           className="rounded-full bg-red-700 px-6 py-3 text-base font-medium text-white hover:bg-red-600"
         >
-          Yes, revoke my data
+          Yes, remove my signature
         </button>
         <a
           href="/account"
