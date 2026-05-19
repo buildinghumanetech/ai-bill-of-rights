@@ -111,6 +111,8 @@ export async function submitSignAction(formData: FormData): Promise<void> {
   });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const signerPageUrl = `${siteUrl}/signatories/${signer.id}`;
+
   try {
     const clerkClientFn = (await import("@clerk/nextjs/server")).clerkClient;
     const clerk = await clerkClientFn();
@@ -122,7 +124,7 @@ export async function submitSignAction(formData: FormData): Promise<void> {
       const tpl = signConfirmation({
         displayName: signer.displayName,
         version: versionString,
-        signerPageUrl: `${siteUrl}/signatories/${signer.id}`,
+        signerPageUrl,
         revokeUrl: `${siteUrl}/account/revoke`,
       });
       await sendEmail({ to: email, ...tpl });
@@ -130,6 +132,21 @@ export async function submitSignAction(formData: FormData): Promise<void> {
   } catch (err) {
     // Email send failure should not block the signature flow.
     console.error("[email] confirmation send failed:", err);
+  }
+
+  // Notify the team. Independent of the signer-confirmation send so a failure
+  // on one doesn't suppress the other (e.g., a bad signer email shouldn't
+  // hide the new-signer notification from the team inbox).
+  try {
+    const { signerNotification } = await import("@/lib/email/templates");
+    const { sendEmail } = await import("@/lib/email/send");
+    const tpl = signerNotification({
+      displayName: signer.displayName,
+      signerPageUrl,
+    });
+    await sendEmail({ to: "hello@ai-for-people.org", ...tpl });
+  } catch (err) {
+    console.error("[email] team notification send failed:", err);
   }
 
   redirect(`/sign/complete?version=${encodeURIComponent(versionString)}`);
