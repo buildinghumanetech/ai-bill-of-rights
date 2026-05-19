@@ -1,5 +1,23 @@
 # Branch Progress: feat/phase-3-comments-upvotes-moderation
 
+## Progress Update as of 2026-05-18 (Plan 3 Task 9: wire hover-to-comment drawer into /v/[version])
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Created `AnchorSentence` and `CommentDrawer` client components; updated `DocumentRenderer` to pass `anchorCounts` via `AnchorSentence`; wired `CommentDrawer` into `/v/[version]/page.tsx` with auth-gated `isSignedIn` check. TypeScript clean; 52 tests pass. Dev server unavailable for smoke test.
+
+### Detail of changes made:
+- `src/components/AnchorSentence.tsx`: New client component wrapping each sentence in a `<span data-anchor-id="...">` with a group-hover bubble button that dispatches `window.CustomEvent("anchor-open", { anchorId })`. Renders `+` when no comments, `💬 N` when comments exist.
+- `src/components/CommentDrawer.tsx`: New client component listening for `anchor-open` events via `useEffect`. Renders a fixed right-side drawer with `CommentThread` (filtered to `anchorId`) and `CommentComposer` (if `isSignedIn`) or a sign-in prompt. Closes via a Close button.
+- `src/components/DocumentRenderer.tsx`: Added `anchorCounts?: Record<string, number>` prop. Replaced `<span data-anchor-id>` with `<AnchorSentence>`, passing `count={anchorCounts[sentence.id] ?? 0}`.
+- `src/app/v/[version]/page.tsx`: Added imports for `listCommentsForAnchor`, `countCommentsByAnchor`, `CommentDrawer`, `auth`, `eq`, `signers`, `db`. Added `anchorCounts`, `allComments`, and `isSignedIn` data-fetching before the return. Passed `anchorCounts` to `DocumentRenderer`; added `<CommentDrawer>` before `</main>`.
+
+### Potential concerns to address:
+- `AnchorMarker.tsx` was intentionally skipped (spec bug — dead code).
+- All prior concerns from Tasks 1–8 still apply.
+
+---
+
 ## Progress Update as of 2026-05-18 (Plan 3 Task 8: comment components)
 *(Most recent updates at top)*
 

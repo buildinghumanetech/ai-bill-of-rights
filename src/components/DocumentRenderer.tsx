@@ -1,10 +1,12 @@
 import type { ParsedDocument } from "@/lib/markdown/parse";
+import { AnchorSentence } from "./AnchorSentence";
 
 interface Props {
   document: ParsedDocument;
+  anchorCounts?: Record<string, number>;
 }
 
-export function DocumentRenderer({ document }: Props) {
+export function DocumentRenderer({ document, anchorCounts = {} }: Props) {
   return (
     <article className="prose prose-zinc max-w-none dark:prose-invert">
       {document.articles.map((article) => (
@@ -17,14 +19,14 @@ export function DocumentRenderer({ document }: Props) {
           {article.paragraphs.map((paragraph) => (
             <p key={paragraph.id}>
               {paragraph.sentences.map((sentence, idx) => (
-                <span
+                <AnchorSentence
                   key={sentence.id}
-                  data-anchor-id={sentence.id}
-                  className="anchored-sentence"
+                  anchorId={sentence.id}
+                  count={anchorCounts[sentence.id] ?? 0}
                 >
                   {idx > 0 ? " " : ""}
                   {sentence.text}
-                </span>
+                </AnchorSentence>
               ))}
             </p>
           ))}
