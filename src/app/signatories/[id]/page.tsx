@@ -103,7 +103,8 @@ export default async function SignerProfile({
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700">
           Nine commitments we&apos;re demanding from every AI company.
-          {signer.displayName} signed — you can too.
+          <br />
+          Join {signer.displayName} as a signer.
         </p>
         <div className="mt-6">
           <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
@@ -112,7 +113,7 @@ export default async function SignerProfile({
         </div>
       </section>
 
-      <p className="mt-14 text-xs text-zinc-500">
+      <p className="mt-14 text-center text-xs text-zinc-500">
         Your data, your choice.{" "}
         <Link
           href="/account/revoke"

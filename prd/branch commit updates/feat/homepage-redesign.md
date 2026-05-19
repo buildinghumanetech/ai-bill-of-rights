@@ -1,5 +1,27 @@
 # Branch Progress: feat/homepage-redesign
 
+## Progress Update as of [2026-05-19 06:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+On `/signatories/[id]`: replaced "{name} signed — you can too." with
+"Join {name} as a signer." on its own line, and center-aligned the
+"Your data, your choice. Revoke your signature any time." footer line.
+
+### Detail of changes made:
+- **`src/app/signatories/[id]/page.tsx`** CTA card sub-paragraph:
+  the second sentence now reads "Join {displayName} as a signer." on
+  its own line (via `<br />`), invitational rather than peer-pressure
+  phrasing.
+- **`src/app/signatories/[id]/page.tsx`** footer paragraph: added
+  `text-center` so "Your data, your choice. Revoke your signature any
+  time." sits centered like the CTA card above it (was left-aligned).
+
+### Potential concerns to address:
+- None.
+
+---
+
 ## Progress Update as of [2026-05-19 06:30 Pacific]
 *(Most recent updates at top)*
 
