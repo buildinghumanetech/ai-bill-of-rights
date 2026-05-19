@@ -9,7 +9,7 @@ export default async function ProfilePage({
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/");
-  const { version = "1.0.0" } = await searchParams;
+  const { version = "0.0.1" } = await searchParams;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-12">

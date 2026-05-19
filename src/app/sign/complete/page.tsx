@@ -14,7 +14,7 @@ export default async function CompletePage({
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/");
-  const { version = "1.0.0" } = await searchParams;
+  const { version = "0.0.1" } = await searchParams;
   const rows = await db
     .select()
     .from(signers)
