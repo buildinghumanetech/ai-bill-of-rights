@@ -118,25 +118,19 @@ export function CommentView({
             Related to this quote
           </p>
           {relatedComments.map((rc) => (
-            <div
+            <button
               key={rc.id}
-              className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 space-y-1"
+              type="button"
+              onClick={() => onActiveChange?.(rc.id)}
+              disabled={!onActiveChange}
+              className="block w-full rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-left space-y-1 transition-colors hover:border-zinc-300 hover:bg-white disabled:cursor-default"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-xs font-semibold text-zinc-700">{rc.displayName}</span>
                 <span className="text-xs text-zinc-400">{rc.score} pts</span>
               </div>
               <p className="text-xs text-zinc-600 line-clamp-2 leading-relaxed">{rc.body}</p>
-              {onActiveChange && (
-                <button
-                  type="button"
-                  onClick={() => onActiveChange(rc.id)}
-                  className="text-[10px] font-medium text-zinc-500 hover:text-zinc-800 underline"
-                >
-                  View
-                </button>
-              )}
-            </div>
+            </button>
           ))}
         </div>
       )}
