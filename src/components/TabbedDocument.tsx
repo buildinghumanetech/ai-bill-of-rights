@@ -134,11 +134,17 @@ export function TabbedDocument({
     return depth(activeComment);
   })();
 
-  // Static grid-template classes — Tailwind JIT requires static strings, not template literals.
+  // Static grid-template and wrapper-width classes — Tailwind JIT requires static strings.
+  // When depth ≥ 3 the right column widens to 720px / 900px, so we also widen the outer
+  // wrapper so the tab-bar divider (which spans the wrapper) covers the full grid width.
   const gridClass =
     maxDepth >= 3
       ? "grid gap-8 md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_720px] xl:grid-cols-[1fr_900px]"
       : "grid gap-8 md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_540px]";
+  const wrapperClass =
+    maxDepth >= 3
+      ? "relative mx-auto mt-8 max-w-7xl xl:max-w-[1400px]"
+      : "relative mx-auto mt-8 max-w-6xl";
 
   return (
     <>
@@ -157,8 +163,10 @@ export function TabbedDocument({
         </div>
       </div>
 
-      {/* Proposed tab — two-column grid on md+ */}
-      <div className={activeTab === "proposed" ? "relative mx-auto mt-8 max-w-6xl" : "hidden"}>
+      {/* Proposed tab — two-column grid on md+.
+          wrapperClass widens the outer wrapper when the right column widens (deep nesting),
+          so the TabBar divider (which spans the wrapper) covers the full grid. */}
+      <div className={activeTab === "proposed" ? wrapperClass : "hidden"}>
         <TabBar
           active={activeTab}
           currentVersion={currentVersion}

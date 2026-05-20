@@ -42,9 +42,9 @@ function relativeTime(date: Date): string {
  * Tailwind's JIT scans for static class strings; dynamic templates like
  * `pl-${n}` don't get picked up, so we use a static lookup table.
  */
-const INDENT_BY_DEPTH = ["", "pl-6", "pl-12", "pl-16", "pl-20"];
+const INDENT_BY_DEPTH = ["", "pl-3", "pl-6", "pl-9", "pl-12"];
 function indentClass(depth: number): string {
-  return INDENT_BY_DEPTH[Math.min(depth, 4)] ?? "pl-20";
+  return INDENT_BY_DEPTH[Math.min(depth, 4)] ?? "pl-12";
 }
 
 function openSignModal() {
@@ -241,7 +241,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             {/* Display name — links to signer profile */}
             <Link
               href={`/signatories/${comment.signerId}`}
-              className="text-xs font-semibold text-zinc-700 hover:underline"
+              className="text-xs font-semibold text-zinc-700 hover:underline hover:text-zinc-900 cursor-pointer"
             >
               {comment.displayName}
             </Link>

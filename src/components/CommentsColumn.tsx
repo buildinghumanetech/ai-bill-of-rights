@@ -97,6 +97,9 @@ export function CommentsColumn({
           baseVersionId={baseVersionId ?? ""}
           onClose={() => onActiveChange(null)}
           onPostedTopLevel={onPostedTopLevel}
+          onDeactivate={() => onActiveChange(null)}
+          allThreadedComments={threadedComments}
+          onActiveChange={onActiveChange}
         />
       ) : (
         <p className="text-sm text-zinc-500 leading-relaxed">

@@ -212,8 +212,15 @@ export const articles: Article[] = [
 ];
 
 /**
- * Walk left-to-right through a sentence string and wrap the first occurrence
- * of each comment's selectedText in a clickable button styled with cyan bg.
+ * Walk left-to-right through a sentence string and wrap occurrences of each
+ * comment's selectedText in a clickable span styled with cyan bg.
+ *
+ * Containment tree approach (Issue 3):
+ *   - When span A fully contains span B (A.start ≤ B.start && A.end ≥ B.end),
+ *     B is rendered as a nested child inside A, giving a darker visual.
+ *   - Partial overlaps (neither contains the other) — first-created span wins
+ *     and the other is dropped, same as before. A comment is left to explain this.
+ *   - Click on a nested child span stops propagation so only the child activates.
  */
 function applyHighlights(
   sentence: string,
@@ -221,58 +228,140 @@ function applyHighlights(
   activeCommentId: string | null,
   onHighlightClick: (id: string) => void,
 ): ReactNode[] {
-  // Collect only comments that have a selectedText we can find in this sentence.
-  // First-created wins when two comments have overlapping ranges.
   type Span = { start: number; end: number; comment: CommentWithSelection };
-  const spans: Span[] = [];
+
+  // 1. Collect spans for all comments that appear in this sentence.
+  const rawSpans: Span[] = [];
   for (const c of comments) {
     if (!c.selectedText) continue;
     const idx = sentence.indexOf(c.selectedText);
     if (idx === -1) continue;
-    // Skip if this span overlaps an already-claimed range.
-    const overlaps = spans.some((s) => idx < s.end && idx + c.selectedText!.length > s.start);
-    if (overlaps) continue;
-    spans.push({ start: idx, end: idx + c.selectedText.length, comment: c });
+    rawSpans.push({ start: idx, end: idx + c.selectedText.length, comment: c });
   }
-  if (spans.length === 0) return [sentence];
+  if (rawSpans.length === 0) return [sentence];
 
-  // Sort by position so we can slice left-to-right.
-  spans.sort((a, b) => a.start - b.start);
+  // 2. Build a containment tree. For each span, find the tightest parent that
+  //    fully contains it. Partial overlaps (neither contains the other) are
+  //    resolved by keeping the earlier-created span and dropping the later one.
+  //    (Earlier-created = lower index in `comments`, which is sorted oldest-first.)
+  type SpanNode = Span & { children: SpanNode[]; parentId: string | null };
+  const nodes: SpanNode[] = rawSpans.map((s) => ({ ...s, children: [], parentId: null }));
 
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  for (const span of spans) {
-    if (cursor < span.start) nodes.push(sentence.slice(cursor, span.start));
-    const isActive = span.comment.id === activeCommentId;
-    // Use a <span role="button"> rather than <button> so the highlight flows
-    // inline with surrounding text. <button> defaults to inline-block which
-    // is treated as an atomic unit by the line-breaker, splitting words.
-    nodes.push(
+  // Mark dropped spans (partial overlaps with an earlier accepted span)
+  const dropped = new Set<number>();
+  for (let i = 0; i < nodes.length; i++) {
+    if (dropped.has(i)) continue;
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (dropped.has(j)) continue;
+      const a = nodes[i], b = nodes[j];
+      const aContainsB = a.start <= b.start && a.end >= b.end;
+      const bContainsA = b.start <= a.start && b.end >= a.end;
+      if (aContainsB || bContainsA) continue; // containment — keep both
+      // Partial overlap: drop the later span (j).
+      const aOverlapsB = a.start < b.end && b.start < a.end;
+      if (aOverlapsB) dropped.add(j);
+    }
+  }
+  const acceptedNodes = nodes.filter((_, i) => !dropped.has(i));
+
+  // Sort by start asc, then end desc (larger spans first for containment assignment)
+  acceptedNodes.sort((a, b) => a.start !== b.start ? a.start - b.start : b.end - a.end);
+
+  // Assign each node to its tightest parent (containment).
+  const roots: SpanNode[] = [];
+  for (let i = 0; i < acceptedNodes.length; i++) {
+    const node = acceptedNodes[i];
+    let tightestParent: SpanNode | null = null;
+    for (let j = 0; j < acceptedNodes.length; j++) {
+      if (i === j) continue;
+      const candidate = acceptedNodes[j];
+      if (candidate.start <= node.start && candidate.end >= node.end && candidate !== node) {
+        // candidate contains node
+        if (
+          tightestParent === null ||
+          candidate.end - candidate.start < tightestParent.end - tightestParent.start
+        ) {
+          tightestParent = candidate;
+        }
+      }
+    }
+    if (tightestParent) {
+      node.parentId = tightestParent.comment.id;
+      tightestParent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  /** Recursively render a span node as a <span role="button"> with any children nested inside. */
+  function renderSpanNode(node: SpanNode, isNested: boolean): ReactNode {
+    const isActive = node.comment.id === activeCommentId;
+    // Sort children by position so we can slice text around them.
+    const sortedChildren = [...node.children].sort((a, b) => a.start - b.start);
+    const text = sentence.slice(node.start, node.end);
+
+    // Build the inner content: plain text segments interleaved with nested child spans.
+    const innerNodes: ReactNode[] = [];
+    let innerCursor = node.start;
+    for (const child of sortedChildren) {
+      if (innerCursor < child.start) {
+        innerNodes.push(sentence.slice(innerCursor, child.start));
+      }
+      innerNodes.push(renderSpanNode(child, true));
+      innerCursor = child.end;
+    }
+    if (innerCursor < node.end) innerNodes.push(sentence.slice(innerCursor, node.end));
+
+    // Background:
+    //   - Top-level inactive: bg-cyan-100; hover: bg-cyan-200
+    //   - Top-level active: bg-cyan-300
+    //   - Nested inactive: bg-cyan-200 (stacks on parent bg-cyan-100 → appears darker)
+    //   - Nested active: bg-cyan-300
+    const bgClass = isActive
+      ? "bg-cyan-300"
+      : isNested
+      ? "bg-cyan-200 hover:bg-cyan-300"
+      : "bg-cyan-100 hover:bg-cyan-200";
+
+    // Use `void text` to prevent unused-var warning in the no-children path.
+    void text;
+
+    return (
       <span
-        key={span.comment.id}
+        key={node.comment.id}
         role="button"
         tabIndex={0}
         data-highlight="true"
-        data-comment-id={span.comment.id}
-        onClick={() => onHighlightClick(span.comment.id)}
+        data-comment-id={node.comment.id}
+        onClick={(e) => {
+          // Stop propagation so clicks on nested spans don't also fire the parent's handler.
+          e.stopPropagation();
+          onHighlightClick(node.comment.id);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onHighlightClick(span.comment.id);
+            e.stopPropagation();
+            onHighlightClick(node.comment.id);
           }
         }}
-        className={[
-          "rounded-sm cursor-pointer transition-colors",
-          isActive ? "bg-cyan-300" : "bg-cyan-100 hover:bg-cyan-200",
-        ].join(" ")}
+        className={`rounded-sm cursor-pointer transition-colors ${bgClass}`}
       >
-        {sentence.slice(span.start, span.end)}
-      </span>,
+        {innerNodes}
+      </span>
     );
-    cursor = span.end;
   }
-  if (cursor < sentence.length) nodes.push(sentence.slice(cursor));
-  return nodes;
+
+  // 3. Render top-level spans left-to-right, filling gaps with plain text.
+  const outputNodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const root of roots) {
+    if (cursor < root.start) outputNodes.push(sentence.slice(cursor, root.start));
+    outputNodes.push(renderSpanNode(root, false));
+    cursor = root.end;
+  }
+  if (cursor < sentence.length) outputNodes.push(sentence.slice(cursor));
+  return outputNodes;
 }
 
 interface Props {

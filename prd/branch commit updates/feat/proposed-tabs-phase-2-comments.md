@@ -1,5 +1,25 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 22:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Pass 5: Six bug fixes and UI improvements in one pass. (1) Profile link style hardened — added `hover:text-zinc-900 cursor-pointer`. (2) Reply indent halved — `INDENT_BY_DEPTH` changed from `["", "pl-6", "pl-12", "pl-16", "pl-20"]` to `["", "pl-3", "pl-6", "pl-9", "pl-12"]`. (3) Cancel on the bottom composer in `CommentView` now calls `onDeactivate()`, which threads up via `CommentsColumn` → `TabbedDocument` to set `activeCommentId = null`, reverting the right column to the placeholder. (4) Outer wrapper in `TabbedDocument` widens to `max-w-7xl xl:max-w-[1400px]` when `maxDepth >= 3`, ensuring the TabBar divider line spans the full grid width when the comments column is wider. (5) `applyHighlights` now builds a containment tree — superset/subset spans render as nested `<span>` elements (outer `bg-cyan-100`, inner `bg-cyan-200`); partial overlaps still drop the later-created span. Click propagation stopped on nested spans so only the correct comment activates. (6) `CommentView` computes related (overlapping-selectedText) top-level comments on the same anchor and renders a "Related to this quote" card list below the thread; each card has a "View" button that calls `onActiveChange`. 177/177 tests pass.
+
+### Detail of changes made:
+- **`src/components/CommentNode.tsx`** — `INDENT_BY_DEPTH` changed to `["", "pl-3", "pl-6", "pl-9", "pl-12"]` (halved). Profile link `<Link>` className gains `hover:text-zinc-900 cursor-pointer`.
+- **`src/components/CommentView.tsx`** — New props: `onDeactivate?: () => void`, `allThreadedComments?: ThreadedComment[]`, `onActiveChange?: (id: string | null) => void`. New helper `textsOverlap(a, b)` checks containment and partial overlap. Related comments computed by filtering `allThreadedComments` for same `anchorId`, different id, and overlapping `selectedText`. Bottom `NewCommentForm.onCancel` now calls `onDeactivate?.()`. "Related to this quote" section renders below thread when relatedComments is non-empty, with author name, score, body excerpt, and "View" button.
+- **`src/components/CommentsColumn.tsx`** — Passes `onDeactivate={() => onActiveChange(null)}`, `allThreadedComments={threadedComments}`, and `onActiveChange` down to `<CommentView>`.
+- **`src/components/TabbedDocument.tsx`** — Added `wrapperClass` computed alongside `gridClass`: `max-w-7xl xl:max-w-[1400px]` when `maxDepth >= 3`, else `max-w-6xl`. The proposed-tab outer wrapper uses `wrapperClass` instead of the hardcoded `max-w-6xl` string.
+- **`src/app/HomepageArticles.tsx`** — `applyHighlights` rewritten with containment-tree algorithm: (a) collect raw spans for all comments found in sentence; (b) drop later-created spans in partial-overlap cases (comment explains rationale); (c) assign each span to its tightest containing parent; (d) render via recursive `renderSpanNode(node, isNested)` which builds inner content by interleaving child spans with plain text slices; (e) nested spans use `bg-cyan-200` (outer stays `bg-cyan-100`) to produce a visual darker-inner effect; (f) `onClick` and `onKeyDown` call `e.stopPropagation()` so nested clicks don't fire parent handlers.
+
+### Potential concerns to address:
+- `textsOverlap` uses a heuristic for partial overlap (10+ char prefix/suffix match) which may miss very short or pathological overlaps. The related-comments feature is display-only so false negatives are acceptable.
+- `wrapperClass` uses `xl:max-w-[1400px]` — a Tailwind arbitrary value. JIT picks it up from the static string literal. Ensure `wrapperClass` is never built from a dynamic template.
+- The "Related to this quote" section passes `allThreadedComments` (all top-level threaded comments for the version, not just the anchor). This is fine since `textsOverlap` filters by `anchorId` first.
+
+---
+
 ## Progress Update as of 2026-05-19 22:30 Pacific
 *(Most recent updates at top)*
 
