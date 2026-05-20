@@ -10,8 +10,10 @@ import {
 } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
-import { signConfirmation } from "@/lib/email/templates";
+import { signConfirmation, signerNotification } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
+
+const TEAM_NOTIFICATION_EMAIL = "hello@ai-for-people.org";
 
 type NameDisplayFormat = "initials" | "first-initial" | "full";
 type NotificationPreference = "major" | "minor" | "none";
@@ -177,24 +179,35 @@ export async function recordSignatureFromModal(
       throw err;
     }
 
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+    const signerPageUrl = `${siteUrl}/signatories/${profile.id}`;
+
     // Confirmation email (best effort — failure does not block the signature)
     try {
       const clerk = await clerkClient();
       const user = await clerk.users.getUser(userId);
       const email = user.primaryEmailAddress?.emailAddress;
       if (email) {
-        const siteUrl =
-          process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
         const tpl = signConfirmation({
           displayName,
           version: input.versionString,
-          signerPageUrl: `${siteUrl}/signatories/${profile.id}`,
+          signerPageUrl,
           revokeUrl: `${siteUrl}/account/revoke`,
         });
         await sendEmail({ to: email, ...tpl });
       }
     } catch (err) {
       console.error("[email] confirmation send failed:", err);
+    }
+
+    // Team notification (best effort, independent of the confirmation send so
+    // a bad signer email can't suppress the new-signer ping to the team inbox).
+    try {
+      const tpl = signerNotification({ displayName, signerPageUrl });
+      await sendEmail({ to: TEAM_NOTIFICATION_EMAIL, ...tpl });
+    } catch (err) {
+      console.error("[email] team notification send failed:", err);
     }
 
     return { success: true, signerId: profile.id, displayName };
