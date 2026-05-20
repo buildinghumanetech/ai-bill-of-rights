@@ -1,5 +1,27 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 21:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Redesigned the Current/Proposed tab UI from buttons to file-folder tabs and added fading vertical side-lines that frame the document. Replaced the two separate server-rendered pages with a single client-side `<TabbedDocument>` so users can flip between Current and Proposed instantly without a network round-trip. Both `/` and `/proposed` still exist as bookmarkable URLs; the URL syncs to the active tab via `history.pushState` on click and a `popstate` listener handles back/forward. Tests still 137 passing; tsc clean; smoke: /=200, /proposed=200.
+
+### Detail of changes made:
+- **`src/components/TabBar.tsx`** — visual redesign + new optional `onTabChange` prop. Tabs now have `rounded-t-lg` top corners, active tab uses `bg-white border-b-0 -mb-px z-10` so it visually "attaches" to the doc body below (overlapping the horizontal divider). Inactive tab uses `bg-zinc-100` + grayer text. Bottom of the bar is an `h-px bg-zinc-300` divider that the tabs sit on top of. When `onTabChange` is provided (used by `<TabbedDocument>`), tabs render as `<button>`s; without it they fall back to `<Link>`s for plain SSR usage.
+- **`src/components/TabbedDocument.tsx`** — new client component. Owns `activeTab` state initialized from `initialTab` prop. `handleTabChange` calls `setActiveTab` + `window.history.pushState(null, '', '/' | '/proposed')` so the URL updates without a navigation. `useEffect` listens for `popstate` to sync state with browser back/forward. Always-mounts both views (`<HomepageArticles mode="static">` and the interactive variant with `<ArticleSelectionContainer>`, working-draft banner, `<EndorseButton>`); inactive view is hidden via the `hidden` Tailwind class so switching is purely a CSS toggle. The `<HighlightPopover>` and `<ProposalDrawer>` are mounted only when proposed tab is active (they listen to global window events, but their triggers — `ArticleSelectionContainer` `mouseup`, `AnchorSentence` `anchor-open` — only fire from the visible interactive view, so always-mounting would also work; conditional mount avoids unnecessary subscriptions on the current tab).
+- **`src/lib/homepage/load-tab-data.ts`** — new shared loader. `loadHomepageTabData()` fetches everything both tabs need (currentVersion, proposedVersion, baseVersionId, proposalCounts, proposalsByAnchor, acceptedProposals, isAdmin, initialEndorsed, endorserCount) inside one try/catch so DB unavailability falls through with defaults. Both pages now call this loader instead of inlining the queries.
+- **`src/app/page.tsx`** — slimmed down. Now just calls `loadHomepageTabData()` and renders `<TabbedDocument initialTab="current" {...data} />` inside the existing layout. Removed inline `getCurrentVersion` + `bumpPatch` logic — those live in the loader now. Living-document footer now reads `data.currentVersion` rather than the hardcoded `"0.0.1"`.
+- **`src/app/proposed/page.tsx`** — same treatment. Renders `<TabbedDocument initialTab="proposed" {...data} />`. Removed all the inline imports for proposal queries, `auth`, `signers`, `applyEdits`, `buildOriginalTextByAnchor`, `getCurrentAdmin` — all now handled by `loadHomepageTabData` and `<TabbedDocument>`. Footer reads `data.proposedVersion` for "Version X.X.X — working draft".
+- **Fading side lines** — implemented as two `absolute inset-y-0 w-px` divs (left and right) inside a `relative` wrapper sibling to the article views. Background is `bg-gradient-to-b from-zinc-300 via-zinc-300/30 to-transparent` so the line is strongest at top, half-strength at midpoint, fully transparent at bottom. `pointer-events-none` so they don't intercept clicks.
+
+### Potential concerns to address:
+- Both pages now fetch the full proposal dataset (counts, all proposals by anchor, accepted edits, endorser count) even when serving `/` (which only initially renders the current tab). This is the cost of pre-loading data so client-side tab switching can be instant. For a homepage with low proposal volume this is fine; if proposal counts grow to thousands of pending edits, consider lazy-fetching the proposed-only data when the proposed tab is first activated.
+- `<TabbedDocument>` always mounts both `<HomepageArticles>` instances, doubling the rendered HTML for the articles section. The articles array is small (9 short articles), so the size impact is minor (~10KB extra HTML).
+- The `popstate` listener only checks `pathname === "/proposed"` — if the routing ever expands beyond `/` and `/proposed` (e.g., `/proposed?focus=anchor-1`), this needs to widen.
+- The `<HighlightPopover>` and `<ProposalDrawer>` mount/unmount on tab switch. If the user opens a proposal drawer, switches to current, then switches back to proposed, the drawer will be closed (state reset). This is acceptable for the current UX; if drawer state needs to persist across tab switches, hoist the open state into `<TabbedDocument>`.
+
+---
+
 ## Progress Update as of 2026-05-19 18:15 Pacific
 *(Most recent updates at top)*
 

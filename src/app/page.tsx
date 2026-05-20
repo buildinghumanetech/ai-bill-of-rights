@@ -2,30 +2,13 @@ import Link from "next/link";
 import HeroSection from "./HeroSection";
 import FloatingSignButton from "./FloatingSignButton";
 import SignatureCount from "./SignatureCount";
-import { TabBar } from "@/components/TabBar";
-import { HomepageArticles } from "./HomepageArticles";
-import { getCurrentVersion } from "@/lib/db/queries";
+import { TabbedDocument } from "@/components/TabbedDocument";
+import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
 
 export const dynamic = "force-dynamic";
 
-/** Bumps the patch segment of a semver string: "0.0.1" → "0.0.2". */
-function bumpPatch(version: string): string {
-  const parts = version.split(".");
-  if (parts.length < 3) return version;
-  const patch = parseInt(parts[2] ?? "0", 10);
-  return `${parts[0]}.${parts[1]}.${patch + 1}`;
-}
-
 export default async function Home() {
-  let currentVersion = "0.0.1";
-  try {
-    const current = await getCurrentVersion();
-    if (current?.version) currentVersion = current.version;
-  } catch {
-    // DB unreachable in preview — fall through with default.
-  }
-
-  const proposedVersion = bumpPatch(currentVersion);
+  const data = await loadHomepageTabData();
 
   return (
     <div className="flex-1">
@@ -71,19 +54,13 @@ export default async function Home() {
           </Link>
         </p>
 
-        <TabBar
-          active="current"
-          currentVersion={currentVersion}
-          proposedVersion={proposedVersion}
-        />
-
-        <HomepageArticles mode="static" />
+        <TabbedDocument initialTab="current" {...data} />
       </section>
 
       <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
         <div className="mx-auto max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-            Version 0.0.1 — a living document
+            Version {data.currentVersion} — a living document
           </p>
           <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
             These nine commitments aren&apos;t a wishlist. They&apos;re the
@@ -92,7 +69,7 @@ export default async function Home() {
           </p>
           <div className="mt-10 flex flex-col items-center gap-6">
             <Link
-              href="/v/0.0.1/as-code"
+              href={`/v/${data.currentVersion}/as-code`}
               className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
             >
               Building AI? Implement this in your code →

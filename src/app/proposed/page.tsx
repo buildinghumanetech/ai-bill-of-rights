@@ -2,134 +2,13 @@ import Link from "next/link";
 import HeroSection from "@/app/HeroSection";
 import FloatingSignButton from "@/app/FloatingSignButton";
 import SignatureCount from "@/app/SignatureCount";
-import { TabBar } from "@/components/TabBar";
-import { HomepageArticles, articles } from "@/app/HomepageArticles";
-import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
-import { ProposalDrawer } from "@/components/ProposalDrawer";
-import { HighlightPopover } from "@/components/HighlightPopover";
-import { EndorseButton } from "@/components/EndorseButton";
-import {
-  countProposalsByAnchor,
-  listProposalsByAnchor,
-  getAcceptedProposalsForVersion,
-  getCurrentVersion,
-  getMyEndorsementForVersion,
-  countEndorsersForVersion,
-  type ProposalRow,
-} from "@/lib/db/queries";
-import { applyEdits } from "@/lib/proposed/apply-edits";
-import { getCurrentAdmin } from "@/lib/admin/check";
-import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
-import { signers } from "@/lib/db/schema";
+import { TabbedDocument } from "@/components/TabbedDocument";
+import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
 
 export const dynamic = "force-dynamic";
 
-/** Bumps the patch segment of a semver string: "0.0.1" → "0.0.2". */
-function bumpPatch(version: string): string {
-  const parts = version.split(".");
-  if (parts.length < 3) return version;
-  const patch = parseInt(parts[2] ?? "0", 10);
-  return `${parts[0]}.${parts[1]}.${patch + 1}`;
-}
-
-/**
- * Naive sentence splitter matching the one in HomepageArticles.tsx.
- * Must be kept in sync.
- */
-function splitSentences(body: string): string[] {
-  return body
-    .split(/(?<=[.!?])\s+(?=[A-Z"„])/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/**
- * Build originalTextByAnchor from the articles[] array.
- * Maps "article-NN-s-I" → sentence text, matching the anchorId scheme
- * used by HomepageArticles interactive mode.
- */
-function buildOriginalTextByAnchor(): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const article of articles) {
-    const sentences = splitSentences(article.body);
-    sentences.forEach((sentence, idx) => {
-      map[`article-${article.number}-s-${idx + 1}`] = sentence;
-    });
-  }
-  return map;
-}
-
 export default async function ProposedPage() {
-  const current = await getCurrentVersion().catch(() => null);
-
-  const currentVersion = current?.version ?? "0.0.1";
-  const proposedVersion = bumpPatch(currentVersion);
-
-  const originalTextByAnchor = buildOriginalTextByAnchor();
-
-  // Determine if visitor is an admin (used to show Accept/Reject buttons).
-  const adminCtx = await getCurrentAdmin().catch(() => null);
-  const isAdmin = adminCtx?.state === "admin";
-
-  let proposalCounts: Record<string, { pending: number; accepted: number }> = {};
-  const proposalsByAnchor: Record<string, ProposalRow[]> = {};
-  let acceptedProposals: ProposalRow[] = [];
-  let myEndorsement: { id: string } | null = null;
-  let endorserCount = 0;
-
-  if (current) {
-    try {
-      proposalCounts = await countProposalsByAnchor(undefined as any, current.id);
-
-      // Fetch proposal lists for every anchor that has proposals.
-      const anchorIds = Object.keys(proposalCounts);
-      await Promise.all(
-        anchorIds.map(async (anchorId) => {
-          proposalsByAnchor[anchorId] = await listProposalsByAnchor(
-            undefined as any,
-            current.id,
-            anchorId,
-          );
-        }),
-      );
-
-      acceptedProposals = await getAcceptedProposalsForVersion(
-        undefined as any,
-        current.id,
-      );
-
-      // Endorsement data
-      endorserCount = await countEndorsersForVersion(undefined as any, current.id);
-      const { userId } = await auth().catch(() => ({ userId: null }));
-      if (userId) {
-        // Look up the signer record for this Clerk user to get their signerId.
-        const { db: dbModule } = await import("@/lib/db");
-        const signerRows = await dbModule
-          .select({ id: signers.id })
-          .from(signers)
-          .where(eq(signers.clerkUserId, userId))
-          .limit(1);
-        if (signerRows[0]) {
-          myEndorsement = await getMyEndorsementForVersion(
-            undefined as any,
-            signerRows[0].id,
-            current.id,
-          );
-        }
-      }
-    } catch {
-      // DB unreachable in preview — fall through with empty maps.
-    }
-  }
-
-  // Build per-anchor count for the badge (total pending + accepted).
-  const anchorCounts: Record<string, number> = {};
-  for (const [anchorId, counts] of Object.entries(proposalCounts)) {
-    anchorCounts[anchorId] = counts.pending + counts.accepted;
-  }
-
-  const editsByAnchor = applyEdits(acceptedProposals);
+  const data = await loadHomepageTabData();
 
   return (
     <div className="flex-1">
@@ -166,7 +45,7 @@ export default async function ProposedPage() {
           </Link>{" "}
           who have signed this AI Bill of Rights
         </p>
-        <p className="mx-auto mb-2 mt-3 max-w-5xl text-center text-base leading-relaxed text-zinc-600">
+        <p className="mx-auto mb-10 mt-3 max-w-5xl text-center text-base leading-relaxed text-zinc-600 sm:mb-14">
           <Link
             href="/about"
             className="text-zinc-700 underline underline-offset-4 hover:text-blue-600"
@@ -175,43 +54,13 @@ export default async function ProposedPage() {
           </Link>
         </p>
 
-        {/* Working draft banner */}
-        <p className="mx-auto mb-4 max-w-3xl text-center text-sm text-zinc-500">
-          Working draft · v{proposedVersion} · Hover any sentence to propose a change
-        </p>
-
-        {/* Endorse button */}
-        {current && (
-          <div className="mb-8 flex justify-center">
-            <EndorseButton
-              baseVersionId={current.id}
-              initialEndorsed={Boolean(myEndorsement)}
-              endorserCount={endorserCount}
-            />
-          </div>
-        )}
-
-        <TabBar
-          active="proposed"
-          currentVersion={currentVersion}
-          proposedVersion={proposedVersion}
-        />
-
-        <ArticleSelectionContainer>
-          <HomepageArticles
-            mode="interactive"
-            anchorMode="proposals"
-            anchorCounts={anchorCounts}
-            editsByAnchor={editsByAnchor}
-            proposalCounts={proposalCounts}
-          />
-        </ArticleSelectionContainer>
+        <TabbedDocument initialTab="proposed" {...data} />
       </section>
 
       <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
         <div className="mx-auto max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-            Version {proposedVersion} — working draft
+            Version {data.proposedVersion} — working draft
           </p>
           <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
             These nine commitments aren&apos;t a wishlist. They&apos;re the
@@ -220,7 +69,7 @@ export default async function ProposedPage() {
           </p>
           <div className="mt-10 flex flex-col items-center gap-6">
             <Link
-              href="/v/0.0.1/as-code"
+              href={`/v/${data.currentVersion}/as-code`}
               className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
             >
               Building AI? Implement this in your code →
@@ -230,16 +79,6 @@ export default async function ProposedPage() {
       </section>
 
       <FloatingSignButton />
-
-      <HighlightPopover enableSuggestChanges={true} />
-      {current ? (
-        <ProposalDrawer
-          baseVersionId={current.id}
-          proposalsByAnchor={proposalsByAnchor}
-          originalTextByAnchor={originalTextByAnchor}
-          isAdmin={isAdmin}
-        />
-      ) : null}
     </div>
   );
 }
