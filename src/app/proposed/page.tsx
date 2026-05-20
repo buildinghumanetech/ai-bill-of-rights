@@ -7,15 +7,21 @@ import { HomepageArticles, articles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
 import { ProposalDrawer } from "@/components/ProposalDrawer";
 import { HighlightPopover } from "@/components/HighlightPopover";
+import { EndorseButton } from "@/components/EndorseButton";
 import {
   countProposalsByAnchor,
   listProposalsByAnchor,
   getAcceptedProposalsForVersion,
   getCurrentVersion,
+  getMyEndorsementForVersion,
+  countEndorsersForVersion,
   type ProposalRow,
 } from "@/lib/db/queries";
 import { applyEdits } from "@/lib/proposed/apply-edits";
 import { getCurrentAdmin } from "@/lib/admin/check";
+import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
+import { signers } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +75,8 @@ export default async function ProposedPage() {
   let proposalCounts: Record<string, { pending: number; accepted: number }> = {};
   const proposalsByAnchor: Record<string, ProposalRow[]> = {};
   let acceptedProposals: ProposalRow[] = [];
+  let myEndorsement: { id: string } | null = null;
+  let endorserCount = 0;
 
   if (current) {
     try {
@@ -90,6 +98,26 @@ export default async function ProposedPage() {
         undefined as any,
         current.id,
       );
+
+      // Endorsement data
+      endorserCount = await countEndorsersForVersion(undefined as any, current.id);
+      const { userId } = await auth().catch(() => ({ userId: null }));
+      if (userId) {
+        // Look up the signer record for this Clerk user to get their signerId.
+        const { db: dbModule } = await import("@/lib/db");
+        const signerRows = await dbModule
+          .select({ id: signers.id })
+          .from(signers)
+          .where(eq(signers.clerkUserId, userId))
+          .limit(1);
+        if (signerRows[0]) {
+          myEndorsement = await getMyEndorsementForVersion(
+            undefined as any,
+            signerRows[0].id,
+            current.id,
+          );
+        }
+      }
     } catch {
       // DB unreachable in preview — fall through with empty maps.
     }
@@ -148,9 +176,20 @@ export default async function ProposedPage() {
         </p>
 
         {/* Working draft banner */}
-        <p className="mx-auto mb-8 max-w-3xl text-center text-sm text-zinc-500">
+        <p className="mx-auto mb-4 max-w-3xl text-center text-sm text-zinc-500">
           Working draft · v{proposedVersion} · Hover any sentence to propose a change
         </p>
+
+        {/* Endorse button */}
+        {current && (
+          <div className="mb-8 flex justify-center">
+            <EndorseButton
+              baseVersionId={current.id}
+              initialEndorsed={Boolean(myEndorsement)}
+              endorserCount={endorserCount}
+            />
+          </div>
+        )}
 
         <TabBar
           active="proposed"

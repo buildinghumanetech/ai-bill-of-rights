@@ -70,6 +70,12 @@ export default async function AdminSelfiesPage({
         <Link href="/admin/selfies" className="font-medium text-zinc-900">
           Selfies
         </Link>
+        <Link
+          href="/admin/release"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Release
+        </Link>
       </nav>
       <header className="mb-8 flex items-end justify-between">
         <div>

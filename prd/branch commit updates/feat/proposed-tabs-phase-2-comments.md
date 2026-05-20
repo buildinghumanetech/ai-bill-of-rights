@@ -1,5 +1,29 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 18:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Implemented Phase 4 partial deliverables: endorsement queries, toggleEndorsement server action, EndorseButton client component, releaseConversionEmail template, /admin/release placeholder page, Release link in admin nav, and EndorseButton on /proposed. 137 tests pass (was 135); TypeScript clean; smoke: /=200, /proposed=200, /admin/release=307.
+
+### Detail of changes made:
+- **`src/lib/db/queries.ts`** — added `endorsements` to schema imports. Appended three new endorsement query functions: `getMyEndorsementForVersion` (returns `{id}|null` for a specific signer+version), `countEndorsersForVersion` (integer count), `listEndorsersForVersion` (returns array with signerId + displayName).
+- **`src/server/actions/endorsements.ts`** — new file. Pure data-layer `toggleEndorsement(db, {signerId, baseVersionId})` handles insert/delete toggle; if `convertedAt` is set (already promoted to a real signature), returns `"endorsed"` no-op instead of re-deleting. Server action wrapper `toggleEndorsementAction(baseVersionId)` handles Clerk auth, signer lookup, soft-ban check, and revalidates `/proposed`.
+- **`tests/server/endorsements.test.ts`** — new file. Two tests for `toggleEndorsement`: inserts on first call → state `"endorsed"`, removes on second call when unconverted → state `"removed"`.
+- **`src/components/EndorseButton.tsx`** — new client component. Button toggles endorsement via `toggleEndorsementAction`; if not signed in, fires `open-sign-modal` event to open the existing sign modal. Shows endorser count below the button. Styled with emerald when endorsed, zinc-900 when not.
+- **`src/lib/email/templates.ts`** — appended `releaseConversionEmail` template. Used for the future batch email to endorsers when a draft version ships.
+- **`src/app/admin/release/page.tsx`** — new admin-gated placeholder page. Shows accepted edit count, pending edit count, endorser count for the current version. Amber callout explains why automated release is deferred (articles[] are source code, not markdown). Release button is disabled with "coming soon" text. Links back to /admin.
+- **`src/app/admin/signers/page.tsx`** — added Release link to admin nav.
+- **`src/app/admin/selfies/page.tsx`** — added Release link to admin nav.
+- **`src/app/proposed/page.tsx`** — added imports for `EndorseButton`, `getMyEndorsementForVersion`, `countEndorsersForVersion`, `auth`, `eq`, `signers`. Fetches `endorserCount` and `myEndorsement` (signer lookup via Clerk userId) inside the existing try/catch. Renders `<EndorseButton>` between the working-draft banner and the TabBar, centered, with `current.id`, `initialEndorsed`, and `endorserCount` props. Dynamic import pattern for db used (`import("@/lib/db")`) to avoid lazy-load issues in the server component.
+
+### Potential concerns to address:
+- The `auth()` call in `proposed/page.tsx` uses `.catch(() => ({ userId: null }))` to handle preview/test environments where Clerk is unavailable. This is consistent with the existing `getCurrentAdmin().catch()` pattern on the same page.
+- `/admin/page.tsx` still just redirects to `/admin/signers` — the Release link was added to the signers and selfies nav pages instead, since the admin landing page has no UI surface. This is the correct approach given the architecture.
+- The endorsement-to-signature conversion email (`releaseConversionEmail`) exists but no send logic is wired — that's intentional per the scope clarifier (deferred to when the release flow is built).
+
+---
+
 ## Progress Update as of 2026-05-19 21:15 Pacific
 *(Most recent updates at top)*
 

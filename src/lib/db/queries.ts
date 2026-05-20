@@ -1,5 +1,5 @@
 import { eq, count, desc, gt, and, isNull, isNotNull, asc, inArray } from "drizzle-orm";
-import { versions, signatures, signers, comments, attestations, proposedEdits, proposalUpvotes } from "./schema";
+import { versions, signatures, signers, comments, attestations, proposedEdits, proposalUpvotes, endorsements } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -425,6 +425,46 @@ export async function listPendingProposalsForVersion(
     ...r,
     upvoteCount: upvoteCounts[r.id] ?? 0,
   })) as ProposalRow[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Endorsement queries (Phase 4)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export async function getMyEndorsementForVersion(
+  db: any,
+  signerId: string,
+  baseVersionId: string,
+): Promise<{ id: string } | null> {
+  const rows = await db
+    .select({ id: endorsements.id })
+    .from(endorsements)
+    .where(and(eq(endorsements.signerId, signerId), eq(endorsements.baseVersionId, baseVersionId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function countEndorsersForVersion(
+  db: any,
+  baseVersionId: string,
+): Promise<number> {
+  const rows = await db
+    .select({ value: count() })
+    .from(endorsements)
+    .where(eq(endorsements.baseVersionId, baseVersionId));
+  return Number(rows[0]?.value ?? 0);
+}
+
+export async function listEndorsersForVersion(
+  db: any,
+  baseVersionId: string,
+): Promise<Array<{ signerId: string; displayName: string }>> {
+  const rows = await db
+    .select({ signerId: endorsements.signerId, displayName: signers.displayName })
+    .from(endorsements)
+    .innerJoin(signers, eq(signers.id, endorsements.signerId))
+    .where(eq(endorsements.baseVersionId, baseVersionId));
+  return rows;
 }
 
 export async function listPendingReviewAttestations(db: any = null) {
