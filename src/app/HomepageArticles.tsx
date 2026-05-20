@@ -415,7 +415,20 @@ export function HomepageArticles({
             </div>
             <div className="flex-1">
               <h2 className="text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
-                {article.title}
+                {mode === "interactive" ? (() => {
+                  const titleAnchorId = `article-${article.number}-title`;
+                  const titleComments = commentsByAnchor[titleAnchorId] ?? [];
+                  return (
+                    <AnchorSentence anchorId={titleAnchorId}>
+                      {applyHighlights(
+                        article.title,
+                        titleComments,
+                        activeCommentId,
+                        onHighlightClick,
+                      )}
+                    </AnchorSentence>
+                  );
+                })() : article.title}
               </h2>
               {mode === "static" ? (
                 <p className="mt-5 text-lg leading-relaxed text-zinc-700">
@@ -462,22 +475,62 @@ export function HomepageArticles({
               )}
               {article.connects && article.connects.length > 0 ? (
                 <div className="mt-6 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-                    Connects to
-                  </span>
-                  {article.connects.map((pill) => (
-                    <Link
-                      key={pill.slug}
-                      href={`/resources/${pill.slug}`}
-                      className={`rounded-md border px-3 py-1 text-xs font-medium transition-colors ${
-                        mode === "interactive"
-                          ? "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
-                          : pillColor(pill.slug)
-                      }`}
-                    >
-                      {pill.title}
-                    </Link>
-                  ))}
+                  {mode === "interactive" ? (() => {
+                    const labelAnchorId = `article-${article.number}-connects-label`;
+                    const labelComments = commentsByAnchor[labelAnchorId] ?? [];
+                    return (
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                        <AnchorSentence anchorId={labelAnchorId}>
+                          {applyHighlights(
+                            "Connects to",
+                            labelComments,
+                            activeCommentId,
+                            onHighlightClick,
+                          )}
+                        </AnchorSentence>
+                      </span>
+                    );
+                  })() : (
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                      Connects to
+                    </span>
+                  )}
+                  {article.connects.map((pill) => {
+                    const pillClassName = `rounded-md border px-3 py-1 text-xs font-medium transition-colors ${
+                      mode === "interactive"
+                        ? "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
+                        : pillColor(pill.slug)
+                    }`;
+                    if (mode === "interactive") {
+                      const pillAnchorId = `article-${article.number}-connect-${pill.slug}`;
+                      const pillComments = commentsByAnchor[pillAnchorId] ?? [];
+                      return (
+                        <Link
+                          key={pill.slug}
+                          href={`/resources/${pill.slug}`}
+                          className={pillClassName}
+                        >
+                          <AnchorSentence anchorId={pillAnchorId}>
+                            {applyHighlights(
+                              pill.title,
+                              pillComments,
+                              activeCommentId,
+                              onHighlightClick,
+                            )}
+                          </AnchorSentence>
+                        </Link>
+                      );
+                    }
+                    return (
+                      <Link
+                        key={pill.slug}
+                        href={`/resources/${pill.slug}`}
+                        className={pillClassName}
+                      >
+                        {pill.title}
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>
