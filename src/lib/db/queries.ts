@@ -370,6 +370,26 @@ export async function listThreadedCommentsForVersion(
   return buildTree(flat);
 }
 
+export interface SignerForAdminPostAs {
+  id: string;
+  displayName: string;
+}
+
+/**
+ * Returns all non-banned signers for the admin "post as" dropdown.
+ * Sorted alphabetically by display_name.
+ */
+export async function listSignersForAdminPostAs(
+  db: any,
+): Promise<SignerForAdminPostAs[]> {
+  const rows = await db
+    .select({ id: signers.id, displayName: signers.displayName })
+    .from(signers)
+    .where(isNull(signers.softBannedAt))
+    .orderBy(asc(signers.displayName));
+  return rows as SignerForAdminPostAs[];
+}
+
 export async function findThreadedCommentTree(
   db: any,
   rootCommentId: string,

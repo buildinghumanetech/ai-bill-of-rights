@@ -2,16 +2,16 @@
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { ThreadedComment } from "@/lib/db/queries";
+import type { ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
 import { voteCommentAction } from "@/server/actions/comment-votes";
 import { reportCommentAction } from "@/server/actions/comment-reports";
-import { deleteCommentAction } from "@/server/actions/comments";
-import { submitCommentAction } from "@/server/actions/comments";
+import { deleteCommentAction, editCommentAction, submitCommentAction } from "@/server/actions/comments";
 
 interface Props {
   comment: ThreadedComment;
   viewerSignerId: string | null;
   isAdmin: boolean;
+  signersForAdmin: SignerForAdminPostAs[];
   depth: number;
   /** baseVersionId is needed when submitting replies. Passed through from the tree root. */
   baseVersionId: string;
@@ -46,25 +46,33 @@ function openSignModal() {
 
 /**
  * Recursive comment node: renders a comment plus all its replies.
- * Handles voting, replying, flagging, and admin-delete.
+ * Handles voting, replying, flagging, edit, and delete (author or admin).
  */
-export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersionId, rootAnchorId }: Props) {
+export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin, depth, baseVersionId, rootAnchorId }: Props) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(comment.score < -3);
   const [showReply, setShowReply] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [replyActAsSignerId, setReplyActAsSignerId] = useState<string>("");
   const [flagState, setFlagState] = useState<"idle" | "flagged" | "already" | "error">("idle");
   const [voteState, setVoteState] = useState<{ myVote: 1 | -1 | null; score: number }>({
     myVote: comment.myVote,
     score: comment.score,
   });
+  // Edit state
+  const [showEdit, setShowEdit] = useState(false);
+  const [editBody, setEditBody] = useState(comment.body);
+  const [editError, setEditError] = useState<string | null>(null);
   const [, startVoteTransition] = useTransition();
   const [replyPending, startReplyTransition] = useTransition();
   const [, startDeleteTransition] = useTransition();
+  const [editPending, startEditTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isSelf = viewerSignerId === comment.signerId;
+  // Author or admin can edit/delete
+  const canEditDelete = isSelf || isAdmin;
 
   function handleVote(direction: 1 | -1) {
     if (!viewerSignerId) {
@@ -117,6 +125,24 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersi
     });
   }
 
+  function handleEditSave() {
+    setEditError(null);
+    const trimmed = editBody.trim();
+    if (!trimmed) {
+      setEditError("Comment can't be empty.");
+      return;
+    }
+    startEditTransition(async () => {
+      const res = await editCommentAction(comment.id, trimmed);
+      if (!res.ok) {
+        setEditError(res.error ?? "Couldn't save edit.");
+        return;
+      }
+      setShowEdit(false);
+      router.refresh();
+    });
+  }
+
   function handleReplySubmit(e: React.FormEvent) {
     e.preventDefault();
     setReplyError(null);
@@ -135,12 +161,14 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersi
       fd.set("anchorId", rootAnchorId ?? comment.anchorId ?? "");
       fd.set("parentCommentId", comment.id);
       fd.set("body", trimmed);
+      if (isAdmin && replyActAsSignerId) fd.set("actAsSignerId", replyActAsSignerId);
       const res = await submitCommentAction(fd);
       if (!res.ok) {
         setReplyError(res.error ?? "Couldn't save reply.");
         return;
       }
       setReplyBody("");
+      setReplyActAsSignerId("");
       setShowReply(false);
       router.refresh();
     });
@@ -216,10 +244,67 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersi
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-xs font-semibold text-zinc-700">{comment.displayName}</span>
             <span className="text-xs text-zinc-400">{relativeTime(new Date(comment.createdAt))}</span>
+            {/* Edit / Delete for author or admin */}
+            {canEditDelete && (
+              <span className="ml-auto flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditBody(comment.body);
+                    setEditError(null);
+                    setShowEdit((v) => !v);
+                  }}
+                  className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
+                >
+                  edit
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="text-xs text-zinc-400 hover:text-red-600 transition-colors"
+                >
+                  delete
+                </button>
+              </span>
+            )}
           </div>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 break-words">
-            {comment.body}
-          </p>
+
+          {/* Inline edit composer */}
+          {showEdit ? (
+            <div className="mt-1 space-y-2">
+              <textarea
+                autoFocus
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+                rows={4}
+                className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              {editError && (
+                <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{editError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEdit(false)}
+                  className="rounded-full px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEditSave}
+                  disabled={editPending}
+                  className="rounded-full bg-zinc-900 px-4 py-1 text-xs font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {editPending ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 break-words">
+              {comment.body}
+            </p>
+          )}
 
           {/* Action row */}
           <div className="mt-1.5 flex items-center gap-3 flex-wrap">
@@ -252,21 +337,31 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersi
             ) : (
               <span className="text-xs text-red-400 ml-auto">flag failed</span>
             )}
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="text-xs text-red-400 hover:text-red-600 transition-colors"
-              >
-                delete
-              </button>
-            )}
           </div>
 
           {/* Inline reply composer */}
           {showReply && (
             <form onSubmit={handleReplySubmit} className="mt-2 space-y-2">
+              {/* Admin "post as" dropdown for replies */}
+              {isAdmin && signersForAdmin.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-zinc-500 shrink-0">Posting as:</label>
+                  <select
+                    value={replyActAsSignerId}
+                    onChange={(e) => setReplyActAsSignerId(e.target.value)}
+                    className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                  >
+                    <option value="">me ({signersForAdmin.find((s) => s.id === viewerSignerId)?.displayName ?? "admin"})</option>
+                    {signersForAdmin
+                      .filter((s) => s.id !== viewerSignerId)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.displayName}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <textarea
                 ref={textareaRef}
                 autoFocus
@@ -286,6 +381,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersi
                     setShowReply(false);
                     setReplyBody("");
                     setReplyError(null);
+                    setReplyActAsSignerId("");
                   }}
                   className="rounded-full px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100"
                 >
@@ -313,6 +409,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, depth, baseVersi
               comment={reply}
               viewerSignerId={viewerSignerId}
               isAdmin={isAdmin}
+              signersForAdmin={signersForAdmin}
               depth={depth + 1}
               baseVersionId={baseVersionId}
               rootAnchorId={rootAnchorId ?? comment.anchorId}

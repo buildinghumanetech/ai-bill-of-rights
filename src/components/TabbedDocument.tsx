@@ -6,7 +6,7 @@ import { HomepageArticles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
 import { CommentsColumn } from "@/components/CommentsColumn";
 import FloatingSignButton from "@/app/FloatingSignButton";
-import type { CommentWithSelection, ThreadedComment } from "@/lib/db/queries";
+import type { CommentWithSelection, ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
 
 interface Props {
   initialTab: "current" | "proposed";
@@ -18,6 +18,7 @@ interface Props {
   threadedComments: ThreadedComment[];
   viewerSignerId: string | null;
   isAdmin: boolean;
+  signersForAdmin: SignerForAdminPostAs[];
 }
 
 export function TabbedDocument({
@@ -30,6 +31,7 @@ export function TabbedDocument({
   threadedComments,
   viewerSignerId,
   isAdmin,
+  signersForAdmin,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"current" | "proposed">(initialTab);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -126,6 +128,7 @@ export function TabbedDocument({
               activeCommentId={activeCommentId}
               viewerSignerId={viewerSignerId}
               isAdmin={isAdmin}
+              signersForAdmin={signersForAdmin}
               onActiveChange={handleActiveChange}
             />
           </aside>

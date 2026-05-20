@@ -5,28 +5,38 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { submitCommentAction } from "@/server/actions/comments";
 import { saveDraft, clearDraft } from "@/lib/comments/draft";
+import type { SignerForAdminPostAs } from "@/lib/db/queries";
 
 interface Props {
   baseVersionId: string;
   anchorId: string;
   selectedText: string;
+  viewerSignerId: string | null;
+  isAdmin: boolean;
+  signersForAdmin: SignerForAdminPostAs[];
   onCancel: () => void;
 }
 
 /**
  * Right-column comment composer. Shows the selected quote at the top and a
- * textarea below. Submits via the server action and refreshes the router so
- * the new highlight appears immediately.
+ * textarea below. Admins get an additional "Posting as" dropdown to attribute
+ * the comment to any registered signer. Submits via the server action and
+ * refreshes the router so the new highlight appears immediately.
  */
 export function NewCommentForm({
   baseVersionId,
   anchorId,
   selectedText,
+  viewerSignerId,
+  isAdmin,
+  signersForAdmin,
   onCancel,
 }: Props) {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Default "post as" is the admin themselves (empty string = self)
+  const [actAsSignerId, setActAsSignerId] = useState<string>("");
   const { isSignedIn } = useAuth();
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -57,6 +67,7 @@ export function NewCommentForm({
       fd.set("anchorId", anchorId);
       fd.set("selectedText", selectedText);
       fd.set("body", trimmed);
+      if (isAdmin && actAsSignerId) fd.set("actAsSignerId", actAsSignerId);
       const res = await submitCommentAction(fd);
       if (!res.ok) {
         setError(res.error ?? "Couldn't save your comment.");
@@ -77,6 +88,27 @@ export function NewCommentForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Admin "post as" dropdown */}
+        {isAdmin && signersForAdmin.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-zinc-500 shrink-0">Posting as:</label>
+            <select
+              value={actAsSignerId}
+              onChange={(e) => setActAsSignerId(e.target.value)}
+              className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+            >
+              <option value="">me ({signersForAdmin.find((s) => s.id === viewerSignerId)?.displayName ?? "admin"})</option>
+              {signersForAdmin
+                .filter((s) => s.id !== viewerSignerId)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           autoFocus

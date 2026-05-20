@@ -4,8 +4,10 @@ import {
   getCurrentVersion,
   listCommentsByAnchorForVersion,
   listThreadedCommentsForVersion,
+  listSignersForAdminPostAs,
   type CommentWithSelection,
   type ThreadedComment,
+  type SignerForAdminPostAs,
 } from "@/lib/db/queries";
 import { signers } from "@/lib/db/schema";
 
@@ -19,6 +21,8 @@ export interface HomepageTabData {
   threadedComments: ThreadedComment[];
   viewerSignerId: string | null;
   isAdmin: boolean;
+  /** Non-null only when the viewer is an admin. Used for "post as" dropdown. */
+  signersForAdmin: SignerForAdminPostAs[];
 }
 
 function bumpPatch(version: string): string {
@@ -64,15 +68,20 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
   let comments: CommentWithSelection[] = [];
   let commentsByAnchor: Record<string, CommentWithSelection[]> = {};
   let threadedComments: ThreadedComment[] = [];
+  let signersForAdmin: SignerForAdminPostAs[] = [];
 
   if (baseVersionId) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { db } = require("@/lib/db") as { db: any };
-      [commentsByAnchor, threadedComments] = await Promise.all([
+      const tasks: Promise<any>[] = [
         listCommentsByAnchorForVersion(db, baseVersionId),
         listThreadedCommentsForVersion(db, baseVersionId, viewerSignerId),
-      ]);
+      ];
+      if (isAdmin) tasks.push(listSignersForAdminPostAs(db));
+      const results = await Promise.all(tasks);
+      [commentsByAnchor, threadedComments] = results as [typeof commentsByAnchor, typeof threadedComments];
+      if (isAdmin) signersForAdmin = results[2] as SignerForAdminPostAs[];
       // Build a flat list for legacy anchor lookups
       comments = Object.values(commentsByAnchor).flat();
     } catch {
@@ -89,5 +98,6 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
     threadedComments,
     viewerSignerId,
     isAdmin,
+    signersForAdmin,
   };
 }

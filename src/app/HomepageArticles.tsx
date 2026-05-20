@@ -343,7 +343,21 @@ export function HomepageArticles({
               )}
               {article.pullQuote && (
                 <blockquote className="mt-6 border-l-2 border-zinc-900 pl-5 text-sm font-bold leading-snug text-zinc-900 sm:text-base">
-                  {article.pullQuote}
+                  {mode === "interactive" ? (() => {
+                    const pqAnchorId = `article-${article.number}-pullquote`;
+                    const pqComments = commentsByAnchor[pqAnchorId] ?? [];
+                    const highlighted = applyHighlights(
+                      article.pullQuote,
+                      pqComments,
+                      activeCommentId,
+                      onHighlightClick,
+                    );
+                    return (
+                      <AnchorSentence anchorId={pqAnchorId}>
+                        {highlighted}
+                      </AnchorSentence>
+                    );
+                  })() : article.pullQuote}
                 </blockquote>
               )}
               {article.connects && article.connects.length > 0 ? (

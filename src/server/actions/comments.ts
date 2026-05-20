@@ -7,14 +7,6 @@ import { comments, signers } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { getCurrentAdmin } from "@/lib/admin/check";
 
-async function requireAdminOrBootstrap() {
-  const ctx = await getCurrentAdmin();
-  if (ctx.state !== "admin" && ctx.state !== "no-admins-yet") {
-    throw new Error("Forbidden: admin only");
-  }
-  return ctx;
-}
-
 let _db: any | null = null;
 function getDb() {
   if (!_db) _db = (require("@/lib/db") as { db: any }).db;
@@ -76,7 +68,7 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   if (!userId) return { ok: false, error: "Not signed in." };
   const db = getDb();
   const me = await db
-    .select({ id: signers.id, softBannedAt: signers.softBannedAt })
+    .select({ id: signers.id, softBannedAt: signers.softBannedAt, isAdmin: signers.isAdmin })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
@@ -94,6 +86,19 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   const rawSelectedText = formData.get("selectedText")?.toString() ?? "";
   const selectedText = rawSelectedText ? sanitizeText(rawSelectedText, 1000) : null;
 
+  // Admin "post as" feature: if caller is admin and actAsSignerId is provided,
+  // attribute the comment to that signer. Otherwise use the caller's own id.
+  let effectiveSignerId = me[0].id;
+  const actAsSignerId = formData.get("actAsSignerId")?.toString() ?? "";
+  if (actAsSignerId && me[0].isAdmin) {
+    const target = await db
+      .select({ id: signers.id })
+      .from(signers)
+      .where(eq(signers.id, actAsSignerId))
+      .limit(1);
+    if (target.length === 1) effectiveSignerId = target[0].id;
+  }
+
   try {
     await enforceRateLimit(db, {
       bucket: "comment",
@@ -109,7 +114,7 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   try {
     await createComment(db, {
       baseVersionId,
-      signerId: me[0].id,
+      signerId: effectiveSignerId,
       anchorId,
       proposalId,
       parentCommentId,
@@ -151,14 +156,113 @@ export async function unhideCommentAction(commentId: string): Promise<{ ok: bool
   return { ok: true };
 }
 
-export async function deleteCommentAction(commentId: string): Promise<void> {
-  await requireAdminOrBootstrap();
-  const db = getDb();
+/**
+ * Data-layer delete. Used by deleteCommentAction and tests.
+ * Caller is responsible for permission checks.
+ */
+export async function deleteComment(
+  db: any,
+  commentId: string,
+  callerSignerId: string,
+  callerIsAdmin: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const comment = await db
+    .select({ id: comments.id, signerId: comments.signerId })
+    .from(comments)
+    .where(eq(comments.id, commentId))
+    .limit(1);
+  if (comment.length === 0) return { ok: false, error: "Comment not found." };
+
+  const isOwner = comment[0].signerId === callerSignerId;
+  if (!isOwner && !callerIsAdmin) return { ok: false, error: "Not authorized." };
+
+  const hiddenReason = callerIsAdmin && !isOwner ? "admin_delete" : "user_delete";
+
   await db
     .update(comments)
-    .set({ hiddenAt: new Date(), hiddenReason: "admin_delete" })
+    .set({ hiddenAt: new Date(), hiddenReason })
     .where(eq(comments.id, commentId));
+  return { ok: true };
+}
+
+/**
+ * Data-layer edit. Used by editCommentAction and tests.
+ * Caller is responsible for permission checks.
+ */
+export async function editComment(
+  db: any,
+  commentId: string,
+  newBody: string,
+  callerSignerId: string,
+  callerIsAdmin: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const comment = await db
+    .select({ id: comments.id, signerId: comments.signerId })
+    .from(comments)
+    .where(eq(comments.id, commentId))
+    .limit(1);
+  if (comment.length === 0) return { ok: false, error: "Comment not found." };
+
+  const isOwner = comment[0].signerId === callerSignerId;
+  if (!isOwner && !callerIsAdmin) return { ok: false, error: "Not authorized." };
+
+  const body = sanitizeText(newBody, 5000);
+  if (!body) return { ok: false, error: "Comment body cannot be empty." };
+
+  await db
+    .update(comments)
+    .set({ body })
+    .where(eq(comments.id, commentId));
+  return { ok: true };
+}
+
+/**
+ * Soft-delete a comment. Authors can delete their own; admins can delete anyone's.
+ * Replaces the old admin-only deleteCommentAction.
+ */
+export async function deleteCommentAction(commentId: string): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Not signed in." };
+  const db = getDb();
+
+  const me = await db
+    .select({ id: signers.id, isAdmin: signers.isAdmin })
+    .from(signers)
+    .where(eq(signers.clerkUserId, userId))
+    .limit(1);
+  if (me.length === 0) return { ok: false, error: "Signer not found." };
+
+  const res = await deleteComment(db, commentId, me[0].id, Boolean(me[0].isAdmin));
+  if (!res.ok) return res;
+
   revalidatePath("/admin/comments");
   revalidatePath("/proposed");
   revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Edit a comment's body. Authors can edit their own; admins can edit anyone's.
+ */
+export async function editCommentAction(
+  commentId: string,
+  newBody: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Not signed in." };
+  const db = getDb();
+
+  const me = await db
+    .select({ id: signers.id, isAdmin: signers.isAdmin })
+    .from(signers)
+    .where(eq(signers.clerkUserId, userId))
+    .limit(1);
+  if (me.length === 0) return { ok: false, error: "Signer not found." };
+
+  const res = await editComment(db, commentId, newBody, me[0].id, Boolean(me[0].isAdmin));
+  if (!res.ok) return res;
+
+  revalidatePath("/proposed");
+  revalidatePath("/");
+  return { ok: true };
 }

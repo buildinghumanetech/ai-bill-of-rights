@@ -1,5 +1,32 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 22:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Pass 2.5: fixed the comment persistence bug (no "all comments" list meant multiple comments looked like one), added edit/delete for authors and admins, admin "post as" dropdown in comment and reply composers, pull quotes are now fully commentable (wrapped in AnchorSentence with `article-{N}-pullquote` anchor ids), self-replies unblocked (no gate existed; confirmed), and the branch was already up to date with main. Total tests: 154 (+13 new data-layer tests for `editComment` and `deleteComment`).
+
+### Detail of changes made:
+- **`src/server/actions/comments.ts`** — added `editComment(db, commentId, newBody, callerSignerId, callerIsAdmin)` and `deleteComment(db, commentId, callerSignerId, callerIsAdmin)` as testable data-layer exports. Action wrappers `editCommentAction` and `deleteCommentAction` now use these. `deleteCommentAction` is now author-or-admin (was admin-only); hiddenReason is `"user_delete"` for author self-delete, `"admin_delete"` for admin-on-another. `submitCommentAction` reads `actAsSignerId` from FormData and, if caller is admin, inserts the comment attributed to that signer. Removed `requireAdminOrBootstrap()` from this file (was unused after refactor).
+- **`src/lib/db/queries.ts`** — added `SignerForAdminPostAs` interface and `listSignersForAdminPostAs(db)` query (all non-banned signers, sorted by display_name asc).
+- **`src/lib/homepage/load-tab-data.ts`** — added `signersForAdmin: SignerForAdminPostAs[]` to `HomepageTabData`. When `isAdmin`, fetches the signers list alongside comments/threads. Passes empty array for non-admins.
+- **`src/components/CommentsColumn.tsx`** — rewritten. Accepts `signersForAdmin`. Always shows the "all comments" list below the active area (top-level comments sorted newest-first). Each all-list card shows: displayName, relative timestamp, selectedText quote (italic), and body excerpt (2-line clamp). Clicking any card calls `onActiveChange(id)`. Active card highlighted cyan. Idle state + active state + pending-selection state all coexist — list is always visible. Removed the "only-one-comment" limitation.
+- **`src/components/NewCommentForm.tsx`** — accepts `viewerSignerId`, `isAdmin`, `signersForAdmin`. When admin, shows a small "Posting as: me ▾" select above the textarea listing all non-banned signers. On submit, sends `actAsSignerId` in FormData.
+- **`src/components/CommentView.tsx`** — accepts and threads `signersForAdmin` down to `<CommentNode>`.
+- **`src/components/CommentNode.tsx`** — accepts `signersForAdmin`. Adds "edit" and "delete" text buttons top-right of comment header, shown when `canEditDelete` (isSelf || isAdmin). Edit opens inline textarea; Save calls `editCommentAction`. Delete calls `deleteCommentAction` (no modal). Reply composer includes admin "Posting as" dropdown when `isAdmin`. Old admin-only `deleteCommentAction` button removed; replaced by unified edit/delete row. Self-reply is naturally allowed (no gate was ever present).
+- **`src/app/HomepageArticles.tsx`** — pull quotes now wrapped in `<AnchorSentence>` in interactive mode with anchor id `article-{N}-pullquote`. `applyHighlights` runs on the pullQuote text, so existing comments on pull quotes show inline highlights too.
+- **`src/components/TabbedDocument.tsx`** — passes `signersForAdmin` through to `<CommentsColumn>`. Updated Props interface.
+- **`tests/server/comments.test.ts`** — rewrote new-test section using data-layer functions directly (no Clerk auth mocking needed). Added 8 new tests for `editComment` (author edit, admin edit, non-author block, empty-body reject) and 5 for `deleteComment` (author user_delete, admin admin_delete, non-author block, admin self-delete = user_delete). Total 13 new tests, 154 total.
+
+### Potential concerns to address:
+- The all-list shows only top-level comments; replies are accessed by clicking a card and viewing the full `<CommentView>` thread. This is intentional but means users can't immediately see reply previews in the list.
+- Cross-sentence comments (where selectedText spans two sentences) still save correctly but won't have an inline highlight. They appear in the all-list with the quoted text shown, so they're discoverable. This is the "simpler approach" accepted for Pass 2.5.
+- Overlapping-span comments also appear in the all-list (earliest comment wins the inline highlight). Shadow comments visible in the list.
+- The admin "post as" dropdown sends the target signer's id in the FormData as plaintext. The server validates it against the signers table. No additional signing/verification — this is acceptable since only confirmed admins see the field.
+- `_db` singleton in `comments.ts` is shared across requests in the same process. This is the existing pattern; not a regression.
+
+---
+
 ## Progress Update as of 2026-05-19 21:45 Pacific
 *(Most recent updates at top)*
 
