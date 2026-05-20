@@ -184,6 +184,15 @@ export async function createTestDb(): Promise<TestDb> {
       on selfie_reports (selfie_id)
       where resolved_at is null;
 
+    create table comment_mentions (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      mentioned_signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now()
+    );
+    create unique index comment_mentions_unique
+      on comment_mentions (comment_id, mentioned_signer_id);
+
     create table attestations (
       id uuid primary key default gen_random_uuid(),
       org_name text not null,

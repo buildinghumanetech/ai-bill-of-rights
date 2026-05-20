@@ -300,6 +300,19 @@ export const selfieReports = pgTable(
     ),
   ],
 );
+export const commentMentions = pgTable(
+  "comment_mentions",
+  {
+    id: uuid("id").primaryKey().defaultRandom().notNull(),
+    commentId: uuid("comment_id").notNull().references(() => comments.id),
+    mentionedSignerId: uuid("mentioned_signer_id").notNull().references(() => signers.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("comment_mentions_unique").on(t.commentId, t.mentionedSignerId),
+  ],
+);
+
 export const attestations = pgTable("attestations", {
   id: uuid("id").defaultRandom().primaryKey(),
   orgName: text("org_name").notNull(),

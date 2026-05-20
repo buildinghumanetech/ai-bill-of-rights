@@ -5,9 +5,11 @@ import {
   listCommentsByAnchorForVersion,
   listThreadedCommentsForVersion,
   listSignersForAdminPostAs,
+  listSignersForMention,
   type CommentWithSelection,
   type ThreadedComment,
   type SignerForAdminPostAs,
+  type SignerForMention,
 } from "@/lib/db/queries";
 import { signers } from "@/lib/db/schema";
 
@@ -23,6 +25,8 @@ export interface HomepageTabData {
   isAdmin: boolean;
   /** Non-null only when the viewer is an admin. Used for "post as" dropdown. */
   signersForAdmin: SignerForAdminPostAs[];
+  /** All non-banned signers — available to all users for @mention typeahead. */
+  signersForMention: SignerForMention[];
 }
 
 function bumpPatch(version: string): string {
@@ -69,6 +73,7 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
   let commentsByAnchor: Record<string, CommentWithSelection[]> = {};
   let threadedComments: ThreadedComment[] = [];
   let signersForAdmin: SignerForAdminPostAs[] = [];
+  let signersForMention: SignerForMention[] = [];
 
   if (baseVersionId) {
     try {
@@ -77,11 +82,13 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
       const tasks: Promise<any>[] = [
         listCommentsByAnchorForVersion(db, baseVersionId),
         listThreadedCommentsForVersion(db, baseVersionId, viewerSignerId),
+        // Load signers for mention for all signed-in users (needed for @mention typeahead)
+        viewerSignerId ? listSignersForMention(db) : Promise.resolve([]),
       ];
       if (isAdmin) tasks.push(listSignersForAdminPostAs(db));
       const results = await Promise.all(tasks);
-      [commentsByAnchor, threadedComments] = results as [typeof commentsByAnchor, typeof threadedComments];
-      if (isAdmin) signersForAdmin = results[2] as SignerForAdminPostAs[];
+      [commentsByAnchor, threadedComments, signersForMention] = results as [typeof commentsByAnchor, typeof threadedComments, typeof signersForMention];
+      if (isAdmin) signersForAdmin = results[3] as SignerForAdminPostAs[];
       // Build a flat list for legacy anchor lookups
       comments = Object.values(commentsByAnchor).flat();
     } catch {
@@ -99,5 +106,6 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
     viewerSignerId,
     isAdmin,
     signersForAdmin,
+    signersForMention,
   };
 }

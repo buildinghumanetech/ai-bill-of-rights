@@ -1,5 +1,41 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 23:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Pass 3 of the commenting redesign: @mention typeahead in all comment composers, per-comment secret URL with copy-link button, and mention email notifications. Migration 0006 adds `comment_mentions` table. Schema, queries, email templates, and server actions updated. New components: `<MentionTextarea>` (popup typeahead), and utility libs `src/lib/comments/mentions.ts` (parser) and `src/lib/comments/render-mentions.tsx` (display). All 171 tests pass (20 new).
+
+### Detail of changes made:
+- **`drizzle/0006_comment_mentions.sql`** — new migration: `comment_mentions` table with FK to comments and signers, unique index on `(comment_id, mentioned_signer_id)`. Applied via `pnpm db:push`.
+- **`src/lib/db/schema.ts`** — added `commentMentions` table definition with `uniqueIndex("comment_mentions_unique")`.
+- **`src/lib/db/queries.ts`** — added `SignerForMention` interface and `listSignersForMention(db)` query (all non-banned signers, sorted by display_name; same query as `listSignersForAdminPostAs` but not admin-gated).
+- **`src/lib/comments/mentions.ts`** — new file. `parseMentions(body, knownSigners)` scans left-to-right, greedily matches longest display name after `@`, dedupes by signerId.
+- **`src/lib/comments/render-mentions.tsx`** — new file. `renderBodyWithMentions(body, knownSigners)` returns `ReactNode[]` with mention spans styled `bg-blue-50 text-blue-700`. No dangerouslySetInnerHTML.
+- **`src/lib/email/templates.ts`** — added `mentionEmail(opts)` template. Includes HTML version with escaped user input (`escapeHtml` helper). Also added `html?: string` param to `sendEmail`.
+- **`src/lib/email/send.ts`** — added optional `html` field to `sendEmail` opts.
+- **`src/server/actions/comments.ts`** — updated `submitCommentAction`: after insert, fires async mention processing (parse → insert mention rows → Clerk email lookup → Resend send). Self-mentions skipped. All email failures caught individually. Fire-and-forget pattern (`void (async () => {...})()`). Comment URL uses `NEXT_PUBLIC_SITE_URL` env var with `encodeURIComponent` on the ID.
+- **`src/components/MentionTextarea.tsx`** — new component. Drop-in textarea replacement that intercepts keystrokes, detects `@<partial>` context, shows a popup below the textarea with up to 6 filtered signers. Arrow-up/down, Enter/Tab to select, Escape to dismiss. Mouse click also works. Replaces `@partial` in-place with `@DisplayName ` (trailing space). Exported `textareaRef` prop for forwarding to parent (for FormData reading).
+- **`src/components/CommentNode.tsx`** — now accepts `signersForMention`. All three textareas (reply, edit) replaced with `<MentionTextarea>`. Comment body rendered via `renderBodyWithMentions`. Copy-link button added in header (chain icon SVG, shows "copied!" for 2s after click). The button is visible on all comments, not just own.
+- **`src/components/NewCommentForm.tsx`** — accepts `signersForMention`, uses `<MentionTextarea>`.
+- **`src/components/CommentView.tsx`** — accepts and threads `signersForMention` down to `<CommentNode>` and the embedded `<NewCommentForm>`.
+- **`src/components/CommentsColumn.tsx`** — accepts and threads `signersForMention` down to `<NewCommentForm>` and `<CommentView>`.
+- **`src/components/TabbedDocument.tsx`** — accepts `signersForMention` from data. Added `useEffect` for `?c=<commentId>` deep-link: on mount, switches to proposed tab, sets `activeCommentId`, and scrolls to `[data-comment-id="${c}"]` highlight after 100ms.
+- **`src/app/HomepageArticles.tsx`** — highlight spans now have `data-comment-id={span.comment.id}` attribute so the deep-link scroll-to can find them.
+- **`src/lib/homepage/load-tab-data.ts`** — loads `signersForMention` for all signed-in users (not just admins). Returns it in `HomepageTabData`.
+- **`tests/_helpers/pglite-db.ts`** — added `comment_mentions` DDL to in-memory schema.
+- **`tests/lib/comments.mentions.test.ts`** — new. 9 tests for `parseMentions` (single match, multiple, dedup, longest-match-wins, no-match cases).
+- **`tests/lib/comments.render-mentions.test.tsx`** — new. 6 tests for `renderBodyWithMentions` (no mentions → plain string; one mention → [str, span, str]; start/end positions; consecutive mentions; empty signers).
+- **`tests/server/comments.test.ts`** — added 2 new tests verifying mention row insertion and unique-constraint no-op.
+
+### Potential concerns to address:
+- @mention typeahead loads the full signer list at page-load time. For large communities (10k+ signers) this could be heavy. For current scale (hundreds of signers) it's fine. Paginated/lazy search is the future optimization path.
+- Email sending is fire-and-forget. If Resend is misconfigured (no RESEND_API_KEY), the warn log fires and emails are silently skipped — this is intentional, matching existing behavior.
+- `NEXT_PUBLIC_SITE_URL` env var must be set in production for correct mention email URLs. Falls back to `http://localhost:3000` in dev.
+- The scroll-to for deep-linked comments only works when the comment has an inline highlight (i.e. the `selectedText` appears in the article). Comments without `selectedText` still activate in the right column but don't scroll the article.
+
+---
+
 ## Progress Update as of 2026-05-19 22:45 Pacific
 *(Most recent updates at top)*
 

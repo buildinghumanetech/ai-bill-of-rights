@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { comments, signers, versions } from "@/lib/db/schema";
+import { comments, signers, versions, commentMentions } from "@/lib/db/schema";
 import { createComment, editComment, deleteComment } from "@/server/actions/comments";
+import { parseMentions } from "@/lib/comments/mentions";
 import { eq } from "drizzle-orm";
 
 const md = `---
@@ -294,5 +295,79 @@ describe("deleteComment (data layer)", () => {
     const rows = await db.select().from(comments).where(eq(comments.id, commentId));
     // isOwner=true, so user_delete even though callerIsAdmin=true
     expect(rows[0].hiddenReason).toBe("user_delete");
+  });
+});
+
+describe("comment mentions (data layer)", () => {
+  it("parseMentions + insert mention rows when known signers are passed in", async () => {
+    const { db, versionId, signerId } = await seed();
+
+    // Create a second signer to be mentioned
+    const [mentioned] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "u_mentioned",
+        displayName: "Alice",
+        affiliation: null,
+        locationText: null,
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+
+    // Create a comment body that mentions Alice
+    const body = "Hello @Alice, check this out!";
+    const knownSigners = [{ id: mentioned.id, displayName: "Alice" }];
+    const { id: commentId } = await createComment(db, {
+      baseVersionId: versionId,
+      signerId,
+      anchorId: "preamble-s-1",
+      body,
+    });
+
+    // Simulate what the action does: parse mentions, insert mention rows
+    const mentions = parseMentions(body, knownSigners);
+    expect(mentions).toHaveLength(1);
+    expect(mentions[0].signerId).toBe(mentioned.id);
+
+    // Insert mention row
+    await db.insert(commentMentions).values({
+      commentId,
+      mentionedSignerId: mentions[0].signerId,
+    });
+
+    const mentionRows = await db.select().from(commentMentions).where(eq(commentMentions.commentId, commentId));
+    expect(mentionRows).toHaveLength(1);
+    expect(mentionRows[0].mentionedSignerId).toBe(mentioned.id);
+  });
+
+  it("does not duplicate mention rows on re-insert (unique constraint)", async () => {
+    const { db, versionId, signerId } = await seed();
+
+    const [mentioned] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "u_bob",
+        displayName: "Bob",
+        affiliation: null,
+        locationText: null,
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+
+    const { id: commentId } = await createComment(db, {
+      baseVersionId: versionId,
+      signerId,
+      anchorId: "preamble-s-1",
+      body: "@Bob is great",
+    });
+
+    // Insert twice — second should be no-op via onConflictDoNothing
+    await db.insert(commentMentions).values({ commentId, mentionedSignerId: mentioned.id });
+    await db.insert(commentMentions).values({ commentId, mentionedSignerId: mentioned.id }).onConflictDoNothing();
+
+    const rows = await db.select().from(commentMentions).where(eq(commentMentions.commentId, commentId));
+    expect(rows).toHaveLength(1);
   });
 });

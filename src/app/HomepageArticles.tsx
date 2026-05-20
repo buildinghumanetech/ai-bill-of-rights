@@ -253,6 +253,7 @@ function applyHighlights(
         role="button"
         tabIndex={0}
         data-highlight="true"
+        data-comment-id={span.comment.id}
         onClick={() => onHighlightClick(span.comment.id)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {

@@ -2,16 +2,19 @@
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
+import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { voteCommentAction } from "@/server/actions/comment-votes";
 import { reportCommentAction } from "@/server/actions/comment-reports";
 import { deleteCommentAction, editCommentAction, submitCommentAction } from "@/server/actions/comments";
+import { MentionTextarea } from "@/components/MentionTextarea";
+import { renderBodyWithMentions } from "@/lib/comments/render-mentions";
 
 interface Props {
   comment: ThreadedComment;
   viewerSignerId: string | null;
   isAdmin: boolean;
   signersForAdmin: SignerForAdminPostAs[];
+  signersForMention: SignerForMention[];
   depth: number;
   /** baseVersionId is needed when submitting replies. Passed through from the tree root. */
   baseVersionId: string;
@@ -51,7 +54,7 @@ function openSignModal() {
  * Recursive comment node: renders a comment plus all its replies.
  * Handles voting, replying, flagging, edit, and delete (author or admin).
  */
-export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin, depth, baseVersionId, rootAnchorId }: Props) {
+export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin, signersForMention, depth, baseVersionId, rootAnchorId }: Props) {
   const router = useRouter();
   const [showReply, setShowReply] = useState(false);
   const [replyBody, setReplyBody] = useState("");
@@ -66,6 +69,8 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
   const [showEdit, setShowEdit] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
   const [editError, setEditError] = useState<string | null>(null);
+  // Copy-link state
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [, startVoteTransition] = useTransition();
   const [replyPending, startReplyTransition] = useTransition();
   const [, startDeleteTransition] = useTransition();
@@ -145,6 +150,17 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
     });
   }
 
+  function handleCopyLink() {
+    const url = `${window.location.origin}/proposed?c=${encodeURIComponent(comment.id)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 2000);
+    }).catch(() => {
+      // Fallback for environments without clipboard API
+      setCopyState("idle");
+    });
+  }
+
   function handleReplySubmit(e: React.FormEvent) {
     e.preventDefault();
     setReplyError(null);
@@ -219,9 +235,28 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
 
             <span className="text-xs font-semibold text-zinc-700">{comment.displayName}</span>
             <span className="text-xs text-zinc-400">{relativeTime(new Date(comment.createdAt))}</span>
+            {/* Copy link + Edit / Delete */}
+            <span className="ml-auto flex items-center gap-2 shrink-0">
+              {/* Copy link — available to everyone */}
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                aria-label={copyState === "copied" ? "Link copied!" : "Copy link to comment"}
+                title={copyState === "copied" ? "Link copied!" : "Copy link to comment"}
+                className={`transition-colors ${copyState === "copied" ? "text-green-600" : "text-zinc-400 hover:text-zinc-700"}`}
+              >
+                {copyState === "copied" ? (
+                  <span className="text-[10px] font-medium">copied!</span>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                )}
+              </button>
             {/* Edit / Delete for author or admin */}
             {canEditDelete && (
-              <span className="ml-auto flex items-center gap-2 shrink-0">
+              <>
                 <button
                   type="button"
                   onClick={() => {
@@ -272,19 +307,20 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                     <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                   </svg>
                 </button>
-              </span>
+              </>
             )}
+            </span>
           </div>
 
           {/* Inline edit composer */}
           {showEdit ? (
             <div className="mt-1 space-y-2">
-              <textarea
-                autoFocus
+              <MentionTextarea
                 value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
+                onChange={setEditBody}
+                signers={signersForMention}
                 rows={4}
-                className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                autoFocus
               />
               {editError && (
                 <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{editError}</p>
@@ -309,7 +345,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             </div>
           ) : (
             <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 break-words">
-              {comment.body}
+              {renderBodyWithMentions(comment.body, signersForMention)}
             </p>
           )}
 
@@ -395,14 +431,14 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                     ))}
                 </select>
               )}
-              <textarea
-                ref={textareaRef}
-                autoFocus
+              <MentionTextarea
                 value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
+                onChange={setReplyBody}
+                signers={signersForMention}
                 rows={3}
                 placeholder="Write a reply…"
-                className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                autoFocus
+                textareaRef={textareaRef}
               />
               {replyError && (
                 <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{replyError}</p>
@@ -443,6 +479,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
               viewerSignerId={viewerSignerId}
               isAdmin={isAdmin}
               signersForAdmin={signersForAdmin}
+              signersForMention={signersForMention}
               depth={depth + 1}
               baseVersionId={baseVersionId}
               rootAnchorId={rootAnchorId ?? comment.anchorId}

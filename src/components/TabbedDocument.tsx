@@ -6,7 +6,7 @@ import { HomepageArticles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
 import { CommentsColumn } from "@/components/CommentsColumn";
 import FloatingSignButton from "@/app/FloatingSignButton";
-import type { CommentWithSelection, ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
+import type { CommentWithSelection, ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 
 interface Props {
   initialTab: "current" | "proposed";
@@ -19,6 +19,7 @@ interface Props {
   viewerSignerId: string | null;
   isAdmin: boolean;
   signersForAdmin: SignerForAdminPostAs[];
+  signersForMention: SignerForMention[];
 }
 
 export function TabbedDocument({
@@ -32,6 +33,7 @@ export function TabbedDocument({
   viewerSignerId,
   isAdmin,
   signersForAdmin,
+  signersForMention,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"current" | "proposed">(initialTab);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -45,6 +47,24 @@ export function TabbedDocument({
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Handle ?c=<commentId> deep-link: activate the comment and scroll to its highlight.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const c = url.searchParams.get("c");
+    if (!c) return;
+    // Switch to proposed tab
+    setActiveTab("proposed");
+    setActiveCommentId(c);
+    // Scroll to the highlight after a tick so the DOM is settled
+    setTimeout(() => {
+      const el = document.querySelector(`[data-comment-id="${c}"]`);
+      if (el && "scrollIntoView" in el) {
+        (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Clicking outside any highlight span clears the active comment.
@@ -129,6 +149,7 @@ export function TabbedDocument({
               viewerSignerId={viewerSignerId}
               isAdmin={isAdmin}
               signersForAdmin={signersForAdmin}
+              signersForMention={signersForMention}
               onActiveChange={handleActiveChange}
             />
           </aside>

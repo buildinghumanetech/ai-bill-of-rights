@@ -390,6 +390,27 @@ export async function listSignersForAdminPostAs(
   return rows as SignerForAdminPostAs[];
 }
 
+export interface SignerForMention {
+  id: string;
+  displayName: string;
+}
+
+/**
+ * Returns all non-banned signers for the @mention typeahead.
+ * Available to all signed-in users (not admin-only).
+ * Sorted alphabetically by display_name.
+ */
+export async function listSignersForMention(
+  db: any,
+): Promise<SignerForMention[]> {
+  const rows = await db
+    .select({ id: signers.id, displayName: signers.displayName })
+    .from(signers)
+    .where(isNull(signers.softBannedAt))
+    .orderBy(asc(signers.displayName));
+  return rows as SignerForMention[];
+}
+
 export async function findThreadedCommentTree(
   db: any,
   rootCommentId: string,

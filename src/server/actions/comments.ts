@@ -3,9 +3,13 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
-import { comments, signers } from "@/lib/db/schema";
+import { comments, signers, commentMentions } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { getCurrentAdmin } from "@/lib/admin/check";
+import { listSignersForMention } from "@/lib/db/queries";
+import { parseMentions } from "@/lib/comments/mentions";
+import { mentionEmail } from "@/lib/email/templates";
+import { sendEmail } from "@/lib/email/send";
 
 let _db: any | null = null;
 function getDb() {
@@ -111,8 +115,9 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
     return { ok: false, error: (err as Error).message };
   }
 
+  let insertedCommentId: string;
   try {
-    await createComment(db, {
+    const result = await createComment(db, {
       baseVersionId,
       signerId: effectiveSignerId,
       anchorId,
@@ -121,9 +126,69 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
       body,
       selectedText,
     });
+    insertedCommentId = result.id;
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
+
+  // Fire mention emails asynchronously — don't let email failures block the response
+  void (async () => {
+    try {
+      const knownSigners = await listSignersForMention(db);
+      const mentions = parseMentions(body, knownSigners);
+      // Filter self-mentions
+      const others = mentions.filter((m) => m.signerId !== effectiveSignerId);
+      if (others.length === 0) return;
+
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+      const commentUrl = `${siteUrl}/proposed?c=${encodeURIComponent(insertedCommentId)}`;
+
+      // Find the mentioning signer's display name
+      const mentioner = knownSigners.find((s) => s.id === effectiveSignerId);
+      const mentioningDisplayName = mentioner?.displayName ?? "Someone";
+
+      // Look up the mentioned signer's clerkUserId to get email from Clerk
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const clerk = await clerkClient();
+
+      await Promise.all(
+        others.map(async (mention) => {
+          try {
+            // Insert mention row (ignore unique-constraint violations)
+            await db.insert(commentMentions).values({
+              commentId: insertedCommentId,
+              mentionedSignerId: mention.signerId,
+            }).onConflictDoNothing();
+
+            // Fetch the mentioned signer's clerkUserId to get email
+            const mentionedRow = await db
+              .select({ clerkUserId: signers.clerkUserId, displayName: signers.displayName })
+              .from(signers)
+              .where(eq(signers.id, mention.signerId))
+              .limit(1);
+            if (mentionedRow.length === 0) return;
+
+            const clerkUser = await clerk.users.getUser(mentionedRow[0].clerkUserId);
+            const email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+            if (!email) return;
+
+            const tmpl = mentionEmail({
+              mentionedDisplayName: mentionedRow[0].displayName,
+              mentioningDisplayName,
+              body,
+              commentUrl,
+              selectedText: selectedText ?? null,
+            });
+            await sendEmail({ to: email, subject: tmpl.subject, text: tmpl.text, html: tmpl.html });
+          } catch (innerErr) {
+            console.error("[mention] Failed to send mention email:", innerErr);
+          }
+        }),
+      );
+    } catch (outerErr) {
+      console.error("[mention] Failed to process mentions:", outerErr);
+    }
+  })();
 
   revalidatePath("/");
   return { ok: true };

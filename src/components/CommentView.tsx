@@ -1,6 +1,6 @@
 "use client";
 
-import type { ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
+import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { CommentNode } from "./CommentNode";
 import { NewCommentForm } from "./NewCommentForm";
 
@@ -9,6 +9,7 @@ interface Props {
   viewerSignerId: string | null;
   isAdmin: boolean;
   signersForAdmin: SignerForAdminPostAs[];
+  signersForMention: SignerForMention[];
   baseVersionId: string;
   /** Kept for API back-compat; no longer rendered (no Close button). */
   onClose?: () => void;
@@ -20,7 +21,7 @@ interface Props {
  * composer sits below the thread so the viewer can add another top-level
  * comment on the same selected text without replying to anyone specific.
  */
-export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, baseVersionId }: Props) {
+export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, signersForMention, baseVersionId }: Props) {
   return (
     <div className="space-y-3">
       {comment.selectedText && (
@@ -33,6 +34,7 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
         viewerSignerId={viewerSignerId}
         isAdmin={isAdmin}
         signersForAdmin={signersForAdmin}
+        signersForMention={signersForMention}
         depth={0}
         baseVersionId={baseVersionId}
         rootAnchorId={comment.anchorId}
@@ -48,6 +50,7 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
             viewerSignerId={viewerSignerId}
             isAdmin={isAdmin}
             signersForAdmin={signersForAdmin}
+            signersForMention={signersForMention}
             showQuote={false}
             onCancel={() => { /* no-op — composer is persistent at the bottom */ }}
           />

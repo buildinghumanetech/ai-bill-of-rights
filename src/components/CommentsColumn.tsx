@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
+import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { findCommentInTree } from "@/lib/db/queries";
 import { NewCommentForm } from "./NewCommentForm";
 import { CommentView } from "./CommentView";
@@ -19,6 +19,7 @@ interface Props {
   viewerSignerId: string | null;
   isAdmin: boolean;
   signersForAdmin: SignerForAdminPostAs[];
+  signersForMention: SignerForMention[];
   onActiveChange: (id: string | null) => void;
 }
 
@@ -41,6 +42,7 @@ export function CommentsColumn({
   viewerSignerId,
   isAdmin,
   signersForAdmin,
+  signersForMention,
   onActiveChange,
 }: Props) {
   const [pendingSelection, setPendingSelection] = useState<SelectionEvent | null>(null);
@@ -79,6 +81,7 @@ export function CommentsColumn({
           viewerSignerId={viewerSignerId}
           isAdmin={isAdmin}
           signersForAdmin={signersForAdmin}
+          signersForMention={signersForMention}
           onCancel={() => setPendingSelection(null)}
         />
       ) : activeComment ? (
@@ -87,6 +90,7 @@ export function CommentsColumn({
           viewerSignerId={viewerSignerId}
           isAdmin={isAdmin}
           signersForAdmin={signersForAdmin}
+          signersForMention={signersForMention}
           baseVersionId={baseVersionId ?? ""}
           onClose={() => onActiveChange(null)}
         />
