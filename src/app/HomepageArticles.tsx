@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AnchorSentence } from "@/components/AnchorSentence";
-import type { EditsByAnchor } from "@/lib/proposed/apply-edits";
 
 // Pastel pill palette. Tailwind sees these as full class strings so the
 // JIT will include them in the generated CSS. Pills are colored by a tiny
@@ -212,36 +211,12 @@ export const articles: Article[] = [
 
 interface Props {
   /**
-   * - "static": no per-sentence anchors. Production look.
-   * - "interactive": each sentence in each article body wrapped in <AnchorSentence>
-   *   with a deterministic anchor id of `article-<number>-s-<index>`. Adds the
-   *   per-sentence count badge + emits selection-in-anchor events for the
-   *   HighlightPopover.
+   * - "static": prose paragraphs. Production look.
+   * - "interactive": each sentence wrapped in `<AnchorSentence>` with a
+   *   deterministic anchor id of `article-<number>-s-<index>` so selections
+   *   inside it can be turned into comments.
    */
   mode: "static" | "interactive";
-  /**
-   * Map of anchorId → comment or proposal count badge value.
-   * Used only when mode=interactive.
-   */
-  anchorCounts?: Record<string, number>;
-  /**
-   * Controls what drawer the badge opens. Passed through to AnchorSentence.
-   * Defaults to "comments".
-   */
-  anchorMode?: "comments" | "proposals";
-  /**
-   * Accepted edit overrides for interactive mode. When set, sentences with
-   * a matching anchorId will be rendered with the override applied:
-   * - isDeleted → dim strikethrough (sentence will be removed)
-   * - replaceWith → render replacement text with green left border
-   * - insertsAfter → synthetic sentences appended after this one
-   */
-  editsByAnchor?: EditsByAnchor;
-  /**
-   * Pending proposal counts per anchor. Used to show the amber underline
-   * on sentences with open proposals.
-   */
-  proposalCounts?: Record<string, { pending: number; accepted: number }>;
 }
 
 /**
@@ -255,13 +230,7 @@ function splitSentences(body: string): string[] {
     .filter(Boolean);
 }
 
-export function HomepageArticles({
-  mode,
-  anchorCounts = {},
-  anchorMode = "comments",
-  editsByAnchor = {},
-  proposalCounts = {},
-}: Props) {
+export function HomepageArticles({ mode }: Props) {
   return (
     <ol className="mx-auto max-w-3xl">
       {articles.map((article) => (
@@ -288,79 +257,14 @@ export function HomepageArticles({
                 </p>
               ) : (
                 <p className="mt-5 text-lg leading-relaxed text-zinc-700">
-                  {splitSentences(article.body).flatMap((sentence, idx) => {
+                  {splitSentences(article.body).map((sentence, idx) => {
                     const anchorId = `article-${article.number}-s-${idx + 1}`;
-                    const override = editsByAnchor[anchorId];
-                    const pendingCount = proposalCounts[anchorId]?.pending ?? 0;
-
-                    // Deleted sentence: render dim strikethrough.
-                    if (override?.isDeleted) {
-                      return [
-                        <span
-                          key={anchorId}
-                          className="text-zinc-400 line-through opacity-60"
-                          title="This sentence is proposed for removal"
-                        >
-                          {idx > 0 ? " " : ""}
-                          {sentence}
-                        </span>,
-                      ];
-                    }
-
-                    // Text to actually display (may be replaced).
-                    const displayText = override?.replaceWith ?? sentence;
-                    const isReplaced = Boolean(override?.replaceWith);
-
-                    const sentenceEl = (
-                      <AnchorSentence
-                        key={anchorId}
-                        anchorId={anchorId}
-                        count={anchorCounts[anchorId] ?? 0}
-                        mode={anchorMode}
-                      >
+                    return (
+                      <AnchorSentence key={anchorId} anchorId={anchorId}>
                         {idx > 0 ? " " : ""}
-                        <span
-                          className={[
-                            isReplaced
-                              ? "border-l-2 border-emerald-300 pl-2"
-                              : "",
-                            pendingCount > 0 && !isReplaced
-                              ? "border-b border-amber-400"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          {displayText}
-                          {pendingCount > 0 && (
-                            <span
-                              className="ml-1 inline-flex h-4 items-center rounded-full bg-amber-100 px-1.5 text-[9px] font-semibold text-amber-700"
-                              title={`${pendingCount} pending proposal${pendingCount !== 1 ? "s" : ""}`}
-                            >
-                              {pendingCount}
-                            </span>
-                          )}
-                        </span>
+                        {sentence}
                       </AnchorSentence>
                     );
-
-                    // Append any insert_after sentences.
-                    const inserts =
-                      override?.insertsAfter?.map((ins) => (
-                        <AnchorSentence
-                          key={ins.id}
-                          anchorId={ins.id}
-                          count={0}
-                          mode={anchorMode}
-                        >
-                          {" "}
-                          <span className="border-l-2 border-blue-300 pl-2 text-blue-900">
-                            {ins.text}
-                          </span>
-                        </AnchorSentence>
-                      )) ?? [];
-
-                    return [sentenceEl, ...inserts];
                   })}
                 </p>
               )}

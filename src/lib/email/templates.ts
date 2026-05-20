@@ -128,24 +128,6 @@ ${opts.appealUrl}
   };
 }
 
-export function releaseConversionEmail(opts: {
-  displayName: string;
-  newVersion: string;
-  signUrl: string;
-}): { subject: string; text: string } {
-  return {
-    subject: `Your endorsed draft just shipped as v${opts.newVersion}`,
-    text: `Hi ${opts.displayName},
-
-A new version of the AI Bill of Rights just shipped: v${opts.newVersion}. You endorsed it while it was a working draft — thanks for shaping it.
-
-Sign v${opts.newVersion} now to make it official: ${opts.signUrl}
-
-— The AI Bill of Rights project
-`,
-  };
-}
-
 export function attestationVerifyEmail(opts: {
   orgName: string;
   productName: string;

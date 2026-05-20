@@ -1,5 +1,58 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 21:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Major scope simplification per user direction: removed the Endorse feature, removed the Suggest-Edits feature entirely (was Phase 3), removed the per-sentence `+` icon, and replaced the dual-button HighlightPopover with an inline comment composer that pops up next to the user's text selection. The selection itself is now styled with a cyan `::selection` color so the user sees what they're commenting on. Tab visual tweaks: active tab is now taller than inactive (`py-3` vs `py-2`) and tab text padding is 40px (`px-10`, was 20px). Tests dropped from 137 → 120 (17 endorsement + proposal tests deleted along with their code).
+
+### Detail of changes made:
+- **`src/components/TabBar.tsx`** — bumped tab text padding to `px-10` (40px) and split active/inactive heights: active uses `py-3` (24px), inactive uses `py-2` (16px). With `items-end` on the nav flex, inactive tabs bottom-align and sit visually lower than the active tab, giving the "raised folder tab" look.
+- **`src/components/TabbedDocument.tsx`** — dropped all proposal/endorsement props and imports. Now just owns the tab state and renders `<HomepageArticles mode="static">` and `<HomepageArticles mode="interactive">` plus a single `<HighlightPopover>` when the proposed tab is active. The working-draft banner copy changed from "Hover any sentence to propose a change" to "Highlight any text to leave a comment."
+- **`src/components/HighlightPopover.tsx`** — rewritten as a positioned inline composer. Listens for `selection-in-anchor`, opens a small card below the selection with a cyan-bg quoted preview of the selected text, a textarea, and Cancel/Comment buttons. On submit, calls `submitCommentAction` directly with the anchor id and body. Anonymous users get the same `saveDraft` → `open-sign-modal` handoff used elsewhere. Dismisses on submit, cancel, click-outside, or Escape.
+- **`src/components/AnchorSentence.tsx`** — slimmed to a single-purpose wrapper. Just emits `<span data-anchor-id={anchorId}>{children}</span>`. No more button, no more mode prop, no more count badge — the only thing this component does now is expose the anchor id to `<ArticleSelectionContainer>`'s mouseup listener.
+- **`src/app/HomepageArticles.tsx`** — dropped `editsByAnchor`, `proposalCounts`, `anchorCounts`, and `anchorMode` props. The interactive mode now just wraps each sentence in `<AnchorSentence>`. Removed all the diff rendering (green left border for replaces, dim strikethrough for deletes, amber underline for pending, blue border for inserts, pending count chip). Also dropped the `EditsByAnchor` import.
+- **`src/lib/homepage/load-tab-data.ts`** — slimmed to fetch only `currentVersion`, `proposedVersion`, and `baseVersionId`. The proposed-tab popover hits the DB on submit via the server action, so no SSR-time fetching of proposals or comments is needed.
+- **`src/lib/db/queries.ts`** — removed all four proposal queries (`countProposalsByAnchor`, `listProposalsByAnchor`, `getAcceptedProposalsForVersion`, `listPendingProposalsForVersion`), the `ProposalRow` interface, all three endorsement queries (`getMyEndorsementForVersion`, `countEndorsersForVersion`, `listEndorsersForVersion`), and the `proposedEdits`, `proposalUpvotes`, `endorsements`, and `inArray` imports.
+- **`src/lib/email/templates.ts`** — removed `releaseConversionEmail` template.
+- **`src/app/admin/signers/page.tsx`** and **`src/app/admin/selfies/page.tsx`** — removed the Release link from the admin nav row.
+- **`src/app/globals.css`** — added a scoped `::selection` rule (`[data-anchor-id] ::selection`) using `#a5f3fc` (tailwind cyan-200) so text selections inside the proposed-tab article body render in cyan.
+- **`src/components/DocumentRenderer.tsx`** — simplified to only render the read-only path. The interactive variant has moved to `<HomepageArticles>` + `<HighlightPopover>` on the homepage. The `anchorCounts` prop is gone; the `readOnly` prop is kept for API back-compat but is effectively ignored.
+
+### Files deleted (entire functionality removed):
+- `src/components/EndorseButton.tsx`
+- `src/server/actions/endorsements.ts`
+- `tests/server/endorsements.test.ts`
+- `src/server/actions/proposals.ts`
+- `src/components/SuggestChangesComposer.tsx`
+- `src/components/ProposalCard.tsx`
+- `src/components/ProposalDrawer.tsx`
+- `src/components/CommentDrawer.tsx` (side drawer; replaced by inline popover)
+- `src/components/CommentThread.tsx` (only consumed by the drawer)
+- `src/lib/proposed/apply-edits.ts` + `src/lib/proposed/` directory
+- `src/app/admin/proposals/page.tsx` + directory
+- `src/app/admin/release/page.tsx` + directory
+- `tests/server/proposals.test.ts`
+- `tests/lib/proposed.apply-edits.test.ts`
+- `tests/lib/db.queries.proposed-edits.test.ts`
+- `src/components/InteractiveDoc.tsx` (older markdown-based interactive doc — was dead code after the homepage moved to articles[])
+
+### What was NOT deleted (intentionally):
+- The DB schema (`proposed_edits`, `proposal_upvotes`, `endorsements` tables) and migration `0001_add_comments_and_proposed_edits.sql`. Rolling back migrations is destructive — existing rows in dev/prod are now orphaned but harmless.
+- `src/lib/db/schema.ts` table declarations for the above (same reason).
+- `tests/_helpers/pglite-db.ts` table creation for `endorsements` (matches the migration; harmless).
+- `tests/lib/db.proposed-edits-schema.test.ts` (asserts the schema round-trips — still valid).
+
+### Outstanding work (not in this commit):
+- HN-style comments per user's latest message: upvotes, downvotes, threaded replies, flagging, admin delete, body sanitization. Needs a new `comment_votes` (signed direction) table, a new `comment_reports` table, comment list UI showing existing comments per anchor (currently the user can post but can't see existing comments), and an admin comment-moderation enhancement. To be built next.
+
+### Potential concerns to address:
+- `/admin/proposals` and `/admin/release` URLs return 307 from the dev server (cached); a fresh build will 404 them as the route files are gone. Old shared links to those URLs will hit a 404 — no migration of those pages was kept.
+- After comment submission via `<HighlightPopover>`, the user has no way to see the comment they just posted on the page. The popover dismisses on success but no comment thread is shown. This is intentionally minimal — the HN-style follow-up work will add the visible threaded comments section.
+- The CommentComposer component (`src/components/CommentComposer.tsx`) is no longer used by any caller; the new popover has its own composer inline. Leaving it in for now in case the HN-style work needs the same pattern; will delete if not reused.
+
+---
+
 ## Progress Update as of 2026-05-19 21:15 Pacific
 *(Most recent updates at top)*
 

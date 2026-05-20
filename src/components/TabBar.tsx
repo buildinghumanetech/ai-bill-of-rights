@@ -23,12 +23,15 @@ function FolderTab({ isActive, label, href, onClick }: FolderTabProps) {
   // File-folder styling: rounded top corners, no rounded bottom; active tab
   // uses the doc body color (white) and drops its bottom border, then overlaps
   // the horizontal divider via -mb-px so it looks "attached" to the doc below.
+  // Active tab is taller (py-3) than inactive (py-2); the nav uses items-end
+  // so inactive tabs bottom-align and sit lower, making the active tab rise
+  // above them like a raised folder tab.
   const base =
-    "relative rounded-t-lg border px-5 py-2.5 text-sm font-semibold transition-colors";
+    "relative rounded-t-lg border px-10 text-sm font-semibold transition-colors";
   const active =
-    "z-10 -mb-px border-b-0 border-zinc-300 bg-white text-zinc-900";
+    "z-10 -mb-px border-b-0 border-zinc-300 bg-white py-3 text-zinc-900";
   const inactive =
-    "border-zinc-200 bg-zinc-100 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700";
+    "border-zinc-200 bg-zinc-100 py-2 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700";
   const cls = `${base} ${isActive ? active : inactive}`;
 
   if (onClick) {
