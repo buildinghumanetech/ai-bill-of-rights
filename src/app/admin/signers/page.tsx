@@ -7,6 +7,7 @@ import { getCurrentAdmin } from "@/lib/admin/check";
 import { bootstrapAdminAction } from "@/server/actions/admin";
 import AdminRowActions from "./AdminRowActions";
 import AdminAddSignerForm from "./AdminAddSignerForm";
+import AdminAddNonSignerForm from "./AdminAddNonSignerForm";
 
 export const dynamic = "force-dynamic";
 
@@ -116,8 +117,9 @@ export default async function AdminSignersPage() {
         </Link>
       </header>
 
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col gap-4">
         <AdminAddSignerForm />
+        <AdminAddNonSignerForm />
       </div>
 
       {rows.length === 0 ? (

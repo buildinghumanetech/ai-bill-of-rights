@@ -1,5 +1,23 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-20 00:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Admin non-signer flow: added a second admin button "+ Add a user (non-signer)" to `/admin/signers`. Clicking it expands a form that creates only a `signers` + `consent_records` row — no `signatures` row — useful for giving someone a comment-only backstage account. Implemented as `adminAddNonSignerAction` (server action wrapper) + `insertNonSigner` (pure data-layer function) in `admin.ts`, a new `AdminAddNonSignerForm` client component, and 5 new tests via the data-layer function. 186/186 tests pass, `tsc --noEmit` clean.
+
+### Detail of changes made:
+- **`src/server/actions/admin.ts`** — Added `AdminAddNonSignerInput`, `AdminAddNonSignerResult`, `adminAddNonSignerAction`, and `insertNonSigner`. `insertNonSigner` is the pure data-layer function (takes an explicit `db` argument, no Clerk dependency, no `revalidatePath`); `adminAddNonSignerAction` wraps it with `requireAdminOrBootstrap()` + `revalidatePath` calls. `capturedFields.source = "admin_added_non_signer"`. Consent text is `admin-added-non-signer|${displayName}|${verificationMethod}` (no version string since there is no signature). Synthetic clerkUserId prefix is `admin-added-non-signer-`.
+- **`src/app/admin/signers/AdminAddNonSignerForm.tsx`** — New `"use client"` component mirroring `AdminAddSignerForm`. Collapsed button reads "+ Add a user (non-signer)"; expanded form header reads "Add a user (non-signer)". Helper subtitle: "Creates an account so the person can comment, without recording a signature on the bill." No version-string field. Submit button: "Add user". Submit button uses blue (`bg-blue-600`) vs. emerald for the signer form — visual differentiation. Calls `adminAddNonSignerAction`.
+- **`src/app/admin/signers/page.tsx`** — Imported `AdminAddNonSignerForm`; changed the button wrapper div to `flex flex-col gap-4` and added `<AdminAddNonSignerForm />` below `<AdminAddSignerForm />`.
+- **`tests/server/admin.add-non-signer.test.ts`** — 5 tests: signer row created with input fields; consent record with `source = "admin_added_non_signer"`; NO signatures row; error on empty displayName; error on whitespace-only displayName.
+
+### Potential concerns to address:
+- `insertNonSigner` is exported from the server actions file, which is `"use server"`. TypeScript is fine but it's worth noting that exported functions from `"use server"` modules become callable server actions. The function is not harmful to expose (it requires a `db` argument callers can't easily supply from the client), but a future refactor could move pure data-layer helpers to a separate `lib/` module.
+- The two "add" forms stack vertically (flex-col gap-4). When both are expanded simultaneously they could be confusing. That's an unlikely UX edge case for an admin-only backstage page; no change needed now.
+
+---
+
 ## Progress Update as of 2026-05-19 23:45 Pacific
 *(Most recent updates at top)*
 
