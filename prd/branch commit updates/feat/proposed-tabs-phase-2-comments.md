@@ -1,5 +1,24 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 22:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Proposed-tab visual polish: tab labels now use the monospace font and a colon separator (`v0.0.1: Current` / `v0.0.2: Proposed`) to match the "Article 01" numbering style; the "Working draft …" banner above the articles is removed; the comments-column placeholder simplified to "Highlight any text to comment or suggest changes."; comments column gets 50% wider (540px) on `lg+` screens; 20px (`pt-5`) padding above the "COMMENTS" header; FloatingSignButton hidden on the proposed tab. Also applied schema push to the dev Neon branch since the live DB was missing the `selected_text` column added by migration 0004.
+
+### Detail of changes made:
+- **`src/components/TabBar.tsx`** — added `font-mono` to the tab base classes; tab labels reformatted from `v{ver} · Current` to `v{ver}: Current` (and same for Proposed).
+- **`src/components/TabbedDocument.tsx`** — removed the "Working draft · v0.0.2 · Highlight any text to leave a comment" `<p>` above the article column; grid template updated to `md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_540px]` so the right column expands by 50% on large screens; imported `FloatingSignButton` and render it conditionally as `{activeTab === "current" && <FloatingSignButton />}` so it's hidden on the proposed tab.
+- **`src/components/CommentsColumn.tsx`** — wrapper div has `pt-5` (20px top padding) to clear the tab divider line; placeholder copy replaced with "Highlight any text to comment or suggest changes."
+- **`src/app/page.tsx`** and **`src/app/proposed/page.tsx`** — both pages no longer render `<FloatingSignButton />` directly. The button now lives inside `<TabbedDocument>` so it can toggle visibility based on the active tab.
+- **Dev DB**: ran `pnpm db:push` to apply the schema (including migration 0004's `selected_text` column) to the Neon dev branch. Production will need a separate push at deploy time.
+
+### Potential concerns to address:
+- Production DB has not been migrated yet — when this branch deploys, the production Neon branch needs `pnpm db:push` (or the migration applied via drizzle-kit migrate) before the new code paths will work without throwing the same `column "selected_text" of relation "comments" does not exist` error.
+- The lg breakpoint kicks in at 1024px. On screens between 768px (md) and 1024px (lg) the comments column is 360px; above 1024px it's 540px. This is a sharp jump — if it feels too abrupt, swap to a more progressive width (e.g., `clamp(360px, 30vw, 540px)`).
+
+---
+
 ## Progress Update as of 2026-05-19 22:30 Pacific
 *(Most recent updates at top)*
 
