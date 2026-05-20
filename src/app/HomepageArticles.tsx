@@ -231,12 +231,42 @@ function applyHighlights(
   type Span = { start: number; end: number; comment: CommentWithSelection };
 
   // 1. Collect spans for all comments that appear in this sentence.
+  //
+  // For each comment, first try an exact substring match. If that fails (a
+  // cross-sentence or cross-element selection — the captured selected_text
+  // ran past this anchor's boundary), fall back to the LONGEST PREFIX of
+  // selected_text that is still a contiguous substring of the sentence. That
+  // way a paragraph-spanning selection still gets a visible highlight on
+  // the anchor it landed on, instead of showing nothing.
   const rawSpans: Span[] = [];
   for (const c of comments) {
     if (!c.selectedText) continue;
-    const idx = sentence.indexOf(c.selectedText);
-    if (idx === -1) continue;
-    rawSpans.push({ start: idx, end: idx + c.selectedText.length, comment: c });
+    let idx = sentence.indexOf(c.selectedText);
+    let matchLen = c.selectedText.length;
+    if (idx === -1) {
+      // Binary search for the longest prefix that's a substring of sentence.
+      let lo = 1;
+      let hi = Math.min(c.selectedText.length, sentence.length);
+      let bestPrefixLen = 0;
+      let bestIdx = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >>> 1;
+        const candidate = c.selectedText.slice(0, mid);
+        const found = sentence.indexOf(candidate);
+        if (found !== -1) {
+          bestPrefixLen = mid;
+          bestIdx = found;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      // Require at least 3 characters to avoid false-positive single-letter matches.
+      if (bestPrefixLen < 3) continue;
+      idx = bestIdx;
+      matchLen = bestPrefixLen;
+    }
+    rawSpans.push({ start: idx, end: idx + matchLen, comment: c });
   }
   if (rawSpans.length === 0) return [sentence];
 
