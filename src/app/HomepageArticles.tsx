@@ -247,16 +247,27 @@ function applyHighlights(
   type SpanNode = Span & { children: SpanNode[]; parentId: string | null };
   const nodes: SpanNode[] = rawSpans.map((s) => ({ ...s, children: [], parentId: null }));
 
-  // Mark dropped spans (partial overlaps with an earlier accepted span)
+  // Mark dropped spans:
+  //   - Exact duplicates (same start AND end as an earlier span). Without this,
+  //     two spans with identical extents both "contain" each other and the
+  //     containment loop below creates a circular parent/child relationship —
+  //     neither lands in `roots` and the highlight vanishes. Duplicates surface
+  //     in the right column's "Related to this quote" section instead.
+  //   - Partial overlaps with an earlier accepted span (neither contains the other).
   const dropped = new Set<number>();
   for (let i = 0; i < nodes.length; i++) {
     if (dropped.has(i)) continue;
     for (let j = i + 1; j < nodes.length; j++) {
       if (dropped.has(j)) continue;
       const a = nodes[i], b = nodes[j];
+      // Exact-extent duplicate: drop the later span.
+      if (a.start === b.start && a.end === b.end) {
+        dropped.add(j);
+        continue;
+      }
       const aContainsB = a.start <= b.start && a.end >= b.end;
       const bContainsA = b.start <= a.start && b.end >= a.end;
-      if (aContainsB || bContainsA) continue; // containment — keep both
+      if (aContainsB || bContainsA) continue; // strict containment — keep both
       // Partial overlap: drop the later span (j).
       const aOverlapsB = a.start < b.end && b.start < a.end;
       if (aOverlapsB) dropped.add(j);
