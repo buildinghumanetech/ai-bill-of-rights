@@ -6,6 +6,7 @@ import { HomepageArticles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
 import { CommentsColumn } from "@/components/CommentsColumn";
 import FloatingSignButton from "@/app/FloatingSignButton";
+import SignModal from "@/app/SignModal";
 import type { CommentWithSelection, ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 
 interface Props {
@@ -37,6 +38,7 @@ export function TabbedDocument({
 }: Props) {
   const [activeTab, setActiveTab] = useState<"current" | "proposed">(initialTab);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [signModalOpen, setSignModalOpen] = useState(false);
   const articleRef = useRef<HTMLDivElement | null>(null);
 
   // Back/forward buttons should swap tabs without a navigation.
@@ -47,6 +49,14 @@ export function TabbedDocument({
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Listen for open-sign-modal events from anywhere on the page (e.g. CommentNode).
+  // This must be always mounted, even on the Proposed tab where FloatingSignButton is hidden.
+  useEffect(() => {
+    const onOpen = () => setSignModalOpen(true);
+    window.addEventListener("open-sign-modal", onOpen);
+    return () => window.removeEventListener("open-sign-modal", onOpen);
   }, []);
 
   // Handle ?c=<commentId> deep-link: activate the comment and scroll to its highlight.
@@ -97,6 +107,39 @@ export function TabbedDocument({
     setActiveCommentId(id);
   }, []);
 
+  const handlePostedTopLevel = useCallback((newCommentId: string) => {
+    setActiveCommentId(newCommentId);
+  }, []);
+
+  // Compute max depth of the active comment's subtree for Tweak 4 column widening.
+  const maxDepth = (() => {
+    const activeComment = activeCommentId
+      ? (() => {
+          function find(nodes: ThreadedComment[], id: string): ThreadedComment | null {
+            for (const n of nodes) {
+              if (n.id === id) return n;
+              const f = find(n.replies, id);
+              if (f) return f;
+            }
+            return null;
+          }
+          return find(threadedComments, activeCommentId);
+        })()
+      : null;
+    if (!activeComment) return 0;
+    function depth(node: ThreadedComment): number {
+      if (node.replies.length === 0) return 0;
+      return 1 + Math.max(...node.replies.map(depth));
+    }
+    return depth(activeComment);
+  })();
+
+  // Static grid-template classes — Tailwind JIT requires static strings, not template literals.
+  const gridClass =
+    maxDepth >= 3
+      ? "grid gap-8 md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_720px] xl:grid-cols-[1fr_900px]"
+      : "grid gap-8 md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_540px]";
+
   return (
     <>
       {/* Current tab — full-width, single-column */}
@@ -123,7 +166,7 @@ export function TabbedDocument({
           onTabChange={handleTabChange}
         />
 
-        <div className="grid gap-8 md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_540px]">
+        <div className={gridClass}>
           {/* Left: article column */}
           <div ref={articleRef} className="relative sm:px-12">
             {/* Fading vertical side lines constrained to the article column */}
@@ -151,14 +194,19 @@ export function TabbedDocument({
               signersForAdmin={signersForAdmin}
               signersForMention={signersForMention}
               onActiveChange={handleActiveChange}
+              onPostedTopLevel={handlePostedTopLevel}
             />
           </aside>
         </div>
       </div>
 
       {/* Floating Sign button is for the Current tab only — the Proposed tab
-          is a working draft, and the sign action belongs to the published doc. */}
+          is a working draft, and the sign action belongs to the published doc.
+          The SignModal is always mounted (even on the Proposed tab) because
+          CommentNode and NewCommentForm dispatch open-sign-modal from any tab,
+          and we handle that event here so the modal always responds. */}
       {activeTab === "current" && <FloatingSignButton />}
+      <SignModal open={signModalOpen} onClose={() => setSignModalOpen(false)} />
     </>
   );
 }

@@ -19,6 +19,11 @@ interface Props {
   onCancel: () => void;
   /** Show the cyan-bg selected-text quote above the textarea. Defaults to true. */
   showQuote?: boolean;
+  /**
+   * Called after a successful top-level comment submit (no parentCommentId).
+   * Receives the new comment's id so the parent can activate it.
+   */
+  onSubmittedNewTopLevel?: (newCommentId: string) => void;
 }
 
 /**
@@ -37,6 +42,7 @@ export function NewCommentForm({
   signersForMention,
   onCancel,
   showQuote = true,
+  onSubmittedNewTopLevel,
 }: Props) {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +87,14 @@ export function NewCommentForm({
       }
       clearDraft();
       setBody("");
-      onCancel();
-      router.refresh();
+      // Notify parent that a new top-level comment was created (no parentCommentId)
+      if (res.id && onSubmittedNewTopLevel) {
+        router.refresh();
+        onSubmittedNewTopLevel(res.id);
+      } else {
+        onCancel();
+        router.refresh();
+      }
     });
   }
 

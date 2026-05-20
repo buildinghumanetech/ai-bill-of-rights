@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { commentReports, comments, signers, versions } from "@/lib/db/schema";
-import { reportComment } from "@/server/actions/comment-reports";
+import { reportComment, toggleReportComment } from "@/server/actions/comment-reports";
 
 const md = `---
 version: 1.0.0
@@ -101,5 +101,34 @@ describe("reportComment", () => {
     expect(res.state).toBe("reported");
     const rows = await db.select().from(commentReports);
     expect(rows).toHaveLength(2);
+  });
+});
+
+describe("toggleReportComment", () => {
+  it("inserts a report on first call and returns 'flagged'", async () => {
+    const { db, commentId, reporterId } = await seed();
+    const res = await toggleReportComment(db, { signerId: reporterId, commentId });
+    expect(res.state).toBe("flagged");
+    const rows = await db.select().from(commentReports);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("deletes the report on second call and returns 'unflagged'", async () => {
+    const { db, commentId, reporterId } = await seed();
+    await toggleReportComment(db, { signerId: reporterId, commentId });
+    const res = await toggleReportComment(db, { signerId: reporterId, commentId });
+    expect(res.state).toBe("unflagged");
+    const rows = await db.select().from(commentReports);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("re-inserts the report on a third call (toggle back to flagged)", async () => {
+    const { db, commentId, reporterId } = await seed();
+    await toggleReportComment(db, { signerId: reporterId, commentId });
+    await toggleReportComment(db, { signerId: reporterId, commentId });
+    const res = await toggleReportComment(db, { signerId: reporterId, commentId });
+    expect(res.state).toBe("flagged");
+    const rows = await db.select().from(commentReports);
+    expect(rows).toHaveLength(1);
   });
 });

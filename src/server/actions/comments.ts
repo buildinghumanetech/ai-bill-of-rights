@@ -67,7 +67,7 @@ export async function createComment(
   return { id: row.id };
 }
 
-export async function submitCommentAction(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+export async function submitCommentAction(formData: FormData): Promise<{ ok: boolean; error?: string; id?: string }> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Not signed in." };
   const db = getDb();
@@ -191,7 +191,7 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   })();
 
   revalidatePath("/");
-  return { ok: true };
+  return { ok: true, id: insertedCommentId };
 }
 
 export async function hideCommentAction(

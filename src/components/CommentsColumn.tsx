@@ -21,6 +21,8 @@ interface Props {
   signersForAdmin: SignerForAdminPostAs[];
   signersForMention: SignerForMention[];
   onActiveChange: (id: string | null) => void;
+  /** Called when a new top-level comment is posted; sets the new comment as active. */
+  onPostedTopLevel?: (newCommentId: string) => void;
 }
 
 /**
@@ -44,6 +46,7 @@ export function CommentsColumn({
   signersForAdmin,
   signersForMention,
   onActiveChange,
+  onPostedTopLevel,
 }: Props) {
   const [pendingSelection, setPendingSelection] = useState<SelectionEvent | null>(null);
 
@@ -93,6 +96,7 @@ export function CommentsColumn({
           signersForMention={signersForMention}
           baseVersionId={baseVersionId ?? ""}
           onClose={() => onActiveChange(null)}
+          onPostedTopLevel={onPostedTopLevel}
         />
       ) : (
         <p className="text-sm text-zinc-500 leading-relaxed">

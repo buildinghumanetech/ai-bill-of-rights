@@ -4,8 +4,9 @@ import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { voteCommentAction } from "@/server/actions/comment-votes";
-import { reportCommentAction } from "@/server/actions/comment-reports";
+import { toggleReportCommentAction } from "@/server/actions/comment-reports";
 import { deleteCommentAction, editCommentAction, submitCommentAction } from "@/server/actions/comments";
+import Link from "next/link";
 import { MentionTextarea } from "@/components/MentionTextarea";
 import { renderBodyWithMentions } from "@/lib/comments/render-mentions";
 
@@ -60,7 +61,9 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyActAsSignerId, setReplyActAsSignerId] = useState<string>("");
-  const [flagState, setFlagState] = useState<"idle" | "flagged" | "already" | "error">("idle");
+  // flagged: local state, initialized from server-fetched myReport
+  const [flagged, setFlagged] = useState<boolean>(comment.myReport);
+  const [flagError, setFlagError] = useState(false);
   const [voteState, setVoteState] = useState<{ myVote: 1 | -1 | null; score: number }>({
     myVote: comment.myVote,
     score: comment.score,
@@ -113,15 +116,17 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
       openSignModal();
       return;
     }
+    // Optimistic toggle
+    const prev = flagged;
+    setFlagged((v) => !v);
+    setFlagError(false);
     startVoteTransition(async () => {
-      const res = await reportCommentAction(comment.id);
+      const res = await toggleReportCommentAction(comment.id);
       if (!res.ok) {
-        setFlagState("error");
-      } else if (res.state === "already_reported") {
-        setFlagState("already");
-      } else {
-        setFlagState("flagged");
+        setFlagged(prev); // roll back
+        setFlagError(true);
       }
+      // On success, state is already set optimistically; no extra update needed.
     });
   }
 
@@ -233,16 +238,22 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
               </span>
             </span>
 
-            <span className="text-xs font-semibold text-zinc-700">{comment.displayName}</span>
+            {/* Display name — links to signer profile */}
+            <Link
+              href={`/signatories/${comment.signerId}`}
+              className="text-xs font-semibold text-zinc-700 hover:underline"
+            >
+              {comment.displayName}
+            </Link>
             <span className="text-xs text-zinc-400">{relativeTime(new Date(comment.createdAt))}</span>
-            {/* Copy link + Edit / Delete */}
+            {/* Permalink | Edit | Delete | Flag — header action icons */}
             <span className="ml-auto flex items-center gap-2 shrink-0">
-              {/* Copy link — available to everyone */}
+              {/* Permalink — available to everyone */}
               <button
                 type="button"
                 onClick={handleCopyLink}
-                aria-label={copyState === "copied" ? "Link copied!" : "Copy link to comment"}
-                title={copyState === "copied" ? "Link copied!" : "Copy link to comment"}
+                aria-label={copyState === "copied" ? "Permalink copied!" : "Copy permalink"}
+                title={copyState === "copied" ? "Permalink copied!" : "Copy permalink"}
                 className={`transition-colors ${copyState === "copied" ? "text-green-600" : "text-zinc-400 hover:text-zinc-700"}`}
               >
                 {copyState === "copied" ? (
@@ -254,61 +265,100 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                   </svg>
                 )}
               </button>
-            {/* Edit / Delete for author or admin */}
-            {canEditDelete && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditBody(comment.body);
-                    setEditError(null);
-                    setShowEdit((v) => !v);
-                  }}
-                  aria-label="Edit comment"
-                  title="Edit comment"
-                  className="text-zinc-400 hover:text-zinc-700 transition-colors"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="12"
-                    height="12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+              {/* Edit / Delete for author or admin */}
+              {canEditDelete && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditBody(comment.body);
+                      setEditError(null);
+                      setShowEdit((v) => !v);
+                    }}
+                    aria-label="Edit comment"
+                    title="Edit comment"
+                    className="text-zinc-400 hover:text-zinc-700 transition-colors"
                   >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  aria-label="Delete comment"
-                  title="Delete comment"
-                  className="text-zinc-400 hover:text-red-600 transition-colors"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="12"
-                    height="12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="12"
+                      height="12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    aria-label="Delete comment"
+                    title="Delete comment"
+                    className="text-zinc-400 hover:text-red-600 transition-colors"
                   >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </button>
-              </>
-            )}
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="12"
+                      height="12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6M14 11v6" />
+                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </>
+              )}
+              {/* Flag — available to all viewers; moved from action row to header row */}
+              {(() => {
+                const title = flagError
+                  ? "Couldn't flag"
+                  : flagged
+                  ? "You flagged this comment as inappropriate (click to unflag)"
+                  : "Flag as inappropriate";
+                return (
+                  <button
+                    type="button"
+                    onClick={handleFlag}
+                    aria-label={title}
+                    aria-pressed={flagged}
+                    title={title}
+                    className={`inline-flex transition-colors ${
+                      flagged
+                        ? "text-red-500 hover:text-red-400"
+                        : flagError
+                        ? "text-red-400 cursor-not-allowed"
+                        : "text-zinc-400 hover:text-red-500"
+                    }`}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="12"
+                      height="12"
+                      fill={flagged ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                      <line x1="4" y1="22" x2="4" y2="15" />
+                    </svg>
+                  </button>
+                );
+              })()}
             </span>
           </div>
 
@@ -349,7 +399,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             </p>
           )}
 
-          {/* Action row */}
+          {/* Action row — reply only; flag moved to header row */}
           <div className="mt-1.5 flex items-center gap-3 flex-wrap">
             <button
               type="button"
@@ -364,49 +414,6 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             >
               {showReply ? "cancel" : "reply"}
             </button>
-
-            {(() => {
-              const flagged =
-                flagState === "flagged" || flagState === "already";
-              const failed = flagState === "error";
-              const title = failed
-                ? "Couldn't flag"
-                : flagged
-                ? "You flagged this comment as inappropriate"
-                : "Flag as inappropriate";
-              return (
-                <button
-                  type="button"
-                  onClick={handleFlag}
-                  disabled={flagged || failed}
-                  aria-label={title}
-                  aria-pressed={flagged}
-                  title={title}
-                  className={`ml-auto inline-flex transition-colors ${
-                    flagged
-                      ? "text-red-500 cursor-default"
-                      : failed
-                      ? "text-red-400 cursor-not-allowed"
-                      : "text-zinc-400 hover:text-red-500"
-                  }`}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="12"
-                    height="12"
-                    fill={flagged ? "currentColor" : "none"}
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                    <line x1="4" y1="22" x2="4" y2="15" />
-                  </svg>
-                </button>
-              );
-            })()}
           </div>
 
           {/* Inline reply composer */}

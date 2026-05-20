@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { commentVotes, comments, signers, versions } from "@/lib/db/schema";
+import { commentVotes, commentReports, comments, signers, versions } from "@/lib/db/schema";
 import {
   listThreadedCommentsForVersion,
   findCommentInTree,
@@ -162,6 +162,42 @@ describe("listThreadedCommentsForVersion", () => {
     const tree = await listThreadedCommentsForVersion(db, versionId, null);
     expect(tree).toHaveLength(1);
     expect(tree[0].body).toBe("visible");
+  });
+
+  it("sets myReport true when viewer has flagged the comment", async () => {
+    const { db, versionId, aliceId, bobId } = await seed();
+    const [c] = await db
+      .insert(comments)
+      .values({ baseVersionId: versionId, anchorId: "preamble-s-1", signerId: aliceId, body: "root" })
+      .returning({ id: comments.id });
+    // Bob reports Alice's comment
+    await db.insert(commentReports).values({ commentId: c.id, reporterSignerId: bobId });
+    const tree = await listThreadedCommentsForVersion(db, versionId, bobId);
+    expect(tree[0].myReport).toBe(true);
+  });
+
+  it("sets myReport false when viewer has not flagged the comment", async () => {
+    const { db, versionId, aliceId, bobId } = await seed();
+    await db.insert(comments).values({
+      baseVersionId: versionId,
+      anchorId: "preamble-s-1",
+      signerId: aliceId,
+      body: "root",
+    });
+    const tree = await listThreadedCommentsForVersion(db, versionId, bobId);
+    expect(tree[0].myReport).toBe(false);
+  });
+
+  it("sets myReport false for a null viewer", async () => {
+    const { db, versionId, aliceId, bobId } = await seed();
+    const [c] = await db
+      .insert(comments)
+      .values({ baseVersionId: versionId, anchorId: "preamble-s-1", signerId: aliceId, body: "root" })
+      .returning({ id: comments.id });
+    await db.insert(commentReports).values({ commentId: c.id, reporterSignerId: bobId });
+    // Null viewer: myReport must be false even though bob flagged it
+    const tree = await listThreadedCommentsForVersion(db, versionId, null);
+    expect(tree[0].myReport).toBe(false);
   });
 });
 

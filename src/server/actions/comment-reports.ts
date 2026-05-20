@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { commentReports, signers } from "@/lib/db/schema";
@@ -30,6 +30,45 @@ export async function reportComment(
   }
 }
 
+/**
+ * Toggle report for a comment: insert if not present, delete if already present.
+ * Returns the resulting flag state.
+ */
+export async function toggleReportComment(
+  db: any,
+  input: { signerId: string; commentId: string },
+): Promise<{ state: "flagged" | "unflagged" }> {
+  const existing = await db
+    .select({ id: commentReports.id })
+    .from(commentReports)
+    .where(
+      and(
+        eq(commentReports.commentId, input.commentId),
+        eq(commentReports.reporterSignerId, input.signerId),
+      ),
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    await db
+      .delete(commentReports)
+      .where(
+        and(
+          eq(commentReports.commentId, input.commentId),
+          eq(commentReports.reporterSignerId, input.signerId),
+        ),
+      );
+    return { state: "unflagged" };
+  }
+
+  await db.insert(commentReports).values({
+    commentId: input.commentId,
+    reporterSignerId: input.signerId,
+  });
+  return { state: "flagged" };
+}
+
+/** Legacy — kept for backward compat with admin code. */
 export async function reportCommentAction(commentId: string): Promise<{
   ok: boolean;
   error?: string;
@@ -47,6 +86,28 @@ export async function reportCommentAction(commentId: string): Promise<{
   if (me[0].softBannedAt) return { ok: false, error: "This account is suspended." };
 
   const res = await reportComment(db, { signerId: me[0].id, commentId });
+  revalidatePath("/proposed");
+  revalidatePath("/admin/comment-reports");
+  return { ok: true, state: res.state };
+}
+
+export async function toggleReportCommentAction(commentId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  state?: "flagged" | "unflagged";
+}> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Not signed in." };
+  const db = getDb();
+  const me = await db
+    .select({ id: signers.id, softBannedAt: signers.softBannedAt })
+    .from(signers)
+    .where(eq(signers.clerkUserId, userId))
+    .limit(1);
+  if (me.length === 0) return { ok: false, error: "Sign first to flag." };
+  if (me[0].softBannedAt) return { ok: false, error: "This account is suspended." };
+
+  const res = await toggleReportComment(db, { signerId: me[0].id, commentId });
   revalidatePath("/proposed");
   revalidatePath("/admin/comment-reports");
   return { ok: true, state: res.state };

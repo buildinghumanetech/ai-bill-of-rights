@@ -13,6 +13,8 @@ interface Props {
   baseVersionId: string;
   /** Kept for API back-compat; no longer rendered (no Close button). */
   onClose?: () => void;
+  /** Called when a new top-level sibling comment is posted. */
+  onPostedTopLevel?: (newCommentId: string) => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * composer sits below the thread so the viewer can add another top-level
  * comment on the same selected text without replying to anyone specific.
  */
-export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, signersForMention, baseVersionId }: Props) {
+export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, signersForMention, baseVersionId, onPostedTopLevel }: Props) {
   return (
     <div className="space-y-3">
       {comment.selectedText && (
@@ -53,6 +55,7 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
             signersForMention={signersForMention}
             showQuote={false}
             onCancel={() => { /* no-op — composer is persistent at the bottom */ }}
+            onSubmittedNewTopLevel={onPostedTopLevel}
           />
         </div>
       )}

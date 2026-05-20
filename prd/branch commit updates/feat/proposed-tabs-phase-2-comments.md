@@ -1,5 +1,30 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 22:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Pass 4: Three critical bug fixes and five UI tweaks. Bug 1: sign modal now always mounted in TabbedDocument (listens to `open-sign-modal` from proposed tab). Bug 2: `submitCommentAction` returns new comment id; `NewCommentForm` calls `onSubmittedNewTopLevel` after posting, which propagates up to `TabbedDocument.setActiveCommentId`. Tweaks: flag icon moved from action row to header row with toggle (unflag) behavior and tooltip; commenter display name is now a link to `/signatories/${signerId}`; comments column widens (`lg:grid-cols-[1fr_720px] xl:grid-cols-[1fr_900px]`) when active thread is 3+ levels deep; permalink button label renamed from "copy link" to "permalink". 6 new tests added (177 total, all passing).
+
+### Detail of changes made:
+- **`src/server/actions/comments.ts`** — `submitCommentAction` return type extended with `id?: string`; the inserted comment id is now included in the success response.
+- **`src/server/actions/comment-reports.ts`** — Added `toggleReportComment(db, input)` data-layer function (select → delete if exists / insert if not, returns `{state: "flagged"|"unflagged"}`). Added `toggleReportCommentAction(commentId)` server action. Legacy `reportCommentAction` kept for backward compat with admin code. Import updated to include `and` from drizzle-orm.
+- **`src/lib/db/queries.ts`** — `ThreadedComment` interface gains `myReport: boolean`. `listThreadedCommentsForVersion` now fetches viewer's report rows in step 4 and populates `myReportSet`; added `commentReports` to schema import. Old step 4 renumbered to step 5.
+- **`src/components/NewCommentForm.tsx`** — Added `onSubmittedNewTopLevel?: (newCommentId: string) => void` prop. After successful submit, if `res.id` is present and the callback is set, calls `router.refresh()` then `onSubmittedNewTopLevel(res.id)` instead of `onCancel()`.
+- **`src/components/CommentView.tsx`** — Added `onPostedTopLevel?: (newCommentId: string) => void` prop; threads it down to the persistent bottom `<NewCommentForm>` as `onSubmittedNewTopLevel`.
+- **`src/components/CommentsColumn.tsx`** — Added `onPostedTopLevel?: (newCommentId: string) => void` prop; threads it down to `<CommentView>`.
+- **`src/components/TabbedDocument.tsx`** — (1) Bug 1: imports `SignModal` and `useState` for `signModalOpen`; mounts `<SignModal>` always (outside the conditional FloatingSignButton); adds `useEffect` to listen to `open-sign-modal` event. (2) Bug 2: adds `handlePostedTopLevel` callback that calls `setActiveCommentId(newCommentId)`; passes it to `<CommentsColumn>` as `onPostedTopLevel`. (3) Tweak 4: computes `maxDepth` from the active comment's subtree; chooses `gridClass` between two static Tailwind grid strings. `gridClass` is applied to the two-column grid div.
+- **`src/components/CommentNode.tsx`** — (1) Tweak 1: flag icon moved from action row to header row, positioned after delete icon. (2) Tweak 2: flag state refactored to `flagged: boolean` (initialized from `comment.myReport`) + `flagError: boolean`; `handleFlag` uses `toggleReportCommentAction` with optimistic toggle and rollback on error; tooltip changes between "Flag as inappropriate" and "You flagged this comment as inappropriate (click to unflag)". (3) Tweak 3: display name wrapped in `<Link href="/signatories/${comment.signerId}">` with `hover:underline`. (4) Tweak 5: copy-link button title/aria-label uses "permalink"/"Permalink copied!" instead of "secret link". "copied!" inline feedback was already present. (5) Action row now only shows "reply" (flag moved to header). Added `Link` import from `next/link`.
+- **`tests/server/comment-reports.test.ts`** — Added 3 tests for `toggleReportComment`: first-call inserts+flagged, second-call deletes+unflagged, third-call re-inserts+flagged.
+- **`tests/lib/db.queries.threaded-comments.test.ts`** — Added 3 tests for `myReport`: true when viewer flagged, false when not flagged, false for null viewer. Added `commentReports` to schema imports.
+
+### Potential concerns to address:
+- On the Current tab, both `TabbedDocument` (always) and `FloatingSignButton` (when Current) mount a `SignModal`. They are independent state machines: TabbedDocument's responds to the `open-sign-modal` event; FloatingSignButton's responds to its own button click. Both can coexist safely — only one will open at a time.
+- `router.refresh()` is called before `onSubmittedNewTopLevel` in `NewCommentForm`. There is a race window where the new comment may not yet be in `threadedComments` when `setActiveCommentId` fires (RSC re-render is async). In practice this is acceptable; the comment will appear on the next router cycle.
+- Column widening (Tweak 4) uses static Tailwind classes in a ternary, satisfying JIT scanning. The max depth cap is 6 levels visually (INDENT_BY_DEPTH in CommentNode clamps at depth 4/`pl-20`), but the widening threshold is depth ≥ 3 at the tree level.
+
+---
+
 ## Progress Update as of 2026-05-19 23:15 Pacific
 *(Most recent updates at top)*
 

@@ -1,5 +1,5 @@
 import { eq, count, desc, gt, and, isNull, isNotNull, asc, sum, sql } from "drizzle-orm";
-import { versions, signatures, signers, comments, attestations, commentVotes } from "./schema";
+import { versions, signatures, signers, comments, attestations, commentVotes, commentReports } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -258,6 +258,8 @@ export interface ThreadedComment {
   createdAt: Date;
   score: number;
   myVote: 1 | -1 | null;
+  /** Whether the current viewer has flagged this comment. */
+  myReport: boolean;
   replies: ThreadedComment[];
 }
 
@@ -353,7 +355,17 @@ export async function listThreadedCommentsForVersion(
     for (const v of myVotes) myVoteMap.set(v.commentId, v.direction as 1 | -1);
   }
 
-  // 4. Build tree
+  // 4. Fetch viewer's own reports
+  const myReportSet = new Set<string>();
+  if (viewerSignerId) {
+    const myReports = await db
+      .select({ commentId: commentReports.commentId })
+      .from(commentReports)
+      .where(eq(commentReports.reporterSignerId, viewerSignerId));
+    for (const r of myReports) myReportSet.add(r.commentId);
+  }
+
+  // 5. Build tree
   const flat: Omit<ThreadedComment, "replies">[] = commentRows.map((r: any) => ({
     id: r.id,
     body: r.body,
@@ -365,6 +377,7 @@ export async function listThreadedCommentsForVersion(
     createdAt: r.createdAt,
     score: scoreMap.get(r.id) ?? 0,
     myVote: myVoteMap.get(r.id) ?? null,
+    myReport: myReportSet.has(r.id),
   }));
 
   return buildTree(flat);
