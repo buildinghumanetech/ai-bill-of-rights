@@ -3,7 +3,10 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClerk, useSignIn, useSignUp, useUser } from "@clerk/nextjs";
-import { recordSignatureFromModal } from "@/server/actions/sign-from-modal";
+import {
+  recordSignatureFromModal,
+  createSignerFromModal,
+} from "@/server/actions/sign-from-modal";
 import { sendInvitationsAction } from "@/server/actions/invite";
 import {
   getMySignatureStatus,
@@ -15,6 +18,8 @@ import { SelfieCapture } from "@/components/SelfieCapture";
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** "sign" = full sign-the-bill flow (default). "comment-only" = create an account to comment without signing. */
+  mode?: "sign" | "comment-only";
 }
 
 type Step = "form" | "otp" | "done";
@@ -122,7 +127,7 @@ function clerkErrorMessage(err: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-export default function SignModal({ open, onClose }: Props) {
+export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Props) {
   const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } =
     useSignUp();
   const { signIn, isLoaded: signInLoaded, setActive: setSignInActive } =
@@ -132,6 +137,8 @@ export default function SignModal({ open, onClose }: Props) {
   const router = useRouter();
 
   const [step, setStep] = useState<Step>("form");
+  // Active mode — can be overridden by the open-sign-modal event detail.
+  const [mode, setMode] = useState<"sign" | "comment-only">(modeProp);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [method, setMethod] = useState<Method>("phone");
@@ -183,6 +190,7 @@ export default function SignModal({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) {
       setStep("form");
+      setMode(modeProp);
       setCode("");
       setError(null);
       setLoading(false);
@@ -197,7 +205,7 @@ export default function SignModal({ open, onClose }: Props) {
       setRemoving(false);
       setConfirmingRemove(false);
     }
-  }, [open]);
+  }, [open, modeProp]);
 
   // When the modal opens with a signed-in user, fetch whether they've
   // already signed v0.0.1 so we can show the "already signed" view instead
@@ -260,6 +268,25 @@ export default function SignModal({ open, onClose }: Props) {
       // session from a prior attempt), skip OTP entirely and record the
       // signature against their existing Clerk identity.
       if (isSignedIn) {
+        if (mode === "comment-only") {
+          const res = await createSignerFromModal({
+            firstName,
+            lastName,
+            method,
+            shareLocation,
+            nameDisplayFormat,
+            notificationPreference,
+          });
+          if (!res.success) {
+            setError(res.error ?? "We couldn't create your account.");
+            return;
+          }
+          if (res.signerId) setSignerId(res.signerId);
+          if (res.displayName) setSignerName(res.displayName);
+          setStep("done");
+          router.refresh();
+          return;
+        }
         const res = await recordSignatureFromModal({
           firstName,
           lastName,
@@ -407,19 +434,31 @@ export default function SignModal({ open, onClose }: Props) {
         }
       }
 
-      // Hand off to the server action to record the signature.
-      const res = await recordSignatureFromModal({
-        firstName,
-        lastName,
-        method,
-        shareLocation,
-        versionString: VERSION,
-        nameDisplayFormat,
-        notificationPreference,
-      });
+      // Hand off to the server action to record the signature / create the account.
+      let res: { success: boolean; error?: string; signerId?: string; displayName?: string };
+      if (mode === "comment-only") {
+        res = await createSignerFromModal({
+          firstName,
+          lastName,
+          method,
+          shareLocation,
+          nameDisplayFormat,
+          notificationPreference,
+        });
+      } else {
+        res = await recordSignatureFromModal({
+          firstName,
+          lastName,
+          method,
+          shareLocation,
+          versionString: VERSION,
+          nameDisplayFormat,
+          notificationPreference,
+        });
+      }
 
       if (!res.success) {
-        setError(res.error ?? "We couldn't record your signature.");
+        setError(res.error ?? (mode === "comment-only" ? "We couldn't create your account." : "We couldn't record your signature."));
         return;
       }
       if (res.signerId) setSignerId(res.signerId);
@@ -688,10 +727,14 @@ export default function SignModal({ open, onClose }: Props) {
               id="sign-modal-title"
               className="text-2xl font-semibold tracking-tight text-zinc-950"
             >
-              Sign the AI Bill of Rights
+              {mode === "comment-only"
+                ? "Create an account to comment"
+                : "Sign the AI Bill of Rights"}
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
-              Add your name to v{VERSION} of the document.
+              {mode === "comment-only"
+                ? "Create a free account so your comments on the working draft are attributed to you. You can sign the bill itself any time from your account page."
+                : `Add your name to v${VERSION} of the document.`}
             </p>
 
             {isSignedIn ? (
@@ -955,12 +998,16 @@ export default function SignModal({ open, onClose }: Props) {
               disabled={!isFormValid || loading}
               className="mt-6 w-full rounded-full bg-emerald-600 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Sending code…" : "Sign"}
+              {loading
+                ? "Sending code…"
+                : mode === "comment-only"
+                  ? "Create account & post comment"
+                  : "Sign"}
             </button>
 
             <p className="mt-3 text-center text-xs text-zinc-500">
               We&apos;ll {method === "email" ? "email" : "text"} you a 6-digit
-              code to confirm your signature.
+              code to {mode === "comment-only" ? "verify your account." : "confirm your signature."}
             </p>
           </form>
         )}
@@ -971,7 +1018,9 @@ export default function SignModal({ open, onClose }: Props) {
               id="sign-modal-title"
               className="text-2xl font-semibold tracking-tight text-zinc-950"
             >
-              Enter the code you received to confirm your signature
+              {mode === "comment-only"
+                ? "Enter the code to verify your account"
+                : "Enter the code you received to confirm your signature"}
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
               We sent a 6-digit code to{" "}
@@ -1007,7 +1056,11 @@ export default function SignModal({ open, onClose }: Props) {
               disabled={code.length !== 6 || loading}
               className="mt-6 w-full rounded-full bg-emerald-600 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Confirming…" : "Confirm signature"}
+              {loading
+                ? "Confirming…"
+                : mode === "comment-only"
+                  ? "Confirm & create account"
+                  : "Confirm signature"}
             </button>
 
             <button
@@ -1046,12 +1099,24 @@ export default function SignModal({ open, onClose }: Props) {
                 id="sign-modal-title"
                 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950"
               >
-                Thank you for signing
-                {signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}
+                {mode === "comment-only"
+                  ? `Account created${signerName ? `, ${signerName.split(/\s+/)[0]}` : ""}. You can now comment.`
+                  : `Thank you for signing${signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}`}
               </h2>
             </div>
 
-            {signerId ? (
+            {signerId && mode === "comment-only" ? (
+              <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+                <p>
+                  Your account is set up. Close this window to continue posting your comment.
+                </p>
+                <p className="mt-2 text-xs text-blue-700">
+                  You can sign the AI Bill of Rights itself any time from your account page.
+                </p>
+              </div>
+            ) : null}
+
+            {signerId && mode === "sign" ? (
               <>
                 {/* Add a selfie photo to your signature */}
                 <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">

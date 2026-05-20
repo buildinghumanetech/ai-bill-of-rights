@@ -1,3 +1,21 @@
+export function commentAccountCreated(opts: {
+  displayName: string;
+  siteUrl: string;
+  accountUrl: string;
+}): { subject: string; text: string } {
+  return {
+    subject: `Welcome to the AI Bill of Rights discussion`,
+    text: `Hi ${opts.displayName},
+
+You created an account to comment on the AI Bill of Rights working draft.
+
+You can also sign the bill itself any time from your account page: ${opts.accountUrl}
+
+— The AI Bill of Rights project
+`,
+  };
+}
+
 export function signConfirmation(opts: {
   displayName: string;
   version: string;
@@ -126,6 +144,44 @@ ${opts.appealUrl}
 — The AI Bill of Rights project
 `,
   };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c] ?? c);
+}
+
+export function mentionEmail(opts: {
+  mentionedDisplayName: string;
+  mentioningDisplayName: string;
+  body: string;
+  commentUrl: string;
+  selectedText: string | null;
+}): { subject: string; text: string; html: string } {
+  const subject = `${opts.mentioningDisplayName} mentioned you on the AI Bill of Rights`;
+  const quoteLine = opts.selectedText
+    ? `\n  Re: "${opts.selectedText}"\n`
+    : "";
+  const text = `Hi ${opts.mentionedDisplayName},
+
+${opts.mentioningDisplayName} mentioned you in a comment on the AI Bill of Rights:
+${quoteLine}
+  ${opts.body}
+
+View and reply: ${opts.commentUrl}
+
+— The AI Bill of Rights project
+`;
+  const safeBody = escapeHtml(opts.body);
+  const safeSelectedText = opts.selectedText ? escapeHtml(opts.selectedText) : null;
+  const safeMentionedName = escapeHtml(opts.mentionedDisplayName);
+  const safeMentioningName = escapeHtml(opts.mentioningDisplayName);
+  const html = `<p>Hi ${safeMentionedName},</p>
+<p><strong>${safeMentioningName}</strong> mentioned you in a comment on the AI Bill of Rights:</p>
+${safeSelectedText ? `<blockquote style="border-left: 3px solid #06b6d4; padding-left: 1em; color: #555;">${safeSelectedText}</blockquote>` : ""}
+<p>${safeBody.replace(/\n/g, "<br>")}</p>
+<p><a href="${opts.commentUrl}">View and reply →</a></p>
+<p style="color: #888; font-size: 0.875em;">— The AI Bill of Rights project</p>`;
+  return { subject, text, html };
 }
 
 export function attestationVerifyEmail(opts: {

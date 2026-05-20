@@ -1,9 +1,7 @@
 "use client";
 
 import { FormEvent, useState, useTransition } from "react";
-import { adminAddSignerAction } from "@/server/actions/admin";
-
-const VERSION = "0.0.1";
+import { adminAddNonSignerAction } from "@/server/actions/admin";
 
 type NameDisplayFormat = "initials" | "first-initial" | "full";
 
@@ -25,7 +23,7 @@ function formatNamePreview(
   return `${maskedFirst} ${maskedLast}`.trim();
 }
 
-export default function AdminAddSignerForm() {
+export default function AdminAddNonSignerForm() {
   const [open, setOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -70,7 +68,7 @@ export default function AdminAddSignerForm() {
       nameDisplayFormat,
     );
     startTransition(async () => {
-      const res = await adminAddSignerAction({
+      const res = await adminAddNonSignerAction({
         displayName,
         affiliation,
         locationText,
@@ -78,10 +76,9 @@ export default function AdminAddSignerForm() {
         contactValue,
         isAdmin,
         notificationPreference,
-        versionString: VERSION,
       });
       if (!res.success) {
-        setError(res.error ?? "Couldn't add signer.");
+        setError(res.error ?? "Couldn't add user.");
         return;
       }
       reset();
@@ -96,9 +93,9 @@ export default function AdminAddSignerForm() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-700"
+        className="rounded-md bg-zinc-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-500"
       >
-        + Add signer manually
+        + Add a user (non-signer)
       </button>
     );
   }
@@ -110,7 +107,7 @@ export default function AdminAddSignerForm() {
     >
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold text-zinc-950">
-          Add signer manually
+          Add a user (non-signer)
         </h2>
         <button
           type="button"
@@ -124,7 +121,8 @@ export default function AdminAddSignerForm() {
         </button>
       </div>
       <p className="mt-1 text-xs text-zinc-500">
-        Bypasses Clerk OTP. The contact value below is stored privately on
+        Creates an account so the person can comment, without recording a
+        signature on the bill. The contact value below is stored privately on
         the consent record (for outreach), not shown publicly.
       </p>
 
@@ -161,26 +159,24 @@ export default function AdminAddSignerForm() {
             Show their name as
           </legend>
           <div className="mt-2 flex flex-col gap-1.5">
-            {(["initials", "first-initial", "full"] as const).map(
-              (value) => (
-                <label
-                  key={value}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-sm text-zinc-800 hover:bg-zinc-50"
-                >
-                  <input
-                    type="radio"
-                    name="admin-name-format"
-                    value={value}
-                    checked={nameDisplayFormat === value}
-                    onChange={() => setNameDisplayFormat(value)}
-                    className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
-                  />
-                  <span className="font-mono text-sm text-zinc-900">
-                    {formatNamePreview(firstName, lastName, value)}
-                  </span>
-                </label>
-              ),
-            )}
+            {(["initials", "first-initial", "full"] as const).map((value) => (
+              <label
+                key={value}
+                className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-sm text-zinc-800 hover:bg-zinc-50"
+              >
+                <input
+                  type="radio"
+                  name="non-signer-name-format"
+                  value={value}
+                  checked={nameDisplayFormat === value}
+                  onChange={() => setNameDisplayFormat(value)}
+                  className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                />
+                <span className="font-mono text-sm text-zinc-900">
+                  {formatNamePreview(firstName, lastName, value)}
+                </span>
+              </label>
+            ))}
           </div>
         </fieldset>
       ) : null}
@@ -202,12 +198,12 @@ export default function AdminAddSignerForm() {
             >
               <input
                 type="radio"
-                name="verification-method"
+                name="non-signer-verification-method"
                 value={opt.v}
                 checked={verificationMethod === opt.v}
                 onChange={() => {
                   setVerificationMethod(opt.v);
-                  setContactValue(""); // reset when method changes
+                  setContactValue("");
                 }}
                 className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
               />
@@ -285,7 +281,7 @@ export default function AdminAddSignerForm() {
             >
               <input
                 type="radio"
-                name="notification-preference"
+                name="non-signer-notification-preference"
                 value={opt.v}
                 checked={notificationPreference === opt.v}
                 onChange={() => setNotificationPreference(opt.v)}
@@ -304,7 +300,7 @@ export default function AdminAddSignerForm() {
           onChange={(e) => setIsAdmin(e.target.checked)}
           className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500/30"
         />
-        <span>Grant admin role to this signer</span>
+        <span>Grant admin role to this user</span>
       </label>
 
       {error ? (
@@ -317,9 +313,9 @@ export default function AdminAddSignerForm() {
         <button
           type="submit"
           disabled={pending}
-          className="flex-1 rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex-1 rounded-md bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Adding…" : "Add signer + signature"}
+          {pending ? "Adding…" : "Add user"}
         </button>
         <button
           type="button"

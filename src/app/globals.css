@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
   --background: #ffffff;
@@ -37,4 +38,12 @@ body {
     transition: opacity 240ms ease !important;
     transform: none !important;
   }
+}
+
+/* Cyan highlight color for text the user selects inside the proposed-tab
+   article body — gives a visible cue while the comment popover is open. */
+[data-anchor-id] ::selection,
+[data-anchor-id]::selection {
+  background: #a5f3fc; /* tailwind cyan-200 */
+  color: inherit;
 }

@@ -14,6 +14,7 @@ export async function sendEmail(opts: {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }): Promise<void> {
   const c = getClient();
   if (!c) {
@@ -25,5 +26,6 @@ export async function sendEmail(opts: {
     to: opts.to,
     subject: opts.subject,
     text: opts.text,
+    ...(opts.html ? { html: opts.html } : {}),
   });
 }

@@ -1,12 +1,12 @@
 import Link from "next/link";
-import HeroSection from "./HeroSection";
-import SignatureCount from "./SignatureCount";
+import HeroSection from "@/app/HeroSection";
+import SignatureCount from "@/app/SignatureCount";
 import { TabbedDocument } from "@/components/TabbedDocument";
 import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function ProposedPage() {
   const data = await loadHomepageTabData();
 
   return (
@@ -53,13 +53,13 @@ export default async function Home() {
           </Link>
         </p>
 
-        <TabbedDocument initialTab="current" {...data} />
+        <TabbedDocument initialTab="proposed" {...data} />
       </section>
 
       <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
         <div className="mx-auto max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-            Version {data.currentVersion} — a living document
+            Version {data.proposedVersion} — working draft
           </p>
           <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
             These nine commitments aren&apos;t a wishlist. They&apos;re the

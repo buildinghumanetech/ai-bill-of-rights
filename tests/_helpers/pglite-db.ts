@@ -94,6 +94,7 @@ export async function createTestDb(): Promise<TestDb> {
       proposal_id uuid references proposed_edits(id),
       signer_id uuid not null references signers(id),
       body text not null,
+      selected_text text,
       parent_comment_id uuid references comments(id),
       created_at timestamptz not null default now(),
       hidden_at timestamptz,
@@ -106,6 +107,27 @@ export async function createTestDb(): Promise<TestDb> {
       created_at timestamptz not null default now(),
       primary key (comment_id, signer_id)
     );
+
+    create table comment_votes (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      signer_id uuid not null references signers(id),
+      direction smallint not null,
+      created_at timestamptz not null default now()
+    );
+    create unique index comment_votes_comment_signer_unique
+      on comment_votes (comment_id, signer_id);
+
+    create table comment_reports (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      reporter_signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now(),
+      resolved_at timestamptz,
+      resolved_by uuid references signers(id)
+    );
+    create unique index comment_reports_comment_reporter_unique
+      on comment_reports (comment_id, reporter_signer_id);
 
     create table endorsements (
       id uuid primary key default gen_random_uuid(),
@@ -161,6 +183,15 @@ export async function createTestDb(): Promise<TestDb> {
     create index selfie_reports_selfie_unresolved_idx
       on selfie_reports (selfie_id)
       where resolved_at is null;
+
+    create table comment_mentions (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      mentioned_signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now()
+    );
+    create unique index comment_mentions_unique
+      on comment_mentions (comment_id, mentioned_signer_id);
 
     create table attestations (
       id uuid primary key default gen_random_uuid(),
