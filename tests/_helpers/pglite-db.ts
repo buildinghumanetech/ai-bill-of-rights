@@ -108,6 +108,27 @@ export async function createTestDb(): Promise<TestDb> {
       primary key (comment_id, signer_id)
     );
 
+    create table comment_votes (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      signer_id uuid not null references signers(id),
+      direction smallint not null,
+      created_at timestamptz not null default now()
+    );
+    create unique index comment_votes_comment_signer_unique
+      on comment_votes (comment_id, signer_id);
+
+    create table comment_reports (
+      id uuid primary key default gen_random_uuid(),
+      comment_id uuid not null references comments(id),
+      reporter_signer_id uuid not null references signers(id),
+      created_at timestamptz not null default now(),
+      resolved_at timestamptz,
+      resolved_by uuid references signers(id)
+    );
+    create unique index comment_reports_comment_reporter_unique
+      on comment_reports (comment_id, reporter_signer_id);
+
     create table endorsements (
       id uuid primary key default gen_random_uuid(),
       signer_id uuid not null references signers(id),

@@ -7,6 +7,14 @@ import { comments, signers } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { getCurrentAdmin } from "@/lib/admin/check";
 
+async function requireAdminOrBootstrap() {
+  const ctx = await getCurrentAdmin();
+  if (ctx.state !== "admin" && ctx.state !== "no-admins-yet") {
+    throw new Error("Forbidden: admin only");
+  }
+  return ctx;
+}
+
 let _db: any | null = null;
 function getDb() {
   if (!_db) _db = (require("@/lib/db") as { db: any }).db;
@@ -141,4 +149,16 @@ export async function unhideCommentAction(commentId: string): Promise<{ ok: bool
   revalidatePath("/");
   revalidatePath("/admin/comments");
   return { ok: true };
+}
+
+export async function deleteCommentAction(commentId: string): Promise<void> {
+  await requireAdminOrBootstrap();
+  const db = getDb();
+  await db
+    .update(comments)
+    .set({ hiddenAt: new Date(), hiddenReason: "admin_delete" })
+    .where(eq(comments.id, commentId));
+  revalidatePath("/admin/comments");
+  revalidatePath("/proposed");
+  revalidatePath("/");
 }

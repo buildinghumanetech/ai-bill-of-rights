@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CommentWithSelection } from "@/lib/db/queries";
+import type { ThreadedComment } from "@/lib/db/queries";
+import { findCommentInTree } from "@/lib/db/queries";
 import { NewCommentForm } from "./NewCommentForm";
 import { CommentView } from "./CommentView";
 
@@ -13,8 +14,10 @@ interface SelectionEvent {
 
 interface Props {
   baseVersionId: string | null;
-  comments: CommentWithSelection[];
+  threadedComments: ThreadedComment[];
   activeCommentId: string | null;
+  viewerSignerId: string | null;
+  isAdmin: boolean;
   onActiveChange: (id: string | null) => void;
 }
 
@@ -24,7 +27,7 @@ interface Props {
  * State machine:
  *   - Idle: show placeholder text
  *   - Pending selection: show NewCommentForm composer
- *   - Active comment: show CommentView
+ *   - Active comment: show CommentView (threaded)
  *
  * Clicking a saved cyan highlight (from HomepageArticles) sets activeCommentId,
  * which dismisses any pending composer. A new text selection sets pendingSelection,
@@ -32,8 +35,10 @@ interface Props {
  */
 export function CommentsColumn({
   baseVersionId,
-  comments,
+  threadedComments,
   activeCommentId,
+  viewerSignerId,
+  isAdmin,
   onActiveChange,
 }: Props) {
   const [pendingSelection, setPendingSelection] = useState<SelectionEvent | null>(null);
@@ -54,8 +59,9 @@ export function CommentsColumn({
     if (activeCommentId) setPendingSelection(null);
   }, [activeCommentId]);
 
+  // Find the active comment in the threaded tree (depth-first)
   const activeComment = activeCommentId
-    ? comments.find((c) => c.id === activeCommentId) ?? null
+    ? findCommentInTree(threadedComments, activeCommentId)
     : null;
 
   return (
@@ -72,14 +78,18 @@ export function CommentsColumn({
           onCancel={() => setPendingSelection(null)}
         />
       ) : activeComment ? (
-        <CommentView comment={activeComment} onClose={() => onActiveChange(null)} />
+        <CommentView
+          comment={activeComment}
+          viewerSignerId={viewerSignerId}
+          isAdmin={isAdmin}
+          baseVersionId={baseVersionId ?? ""}
+          onClose={() => onActiveChange(null)}
+        />
       ) : (
         <p className="text-sm text-zinc-500 leading-relaxed">
           Highlight any text to comment or suggest changes.
         </p>
       )}
-
-      {/* TODO Pass 2: render full list of all comments below */}
     </div>
   );
 }

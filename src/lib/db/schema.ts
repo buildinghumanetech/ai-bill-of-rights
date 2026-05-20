@@ -14,6 +14,7 @@ import {
   boolean,
   uniqueIndex,
   integer,
+  smallint,
   index,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
@@ -179,6 +180,35 @@ export const commentUpvotes = pgTable(
   },
   (t) => [
     uniqueIndex("comment_upvotes_comment_signer_unique").on(t.commentId, t.signerId),
+  ],
+);
+
+export const commentVotes = pgTable(
+  "comment_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom().notNull(),
+    commentId: uuid("comment_id").notNull().references(() => comments.id),
+    signerId: uuid("signer_id").notNull().references(() => signers.id),
+    direction: smallint("direction").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("comment_votes_comment_signer_unique").on(t.commentId, t.signerId),
+  ],
+);
+
+export const commentReports = pgTable(
+  "comment_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom().notNull(),
+    commentId: uuid("comment_id").notNull().references(() => comments.id),
+    reporterSignerId: uuid("reporter_signer_id").notNull().references(() => signers.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: uuid("resolved_by").references(() => signers.id),
+  },
+  (t) => [
+    uniqueIndex("comment_reports_comment_reporter_unique").on(t.commentId, t.reporterSignerId),
   ],
 );
 

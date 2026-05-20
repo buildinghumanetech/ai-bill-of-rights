@@ -1,5 +1,36 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 21:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Pass 2 of the commenting redesign: full HN-style threaded comments with up/down voting, score-based auto-collapse, inline reply composer, one-click flagging, and admin soft-delete. New `comment_votes` and `comment_reports` tables added via migration 0005, applied to dev DB. Schema updated with `commentVotes` and `commentReports` drizzle tables. Three new server actions (`comment-votes.ts`, `comment-reports.ts`, admin `deleteCommentAction`). New query helpers: `listThreadedCommentsForVersion`, `findCommentInTree`, `flattenTree`. New components: `<CommentNode>` (recursive), rewrote `<CommentView>`. Updated `<CommentsColumn>` to accept `threadedComments`/`viewerSignerId`/`isAdmin`. Updated `<TabbedDocument>` to pass all new props. `loadHomepageTabData` now resolves viewer signerId/admin status and pre-fetches the threaded tree. 19 new tests; total 146/32.
+
+### Detail of changes made:
+- **`drizzle/0005_comment_votes_and_reports.sql`** — creates `comment_votes` (with `direction smallint`, unique per comment+signer) and `comment_reports` (unique per comment+reporter). Applied via `pnpm db:push`.
+- **`src/lib/db/schema.ts`** — added `smallint` import; added `commentVotes` and `commentReports` table definitions after `commentUpvotes`.
+- **`tests/_helpers/pglite-db.ts`** — added `comment_votes` and `comment_reports` DDL so in-memory tests have the tables.
+- **`src/server/actions/comment-votes.ts`** — new file. `voteOnComment(db, input)` is the pure data layer (insert/toggle/switch). `voteCommentAction(commentId, direction)` is the server action with auth, soft-ban, self-vote block, and 60/hr rate-limit.
+- **`src/server/actions/comment-reports.ts`** — new file. `reportComment(db, input)` inserts idempotently (catches unique constraint). `reportCommentAction(commentId)` is the server action with auth/soft-ban.
+- **`src/server/actions/comments.ts`** — added `requireAdminOrBootstrap()` helper (was already in admin.ts; co-located here since it's needed for `deleteCommentAction`). Added `deleteCommentAction(commentId)` which soft-deletes via `hiddenAt` + `hiddenReason: "admin_delete"`.
+- **`src/lib/db/queries.ts`** — added `sum`, `sql` imports; added `commentVotes` to import. Added `ThreadedComment` interface, `sortSiblings`, `buildTree` helpers. Added `listThreadedCommentsForVersion`, `findThreadedCommentTree`, `findCommentInTree`, `flattenTree` exports.
+- **`src/lib/homepage/load-tab-data.ts`** — now calls `auth()` to resolve viewer's signer row (id + isAdmin). Returns `threadedComments`, `viewerSignerId`, `isAdmin` on `HomepageTabData`. Builds the flat `comments` from the `commentsByAnchor` map (no extra DB query).
+- **`src/components/CommentView.tsx`** — rewrote to accept `ThreadedComment` + `viewerSignerId`/`isAdmin`/`baseVersionId`; renders `<CommentNode>` with the threaded tree.
+- **`src/components/CommentNode.tsx`** — new file. Recursive component handling: optimistic vote updates, score display (orange=positive/blue=negative), self-vote disable, auto-collapse below score −3, inline reply composer (calls `submitCommentAction` with `parentCommentId`), one-shot flag button, admin delete. Depth-capped at 4 for indentation.
+- **`src/components/CommentsColumn.tsx`** — rewritten to use `threadedComments: ThreadedComment[]` and `findCommentInTree` for active-comment lookup. Accepts `viewerSignerId` and `isAdmin` props.
+- **`src/components/TabbedDocument.tsx`** — extended `Props` with `threadedComments`, `viewerSignerId`, `isAdmin`; passes them to `<CommentsColumn>`.
+- **`tests/server/comment-votes.test.ts`** — 4 tests: insert upvote, toggle off, switch direction, insert downvote.
+- **`tests/server/comment-reports.test.ts`** — 3 tests: insert report, idempotency, multiple reporters.
+- **`tests/lib/db.queries.threaded-comments.test.ts`** — 12 tests: empty, roots, replies, score aggregation, myVote attribution, myVote null, sort order, hidden exclusion, findCommentInTree (root/nested/missing), flattenTree.
+
+### Potential concerns to address:
+- Reply composer's `baseVersionId` is passed as a prop from `CommentsColumn` → `CommentView` → `CommentNode` chain; `rootAnchorId` propagates from the root comment's `anchorId`. If a comment has no `anchorId` (e.g., linked to a `proposalId`), the reply form will send an empty `anchorId` — the server action will reject it as "must target exactly one of anchorId or proposalId." Proposals are unused in the UI currently, so this is low-risk.
+- `loadHomepageTabData` calls `auth()` which can throw on un-instrumented edge environments; the try/catch around it falls back to `viewerSignerId = null` so the page still renders, just without vote attribution.
+- Rate-limit for votes uses `enforceRateLimit` with a raw SQL `count_sql` string. The placeholder replacement is `$1` → inline escaped string (same pattern as comments rate-limit). Safe against SQL injection since signerId is a UUID from the DB, but a parameterized approach would be cleaner.
+- `deleteCommentAction` re-declares `requireAdminOrBootstrap` in `comments.ts` (same function exists in `admin.ts`). Consider extracting to a shared utility if the duplication bothers future maintainers.
+
+---
+
 ## Progress Update as of 2026-05-19 22:45 Pacific
 *(Most recent updates at top)*
 

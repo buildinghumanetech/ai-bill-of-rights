@@ -1,5 +1,5 @@
-import { eq, count, desc, gt, and, isNull, isNotNull, asc } from "drizzle-orm";
-import { versions, signatures, signers, comments, attestations } from "./schema";
+import { eq, count, desc, gt, and, isNull, isNotNull, asc, sum, sql } from "drizzle-orm";
+import { versions, signatures, signers, comments, attestations, commentVotes } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -245,6 +245,173 @@ export interface AttestationListItem {
   productUrl: string | null;
   version: string;
   claimedAt: Date;
+}
+
+export interface ThreadedComment {
+  id: string;
+  body: string;
+  signerId: string;
+  displayName: string;
+  parentCommentId: string | null;
+  anchorId: string | null;
+  selectedText: string | null;
+  createdAt: Date;
+  score: number;
+  myVote: 1 | -1 | null;
+  replies: ThreadedComment[];
+}
+
+/** Sort siblings by score desc, then createdAt asc (HN-style). */
+function sortSiblings(nodes: ThreadedComment[]): ThreadedComment[] {
+  return nodes.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+}
+
+/**
+ * Build a threaded comment tree from a flat list.
+ * Top-level nodes (parentCommentId == null) are roots.
+ */
+function buildTree(
+  rows: Omit<ThreadedComment, "replies">[],
+): ThreadedComment[] {
+  const byId = new Map<string, ThreadedComment>();
+  for (const r of rows) byId.set(r.id, { ...r, replies: [] });
+
+  const roots: ThreadedComment[] = [];
+  for (const node of byId.values()) {
+    if (node.parentCommentId) {
+      const parent = byId.get(node.parentCommentId);
+      if (parent) {
+        parent.replies.push(node);
+      } else {
+        // Parent is hidden/deleted — promote to root
+        roots.push(node);
+      }
+    } else {
+      roots.push(node);
+    }
+  }
+
+  // Sort each level
+  function sortRecursive(nodes: ThreadedComment[]): ThreadedComment[] {
+    sortSiblings(nodes);
+    for (const n of nodes) n.replies = sortRecursive(n.replies);
+    return nodes;
+  }
+  return sortRecursive(roots);
+}
+
+export async function listThreadedCommentsForVersion(
+  db: any,
+  baseVersionId: string,
+  viewerSignerId: string | null,
+): Promise<ThreadedComment[]> {
+  // 1. Fetch all visible comments joined to signers
+  const commentRows = await db
+    .select({
+      id: comments.id,
+      body: comments.body,
+      signerId: comments.signerId,
+      displayName: signers.displayName,
+      parentCommentId: comments.parentCommentId,
+      anchorId: comments.anchorId,
+      selectedText: comments.selectedText,
+      createdAt: comments.createdAt,
+    })
+    .from(comments)
+    .innerJoin(signers, eq(signers.id, comments.signerId))
+    .where(
+      and(
+        eq(comments.baseVersionId, baseVersionId),
+        isNull(comments.hiddenAt),
+      ),
+    );
+
+  if (commentRows.length === 0) return [];
+
+  // 2. Aggregate scores from comment_votes
+  const voteRows = await db
+    .select({
+      commentId: commentVotes.commentId,
+      score: sql<number>`cast(coalesce(sum(${commentVotes.direction}), 0) as integer)`,
+    })
+    .from(commentVotes)
+    .groupBy(commentVotes.commentId);
+
+  const scoreMap = new Map<string, number>();
+  for (const v of voteRows) scoreMap.set(v.commentId, Number(v.score));
+
+  // 3. Fetch viewer's own votes
+  const myVoteMap = new Map<string, 1 | -1>();
+  if (viewerSignerId) {
+    const myVotes = await db
+      .select({ commentId: commentVotes.commentId, direction: commentVotes.direction })
+      .from(commentVotes)
+      .where(eq(commentVotes.signerId, viewerSignerId));
+    for (const v of myVotes) myVoteMap.set(v.commentId, v.direction as 1 | -1);
+  }
+
+  // 4. Build tree
+  const flat: Omit<ThreadedComment, "replies">[] = commentRows.map((r: any) => ({
+    id: r.id,
+    body: r.body,
+    signerId: r.signerId,
+    displayName: r.displayName,
+    parentCommentId: r.parentCommentId,
+    anchorId: r.anchorId,
+    selectedText: r.selectedText,
+    createdAt: r.createdAt,
+    score: scoreMap.get(r.id) ?? 0,
+    myVote: myVoteMap.get(r.id) ?? null,
+  }));
+
+  return buildTree(flat);
+}
+
+export async function findThreadedCommentTree(
+  db: any,
+  rootCommentId: string,
+  viewerSignerId: string | null,
+): Promise<ThreadedComment | null> {
+  // Fetch the root comment's baseVersionId first, then list the whole version tree
+  // and find the root. This is simpler than a recursive CTE and fine for current scale.
+  const rootRow = await db
+    .select({ baseVersionId: comments.baseVersionId })
+    .from(comments)
+    .where(eq(comments.id, rootCommentId))
+    .limit(1);
+  if (rootRow.length === 0) return null;
+
+  const tree = await listThreadedCommentsForVersion(db, rootRow[0].baseVersionId, viewerSignerId);
+  return findCommentInTree(tree, rootCommentId);
+}
+
+/** Depth-first search for a comment in a threaded tree. */
+export function findCommentInTree(
+  tree: ThreadedComment[],
+  id: string,
+): ThreadedComment | null {
+  for (const node of tree) {
+    if (node.id === id) return node;
+    const found = findCommentInTree(node.replies, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Flatten a tree back to a list (DFS). */
+export function flattenTree(tree: ThreadedComment[]): ThreadedComment[] {
+  const out: ThreadedComment[] = [];
+  function walk(nodes: ThreadedComment[]) {
+    for (const n of nodes) {
+      out.push(n);
+      walk(n.replies);
+    }
+  }
+  walk(tree);
+  return out;
 }
 
 export async function listPublishedAttestations(
