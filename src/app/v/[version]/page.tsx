@@ -4,6 +4,7 @@ import { getVersionByString } from "@/lib/db/queries";
 import { DocumentRenderer } from "@/components/DocumentRenderer";
 import { VersionBanner } from "@/components/VersionBanner";
 import FloatingSignButton from "@/app/FloatingSignButton";
+import { AsCodeButton } from "@/components/AsCodeButton";
 import type { ParsedDocument } from "@/lib/markdown/parse";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,10 @@ export default async function VersionPage({
 
       <div className="mt-10">
         <DocumentRenderer document={parsed} readOnly />
+      </div>
+
+      <div className="mt-12 flex justify-center">
+        <AsCodeButton version={row.version} />
       </div>
 
       <section className="mt-20 border-t border-zinc-200 pt-12 pb-48 text-center">

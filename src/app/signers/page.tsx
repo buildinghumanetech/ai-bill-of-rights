@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { listSignatures, type SignerListItem } from "@/lib/db/queries";
+import {
+  getSignerCount,
+  listSignatures,
+  type SignerListItem,
+} from "@/lib/db/queries";
+import { getActiveSelfiesForSigners } from "@/lib/selfie/queries";
+import { SelfieAvatar } from "@/components/SelfieAvatar";
 import SignTrigger from "../SignTrigger";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +39,7 @@ function VerificationPill({
     : "bg-indigo-50 text-indigo-700 ring-indigo-600/20";
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${styles}`}
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles}`}
     >
       <svg
         className="mr-1 h-3 w-3"
@@ -64,12 +70,16 @@ export default async function SignersPage({
   const limit = 100;
 
   let rows: SignerListItem[] = [];
+  let totalSignerCount = 0;
   let loadFailed = false;
   try {
-    rows = await listSignatures(undefined, {
-      limit,
-      offset: (pageNum - 1) * limit,
-    });
+    [rows, totalSignerCount] = await Promise.all([
+      listSignatures(undefined, {
+        limit,
+        offset: (pageNum - 1) * limit,
+      }),
+      getSignerCount(),
+    ]);
   } catch {
     loadFailed = true;
   }
@@ -83,11 +93,20 @@ export default async function SignersPage({
     return true;
   });
 
+  // Batch-fetch active approved selfies for the visible signers so the
+  // table renders thumbnails without an N+1 query per row.
+  const activeSelfies = await getActiveSelfiesForSigners(
+    signers.map((s) => s.signerId),
+  );
+
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
       <header className="mb-12 text-center">
-        <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-          Verified signers
+        <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+          <span className="font-bold text-zinc-900">
+            {totalSignerCount.toLocaleString()}
+          </span>{" "}
+          <span className="font-medium">Verified signers</span>
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">
           The people behind the signatures
@@ -149,12 +168,6 @@ export default async function SignersPage({
                   scope="col"
                   className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600"
                 >
-                  Verification
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-zinc-600"
-                >
                   Version
                 </th>
                 <th
@@ -171,26 +184,36 @@ export default async function SignersPage({
                   key={signer.signerId}
                   className="transition-colors hover:bg-zinc-50"
                 >
-                  <td className="whitespace-nowrap px-6 py-4">
+                  <td className="px-6 py-4">
                     <Link
                       href={`/signatories/${signer.signerId}`}
-                      className="font-medium text-zinc-950 hover:text-blue-600 hover:underline"
+                      className="group flex items-center gap-3"
                     >
-                      {signer.displayName}
-                    </Link>
-                    {signer.affiliation ? (
-                      <div className="mt-0.5 text-xs text-zinc-500">
-                        {signer.affiliation}
+                      <SelfieAvatar
+                        size="sm"
+                        signerId={signer.signerId}
+                        displayName={signer.displayName}
+                        preloadedActiveSelfies={activeSelfies}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-zinc-950 group-hover:text-blue-600 group-hover:underline">
+                          {signer.displayName}
+                        </div>
+                        {signer.affiliation ? (
+                          <div className="mt-0.5 text-xs text-zinc-500">
+                            {signer.affiliation}
+                          </div>
+                        ) : null}
+                        <div className="mt-1.5">
+                          <VerificationPill method={signer.verificationMethod} />
+                        </div>
                       </div>
-                    ) : null}
+                    </Link>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-zinc-700">
                     {signer.locationText || (
                       <span className="text-zinc-400">—</span>
                     )}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <VerificationPill method={signer.verificationMethod} />
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm">
                     <Link

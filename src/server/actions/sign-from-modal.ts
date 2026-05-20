@@ -16,6 +16,18 @@ import { sendEmail } from "@/lib/email/send";
 type NameDisplayFormat = "initials" | "first-initial" | "full";
 type NotificationPreference = "major" | "minor" | "none";
 
+// Belt-and-suspenders: even though extractCapturedFields decodes Vercel's
+// URL-encoded geo headers, decode again right before write so any future
+// upstream change that re-introduces percent-encoding can't leak into the DB.
+function decodePercentEncoding(s: string): string {
+  if (!s.includes("%")) return s;
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 export interface SignFromModalInput {
   firstName: string;
   lastName: string;
@@ -108,9 +120,11 @@ export async function recordSignatureFromModal(
     }
 
     const locationText = input.shareLocation
-      ? [fields.ip_geo_city, fields.ip_geo_region, fields.ip_geo_country]
-          .filter(Boolean)
-          .join(", ") || null
+      ? decodePercentEncoding(
+          [fields.ip_geo_city, fields.ip_geo_region, fields.ip_geo_country]
+            .filter(Boolean)
+            .join(", "),
+        ) || null
       : null;
 
     const verificationMethod: "email" | "sms" =
@@ -134,12 +148,22 @@ export async function recordSignatureFromModal(
     });
     const consentTextHash = sha256Hex(consentText);
 
+    // Persist the name-format choice (and the raw names that produced the
+    // masked displayName) alongside the existing fingerprint fields. Lets us
+    // re-apply / debug the format later if a signer's row ever needs to be
+    // reformatted (e.g., after a bug that defaulted to "full").
+    const capturedWithNamePrefs = {
+      ...fields,
+      name_display_format: input.nameDisplayFormat ?? "full",
+      raw_first_name: input.firstName.trim(),
+      raw_last_name: input.lastName.trim(),
+    };
     try {
       await recordSignature(undefined, {
         signerId: profile.id,
         versionString: input.versionString,
         consentTextHash,
-        capturedFields: fields,
+        capturedFields: capturedWithNamePrefs,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";

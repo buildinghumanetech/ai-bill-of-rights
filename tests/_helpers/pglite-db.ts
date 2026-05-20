@@ -116,6 +116,70 @@ export async function createTestDb(): Promise<TestDb> {
       converted_at timestamptz
     );
     create unique index endorsements_signer_base_unique on endorsements (signer_id, base_version_id);
+
+    create table selfies (
+      id uuid primary key default gen_random_uuid(),
+      signer_id uuid not null references signers(id),
+      status text not null check (status in ('pending','approved','rejected','auto_hidden','removed')),
+      original_blob_url text not null,
+      display_blob_url text not null,
+      thumbnail_blob_url text not null,
+      original_mime text not null,
+      original_bytes integer not null,
+      capture_method text not null check (capture_method in ('live','upload')),
+      submitted_at timestamptz not null default now(),
+      reviewed_at timestamptz,
+      reviewed_by uuid,
+      rejection_reason text,
+      rejection_note text,
+      auto_hidden_at timestamptz,
+      removed_at timestamptz,
+      replaced_by_selfie_id uuid
+    );
+    create index selfies_signer_id_idx on selfies (signer_id);
+    create unique index selfies_signer_active_unique on selfies (signer_id)
+      where status = 'approved'
+        and auto_hidden_at is null
+        and removed_at is null
+        and replaced_by_selfie_id is null;
+    create index selfies_status_submitted_at_idx
+      on selfies (status, submitted_at desc)
+      where status = 'pending';
+
+    create table selfie_reports (
+      id uuid primary key default gen_random_uuid(),
+      selfie_id uuid not null references selfies(id),
+      reporter_signer_id uuid not null references signers(id),
+      reason text,
+      created_at timestamptz not null default now(),
+      resolved_at timestamptz,
+      resolved_by uuid,
+      resolution text check (resolution in ('allowed','hidden'))
+    );
+    create unique index selfie_reports_selfie_reporter_unique
+      on selfie_reports (selfie_id, reporter_signer_id);
+    create index selfie_reports_selfie_unresolved_idx
+      on selfie_reports (selfie_id)
+      where resolved_at is null;
+
+    create table attestations (
+      id uuid primary key default gen_random_uuid(),
+      org_name text not null,
+      product_name text not null,
+      product_url text,
+      version_id uuid not null references versions(id),
+      contact_email text not null,
+      verification_token text not null unique,
+      claimed_at timestamptz not null default now(),
+      email_verified_at timestamptz,
+      needs_manual_review boolean not null default false,
+      manually_reviewed_at timestamptz,
+      manually_approved boolean,
+      published boolean not null default false,
+      hidden_at timestamptz
+    );
+    create index attestations_version_published
+      on attestations (version_id) where published = true;
   `);
   return db;
 }

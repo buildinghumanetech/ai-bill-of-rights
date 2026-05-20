@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import * as schema from "@/lib/db/schema";
 
 describe("db schema", () => {
-  it("exports all Phase 1 tables", () => {
+  it("exports all current tables", () => {
     expect(schema.versions).toBeDefined();
     expect(schema.signers).toBeDefined();
     expect(schema.signatures).toBeDefined();
     expect(schema.consentRecords).toBeDefined();
+    expect(schema.attestations).toBeDefined();
   });
 
   it("signers has clerk_user_id as unique text column", () => {

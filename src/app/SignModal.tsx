@@ -10,6 +10,7 @@ import {
   removeMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
+import { SelfieCapture } from "@/components/SelfieCapture";
 
 interface Props {
   open: boolean;
@@ -413,6 +414,8 @@ export default function SignModal({ open, onClose }: Props) {
         method,
         shareLocation,
         versionString: VERSION,
+        nameDisplayFormat,
+        notificationPreference,
       });
 
       if (!res.success) {
@@ -1046,16 +1049,20 @@ export default function SignModal({ open, onClose }: Props) {
                 Thank you for signing
                 {signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}
               </h2>
-              <p className="mt-2 text-sm text-zinc-600">
-                Your name is now on v{VERSION}.
-                <br />
-                AI companies pay more attention every time another person
-                signs. Who can you share this with?
-              </p>
             </div>
 
             {signerId ? (
               <>
+                {/* Add a selfie photo to your signature */}
+                <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                    Add a Selfie Photo to your Signature
+                  </p>
+                  <div className="mt-3">
+                    <SelfieCapture context="modal" />
+                  </div>
+                </div>
+
                 {/* Share link section */}
                 <div className="mt-7 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                   <label

@@ -1,4 +1,5 @@
 import { listSignatures } from "@/lib/db/queries";
+import { getActiveSelfiesForSigners } from "@/lib/selfie/queries";
 import { SignatureCard } from "@/components/SignatureCard";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ export default async function SignatoriesPage({
     limit,
     offset: (pageNum - 1) * limit,
   });
+  const signerIds = rows.map((r) => r.signerId);
+  const activeSelfies = await getActiveSelfiesForSigners(signerIds);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -27,7 +30,11 @@ export default async function SignatoriesPage({
           <p className="text-zinc-500">No signatures yet. Be the first.</p>
         ) : (
           rows.map((item) => (
-            <SignatureCard key={item.signerId + item.version} item={item} />
+            <SignatureCard
+              key={item.signerId + item.version}
+              item={item}
+              activeSelfies={activeSelfies}
+            />
           ))
         )}
       </div>

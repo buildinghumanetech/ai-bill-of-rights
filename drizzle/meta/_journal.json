@@ -15,6 +15,20 @@
       "when": 1779222381566,
       "tag": "0001_add_comments_and_proposed_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779238409813,
+      "tag": "0002_add_selfies",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779298409813,
+      "tag": "0003_add_attestations",
+      "breakpoints": true
     }
   ]
 }

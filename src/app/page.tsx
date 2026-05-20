@@ -87,22 +87,27 @@ export default async function Home() {
           ) : null}
         </section>
 
-      <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
+      <section className="border-t border-zinc-200 bg-zinc-50 px-6 pt-24 pb-40 text-center sm:pb-48">
           <div className="mx-auto max-w-2xl">
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
               Version 0.0.1 — a living document
             </p>
             <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
-              These nine commitments aren&apos;t a wishlist. They&apos;re the
-              line. Companies that won&apos;t agree to them are telling you
-              who they are.
+              These nine commitments aren&apos;t a wishlist.{" "}
+              <span className="sm:whitespace-nowrap">
+                They&apos;re the baseline.
+              </span>{" "}
+              <span className="sm:whitespace-nowrap">
+                Companies that won&apos;t agree to them are telling you who
+                they are.
+              </span>
             </p>
             <div className="mt-10 flex flex-col items-center gap-6">
               <Link
                 href="/v/0.0.1/as-code"
                 className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
               >
-                Building AI? Implement this in your code →
+                Building AI? Implement these principles in your code →
               </Link>
             </div>
           </div>

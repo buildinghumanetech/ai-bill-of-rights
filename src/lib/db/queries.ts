@@ -1,5 +1,5 @@
-import { eq, count, desc, gt, and, isNull, asc } from "drizzle-orm";
-import { versions, signatures, signers, comments } from "./schema";
+import { eq, count, desc, gt, and, isNull, isNotNull, asc } from "drizzle-orm";
+import { versions, signatures, signers, comments, attestations } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -29,6 +29,11 @@ export async function getVersionByString(versionString: string, db: any = getDef
 
 export async function getSignatureCount(db: any = getDefaultDb()): Promise<number> {
   const rows = await db.select({ value: count() }).from(signatures);
+  return Number(rows[0]?.value ?? 0);
+}
+
+export async function getSignerCount(db: any = getDefaultDb()): Promise<number> {
+  const rows = await db.select({ value: count() }).from(signers);
   return Number(rows[0]?.value ?? 0);
 }
 
@@ -179,4 +184,75 @@ export async function listCommentsForAnchor(
     )
     .orderBy(asc(comments.createdAt));
   return rows as CommentRow[];
+}
+
+export interface AttestationListItem {
+  id: string;
+  orgName: string;
+  productName: string;
+  productUrl: string | null;
+  version: string;
+  claimedAt: Date;
+}
+
+export async function listPublishedAttestations(
+  db: any = null,
+  opts: { limit: number; offset: number; versionString?: string },
+): Promise<AttestationListItem[]> {
+  const client = db ?? getDefaultDb();
+  const conditions = [
+    eq(attestations.published, true),
+    isNull(attestations.hiddenAt),
+  ];
+  if (opts.versionString) {
+    const v = await client
+      .select({ id: versions.id })
+      .from(versions)
+      .where(eq(versions.version, opts.versionString))
+      .limit(1);
+    if (v.length === 0) return [];
+    conditions.push(eq(attestations.versionId, v[0].id));
+  }
+  const rows = await client
+    .select({
+      id: attestations.id,
+      orgName: attestations.orgName,
+      productName: attestations.productName,
+      productUrl: attestations.productUrl,
+      version: versions.version,
+      claimedAt: attestations.claimedAt,
+    })
+    .from(attestations)
+    .innerJoin(versions, eq(versions.id, attestations.versionId))
+    .where(and(...conditions))
+    .orderBy(desc(attestations.claimedAt))
+    .limit(opts.limit)
+    .offset(opts.offset);
+  return rows as AttestationListItem[];
+}
+
+export async function listPendingReviewAttestations(db: any = null) {
+  const client = db ?? getDefaultDb();
+  return client
+    .select({
+      id: attestations.id,
+      orgName: attestations.orgName,
+      productName: attestations.productName,
+      productUrl: attestations.productUrl,
+      contactEmail: attestations.contactEmail,
+      claimedAt: attestations.claimedAt,
+      emailVerifiedAt: attestations.emailVerifiedAt,
+      version: versions.version,
+    })
+    .from(attestations)
+    .innerJoin(versions, eq(versions.id, attestations.versionId))
+    .where(
+      and(
+        eq(attestations.needsManualReview, true),
+        isNotNull(attestations.emailVerifiedAt),
+        isNull(attestations.manuallyReviewedAt),
+        isNull(attestations.hiddenAt),
+      ),
+    )
+    .orderBy(desc(attestations.claimedAt));
 }

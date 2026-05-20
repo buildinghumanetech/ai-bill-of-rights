@@ -6,8 +6,11 @@ import {
   getSignerById,
   listSignaturesForSigner,
 } from "@/lib/db/queries";
+import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
+import { SelfieAvatar } from "@/components/SelfieAvatar";
+import { ReportSelfieButton } from "@/components/ReportSelfieButton";
 import SignTrigger from "../../SignTrigger";
 
 export const dynamic = "force-dynamic";
@@ -22,11 +25,22 @@ export async function generateMetadata({
   if (!signer) return { title: "Signer not found" };
   const title = `${signer.displayName} signed the AI Bill of Rights`;
   const description = `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`;
+  const ogUrl = `/api/og/signer/${id}`;
   return {
     title,
     description,
-    openGraph: { title, description, type: "profile" },
-    twitter: { card: "summary_large_image", title, description },
+    openGraph: {
+      title,
+      description,
+      type: "profile",
+      images: [{ url: ogUrl, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogUrl],
+    },
   };
 }
 
@@ -39,9 +53,11 @@ export default async function SignerProfile({
   const signer = await getSignerById(id);
   if (!signer) notFound();
   const sigs = await listSignaturesForSigner(id);
+  const activeSelfie = await getActiveSelfieForSigner(signer.id);
 
   const { userId } = await auth();
   const isOwner = Boolean(userId) && userId === signer.clerkUserId;
+  const isSignedInViewer = Boolean(userId);
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
   const signatureUrl = `${siteUrl}/signatories/${signer.id}`;
@@ -58,22 +74,31 @@ export default async function SignerProfile({
         </Link>
       </p>
 
-      <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">
-          {signer.displayName}
-        </h1>
-        <VerificationBadge
-          method={signer.verificationMethod as "email" | "sms"}
+      <div className="mt-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+        <SelfieAvatar
+          size="md"
+          signerId={signer.id}
+          displayName={signer.displayName}
         />
-      </div>
+        <div>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+            <h1 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">
+              {signer.displayName}
+            </h1>
+            <VerificationBadge
+              method={signer.verificationMethod as "email" | "sms"}
+            />
+          </div>
 
-      {signer.locationText || signer.affiliation ? (
-        <div className="mt-2 text-sm text-zinc-600">
-          {[signer.locationText, signer.affiliation]
-            .filter(Boolean)
-            .join(" · ")}
+          {signer.locationText || signer.affiliation ? (
+            <div className="mt-2 text-sm text-zinc-600">
+              {[signer.locationText, signer.affiliation]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       <section className="mt-10">
         <h2 className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
@@ -125,6 +150,12 @@ export default async function SignerProfile({
           </SignTrigger>
         </div>
       </section>
+
+      {!isOwner && isSignedInViewer && activeSelfie ? (
+        <div className="mt-10 text-center">
+          <ReportSelfieButton selfieId={activeSelfie.id} />
+        </div>
+      ) : null}
 
       {isOwner ? (
         <p className="mt-14 text-center text-xs text-zinc-500">
