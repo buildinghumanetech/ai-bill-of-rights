@@ -90,7 +90,7 @@ export function TabbedDocument({
           onTabChange={handleTabChange}
         />
 
-        <div className="relative">
+        <div className="relative sm:px-12">
           {/* Fading vertical side lines spanning the article area. */}
           <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-zinc-300 via-zinc-300/30 to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-zinc-300 via-zinc-300/30 to-transparent" />

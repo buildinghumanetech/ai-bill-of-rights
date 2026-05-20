@@ -1,5 +1,19 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 21:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added 48px (`sm:px-12`) horizontal padding to the article area inside `<TabbedDocument>` so the articles sit further inside the fading vertical lines. Mobile (`<sm`) keeps the lines tight to the content to avoid cramping; on `sm`-and-up there's now ~48px of breathing room on each side between the article text and the gradient lines.
+
+### Detail of changes made:
+- **`src/components/TabbedDocument.tsx`** — added `sm:px-12` to the inner `relative` wrapper that contains the two article views. The gradient lines (`absolute inset-y-0 left-0 / right-0`) stay pinned to the wrapper edges; the children (the `<HomepageArticles>` instances) get pushed inward by the padding. On mobile, the padding is zero so the constrained viewport doesn't shrink article text further.
+
+### Potential concerns to address:
+- None. Visual tweak, no behavior change.
+
+---
+
 ## Progress Update as of 2026-05-19 21:00 Pacific
 *(Most recent updates at top)*
 
