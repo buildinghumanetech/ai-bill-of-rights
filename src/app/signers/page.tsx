@@ -6,26 +6,10 @@ import {
 } from "@/lib/db/queries";
 import { getActiveSelfiesForSigners } from "@/lib/selfie/queries";
 import { SelfieAvatar } from "@/components/SelfieAvatar";
+import SignedAt from "@/components/SignedAt";
 import SignTrigger from "../SignTrigger";
 
 export const dynamic = "force-dynamic";
-
-function formatSignedAt(d: Date): string {
-  const date = d.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const time = d
-    .toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    })
-    .toLowerCase()
-    .replace(/\s+/g, "");
-  return `${date} at ${time}`;
-}
 
 function VerificationPill({
   method,
@@ -224,7 +208,7 @@ export default async function SignersPage({
                     </Link>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm text-zinc-500">
-                    {formatSignedAt(signer.signedAt)}
+                    <SignedAt iso={signer.signedAt.toISOString()} />
                   </td>
                 </tr>
               ))}
