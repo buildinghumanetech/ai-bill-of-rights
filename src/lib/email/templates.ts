@@ -127,3 +127,30 @@ ${opts.appealUrl}
 `,
   };
 }
+
+export function attestationVerifyEmail(opts: {
+  orgName: string;
+  productName: string;
+  version: string;
+  verifyUrl: string;
+  submitterEmail: string;
+}): { subject: string; text: string } {
+  return {
+    subject: `Admin review: ${opts.orgName}'s attestation for AI Bill of Rights v${opts.version}`,
+    text: `An attestation has been submitted and is waiting for an admin to verify it:
+
+  Product:      ${opts.productName}
+  Organization: ${opts.orgName}
+  Version:      v${opts.version}
+  Submitter:    ${opts.submitterEmail}
+
+You're receiving this because you're an admin on the AI Bill of Rights project. Any admin can publish this attestation by clicking the link below. The first click wins.
+
+${opts.verifyUrl}
+
+If this looks fake or low-quality, just ignore it — unpublished attestations stay in the queue and can be hidden from the admin dashboard.
+
+— The AI Bill of Rights project
+`,
+  };
+}

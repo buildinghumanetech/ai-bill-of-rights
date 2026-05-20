@@ -414,6 +414,8 @@ export default function SignModal({ open, onClose }: Props) {
         method,
         shareLocation,
         versionString: VERSION,
+        nameDisplayFormat,
+        notificationPreference,
       });
 
       if (!res.success) {

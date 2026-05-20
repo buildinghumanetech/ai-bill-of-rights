@@ -22,6 +22,13 @@
       "when": 1779238409813,
       "tag": "0002_add_selfies",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779298409813,
+      "tag": "0003_add_attestations",
+      "breakpoints": true
     }
   ]
 }
