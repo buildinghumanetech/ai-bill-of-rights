@@ -29,7 +29,7 @@ export function AnchorSentence({ anchorId, count, children }: Props) {
             }),
           );
         }}
-        className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-100 px-1.5 align-middle text-[10px] font-medium text-zinc-600 opacity-0 transition group-hover:opacity-100 hover:bg-zinc-200"
+        className="ml-1 hidden h-5 min-w-5 items-center justify-center rounded-full bg-zinc-100 px-1.5 align-middle text-[10px] font-medium text-zinc-600 group-hover:inline-flex hover:bg-zinc-200"
         aria-label={`Discuss this sentence (${count} comments)`}
       >
         {count > 0 ? `💬 ${count}` : "+"}

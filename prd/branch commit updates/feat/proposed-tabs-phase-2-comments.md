@@ -1,5 +1,24 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 17:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Fixed two visual bugs on the homepage that surfaced after Phase 2 wired in the comment UI: (1) invisible anchor-sentence comment buttons were still consuming inline width, creating gaps between sentences; (2) prose typography (h1/h2/p sizing, line-height, spacing) was not rendering because `@tailwindcss/typography` was not installed or registered.
+
+### Detail of changes made:
+- Modified `src/components/AnchorSentence.tsx`:
+  - Changed the comment badge button classes from `opacity-0 transition group-hover:opacity-100 inline-flex` to `hidden group-hover:inline-flex`. This removes the button from layout entirely when not hovered (display:none rather than invisible), eliminating the ~24px gaps that accumulated across 5+ sentences in a paragraph.
+- Installed `@tailwindcss/typography` (v0.5.19) as a dev dependency via `pnpm add -D @tailwindcss/typography`.
+- Modified `src/app/globals.css`: added `@plugin "@tailwindcss/typography";` on the second line, after `@import "tailwindcss";`. This is the Tailwind 4 way to register plugins (no tailwind.config.ts exists in this project — it uses the CSS-first config approach via `@tailwindcss/postcss`).
+- The `<article className="prose prose-zinc max-w-none">` in `src/components/InteractiveDoc.tsx` was already correct; the missing plugin was the sole reason headings rendered unstyled.
+
+### Potential concerns to address:
+- `prose prose-zinc` applies default prose sizing. The document's `<h1>` (preamble "An AI Bill of Rights") will now render with Tailwind typography defaults (~2.25rem / 36px). This may be smaller than the hero h1 above it; if the designer wants a custom prose-xl or overridden heading size, that's a follow-on task.
+- `@tailwindcss/typography` 0.5.x is the CSS-plugin version; Tailwind 4 compatibility is confirmed by the `@plugin` directive support in v4 `@tailwindcss/postcss`.
+
+---
+
 ## Progress Update as of 2026-05-19 16:45 Pacific
 *(Most recent updates at top)*
 
