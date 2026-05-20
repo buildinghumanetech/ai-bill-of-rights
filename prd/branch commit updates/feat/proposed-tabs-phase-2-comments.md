@@ -1,5 +1,27 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 18:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Restructured the homepage into Current (/) and Proposed (/proposed) tabs. Current tab is a clean, read-only article-card view matching the pre-Phase-2 production layout. Proposed tab is the same layout but wraps each sentence in AnchorSentence for per-sentence commenting, plus HighlightPopover and CommentDrawer.
+
+### Detail of changes made:
+- Created `src/app/HomepageArticles.tsx`: shared server component rendering the 9-article list. Accepts `mode="static" | "interactive"`. In static mode renders plain `<p>` body text. In interactive mode, splits each article body into sentences via `splitSentences()` (regex on `.!?` followed by capital) and wraps each in `<AnchorSentence anchorId="article-NN-s-I" count={...}>`. Contains the canonical `articles` array, `PILL_COLORS`, and `pillColor()` helper copied verbatim from the pre-Task-2.12 page.tsx.
+- Created `src/app/ArticleSelectionContainer.tsx`: client component that attaches a `mouseup` listener to its container div. On selection, walks up the DOM to find the nearest `data-anchor-id` element and dispatches a `selection-in-anchor` CustomEvent with `{ anchorId, selectedText, rect }`. This replaces the equivalent logic that was embedded in InteractiveDoc.
+- Created `src/components/TabBar.tsx`: renders two tab pills linking to `/` and `/proposed`, with the active tab styled dark. Accepts `active`, `currentVersion`, `proposedVersion` props.
+- Rewrote `src/app/page.tsx`: removed DocumentRenderer, CommentDrawer, HighlightPopover, and all comment-fetch logic. Now fetches only `getCurrentVersion()` to derive `currentVersion` and `proposedVersion` (via `bumpPatch()`). Renders `<TabBar active="current" ...>` then `<HomepageArticles mode="static" />`. Hero, FloatingSignButton, signature count, and bottom CTA section are all preserved from production.
+- Created `src/app/proposed/page.tsx`: mirrors page.tsx but with `<TabBar active="proposed">`, `<ArticleSelectionContainer>` wrapping `<HomepageArticles mode="interactive" anchorCounts={...}>`, plus `<HighlightPopover enableSuggestChanges={false} />` and `<CommentDrawer>`. Includes a "Working draft · vX.X.X · Hover any sentence to comment" banner between signature count and TabBar.
+- DocumentRenderer and InteractiveDoc are unchanged — still used by `/v/[version]` archive views.
+- Design judgment: placed TabBar above the article list inside the same `<section>` as the signature count and "Join" heading; added a slim "Working draft" subtitle on /proposed only; kept FloatingSignButton on /proposed (signing applies to current, not draft, but the button doesn't interfere).
+
+### Potential concerns to address:
+- `splitSentences()` is a naive regex splitter. It handles the 9 curated article bodies well (tested visually), but could misfire on future articles with abbreviations (e.g., "Dr. Smith" would split). A smarter splitter can be swapped in later without changing the API.
+- `anchorCounts` on /proposed only reflects comments on the current version's anchors (`baseVersionId = current.id`). When v0.0.2 is promoted to current, old anchor IDs will still match because the `article-NN-s-I` scheme is derived from position, not DB content. This is acceptable for Phase 2.
+- `countCommentsByAnchor` and `listCommentsForAnchor` are still called with `undefined as any` for the `db` arg (matching the previous pattern in the old page.tsx) to use the default lazy-loaded DB. This is fine but slightly inelegant.
+
+---
+
 ## Progress Update as of 2026-05-19 17:45 Pacific
 *(Most recent updates at top)*
 
