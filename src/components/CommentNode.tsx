@@ -131,8 +131,19 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
   }
 
   function handleDelete() {
+    // Confirm before the destructive action.
+    if (typeof window !== "undefined" && !window.confirm("Delete this comment? This cannot be undone.")) {
+      return;
+    }
     startDeleteTransition(async () => {
-      await deleteCommentAction(comment.id);
+      const res = await deleteCommentAction(comment.id);
+      if (!res.ok) {
+        // Surface the error so the user knows what happened.
+        if (typeof window !== "undefined") {
+          window.alert(res.error ?? "Couldn't delete that comment.");
+        }
+        return;
+      }
       router.refresh();
     });
   }

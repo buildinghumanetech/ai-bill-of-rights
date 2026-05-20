@@ -86,6 +86,12 @@ export function CommentsColumn({
           signersForAdmin={signersForAdmin}
           signersForMention={signersForMention}
           onCancel={() => setPendingSelection(null)}
+          onSubmittedNewTopLevel={(newCommentId) => {
+            // Dismiss the pending-selection composer, then promote the new
+            // comment to active so the user sees it immediately.
+            setPendingSelection(null);
+            onPostedTopLevel?.(newCommentId);
+          }}
         />
       ) : activeComment ? (
         <CommentView
