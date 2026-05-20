@@ -5,6 +5,7 @@ import { TabBar } from "@/components/TabBar";
 import { HomepageArticles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
 import { CommentsColumn } from "@/components/CommentsColumn";
+import FloatingSignButton from "@/app/FloatingSignButton";
 import type { CommentWithSelection } from "@/lib/db/queries";
 
 interface Props {
@@ -94,16 +95,13 @@ export function TabbedDocument({
           onTabChange={handleTabChange}
         />
 
-        <div className="grid gap-8 md:grid-cols-[1fr_360px]">
+        <div className="grid gap-8 md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_540px]">
           {/* Left: article column */}
           <div ref={articleRef} className="relative sm:px-12">
             {/* Fading vertical side lines constrained to the article column */}
             <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-zinc-300 via-zinc-300/30 to-transparent" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-zinc-300 via-zinc-300/30 to-transparent" />
 
-            <p className="mx-auto mb-8 max-w-3xl px-6 pt-6 text-center text-sm text-zinc-500">
-              Working draft · v{proposedVersion} · Highlight any text to leave a comment
-            </p>
             <ArticleSelectionContainer>
               <HomepageArticles
                 mode="interactive"
@@ -125,6 +123,10 @@ export function TabbedDocument({
           </aside>
         </div>
       </div>
+
+      {/* Floating Sign button is for the Current tab only — the Proposed tab
+          is a working draft, and the sign action belongs to the published doc. */}
+      {activeTab === "current" && <FloatingSignButton />}
     </>
   );
 }

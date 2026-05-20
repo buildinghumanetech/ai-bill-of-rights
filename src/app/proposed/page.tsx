@@ -1,6 +1,5 @@
 import Link from "next/link";
 import HeroSection from "@/app/HeroSection";
-import FloatingSignButton from "@/app/FloatingSignButton";
 import SignatureCount from "@/app/SignatureCount";
 import { TabbedDocument } from "@/components/TabbedDocument";
 import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
@@ -77,8 +76,6 @@ export default async function ProposedPage() {
           </div>
         </div>
       </section>
-
-      <FloatingSignButton />
     </div>
   );
 }

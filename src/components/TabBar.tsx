@@ -27,7 +27,7 @@ function FolderTab({ isActive, label, href, onClick }: FolderTabProps) {
   // so inactive tabs bottom-align and sit lower, making the active tab rise
   // above them like a raised folder tab.
   const base =
-    "relative rounded-t-lg border px-10 text-sm font-semibold transition-colors";
+    "relative rounded-t-lg border px-10 font-mono text-sm font-semibold transition-colors";
   const active =
     "z-10 -mb-px border-b-0 border-zinc-300 bg-white py-3 text-zinc-900";
   const inactive =
@@ -54,13 +54,13 @@ export function TabBar({ active, currentVersion, proposedVersion, onTabChange }:
       <nav className="flex items-end gap-1 px-4">
         <FolderTab
           isActive={active === "current"}
-          label={`v${currentVersion} · Current`}
+          label={`v${currentVersion}: Current`}
           href={onTabChange ? undefined : "/"}
           onClick={onTabChange ? () => onTabChange("current") : undefined}
         />
         <FolderTab
           isActive={active === "proposed"}
-          label={`v${proposedVersion} · Proposed`}
+          label={`v${proposedVersion}: Proposed`}
           href={onTabChange ? undefined : "/proposed"}
           onClick={onTabChange ? () => onTabChange("proposed") : undefined}
         />

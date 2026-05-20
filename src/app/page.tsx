@@ -1,6 +1,5 @@
 import Link from "next/link";
 import HeroSection from "./HeroSection";
-import FloatingSignButton from "./FloatingSignButton";
 import SignatureCount from "./SignatureCount";
 import { TabbedDocument } from "@/components/TabbedDocument";
 import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
@@ -77,8 +76,6 @@ export default async function Home() {
           </div>
         </div>
       </section>
-
-      <FloatingSignButton />
     </div>
   );
 }

@@ -59,7 +59,7 @@ export function CommentsColumn({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-5">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Comments
       </h3>
@@ -75,7 +75,7 @@ export function CommentsColumn({
         <CommentView comment={activeComment} onClose={() => onActiveChange(null)} />
       ) : (
         <p className="text-sm text-zinc-500 leading-relaxed">
-          Highlight any text in the article to start a comment. Click an existing cyan highlight to read its thread.
+          Highlight any text to comment or suggest changes.
         </p>
       )}
 
