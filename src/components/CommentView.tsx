@@ -115,7 +115,7 @@ export function CommentView({
       {relatedComments.length > 0 && (
         <div className="mt-4 border-t border-zinc-200 pt-4 space-y-2">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
-            Related to this quote
+            Related Comments:
           </p>
           {relatedComments.map((rc) => (
             <button
