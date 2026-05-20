@@ -169,8 +169,33 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
             if (mentionedRow.length === 0) return;
 
             const clerkUser = await clerk.users.getUser(mentionedRow[0].clerkUserId);
-            const email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
-            if (!email) return;
+            // Best-effort email resolution: primary first, then any verified
+            // address, then any address at all. SMS-only users will have
+            // none — we log the miss so it's auditable, and rely on the
+            // mention row in `comment_mentions` so the user can still see the
+            // mention next time they visit. (SMS delivery would require
+            // wiring Twilio or a similar provider — not in place yet.)
+            const emailCandidates = [
+              clerkUser.primaryEmailAddress?.emailAddress,
+              ...clerkUser.emailAddresses
+                .filter((e) => e.verification?.status === "verified")
+                .map((e) => e.emailAddress),
+              ...clerkUser.emailAddresses.map((e) => e.emailAddress),
+            ].filter((v): v is string => Boolean(v));
+            const email = emailCandidates[0];
+            if (!email) {
+              const hasPhone = (clerkUser.phoneNumbers?.length ?? 0) > 0;
+              console.warn(
+                "[mention] No email for mentioned signer — notification skipped",
+                {
+                  signerId: mention.signerId,
+                  displayName: mentionedRow[0].displayName,
+                  hasPhone,
+                  commentId: insertedCommentId,
+                },
+              );
+              return;
+            }
 
             const tmpl = mentionEmail({
               mentionedDisplayName: mentionedRow[0].displayName,
