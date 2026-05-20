@@ -44,7 +44,7 @@ export function CommentComposer(props: Props) {
         ts: Date.now(),
       });
       // Trigger Clerk OTP flow by opening the sign modal.
-      window.dispatchEvent(new CustomEvent("open-sign-modal"));
+      window.dispatchEvent(new CustomEvent("open-sign-modal", { detail: { mode: "comment-only" } }));
       return;
     }
 

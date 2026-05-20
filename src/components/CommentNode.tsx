@@ -48,7 +48,7 @@ function indentClass(depth: number): string {
 }
 
 function openSignModal() {
-  window.dispatchEvent(new CustomEvent("open-sign-modal"));
+  window.dispatchEvent(new CustomEvent("open-sign-modal", { detail: { mode: "comment-only" } }));
 }
 
 /**

@@ -1,5 +1,28 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 23:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Pass 6: Comment-only sign-in mode. Users who click "Sign in & comment" now go through the same OTP flow but get only a `signers` row — no `signatures` row. New server action `createSignerFromModal` in `sign-from-modal.ts` mirrors `recordSignatureFromModal` but skips the signature insert and sends the new `commentAccountCreated` email template instead. `SignModal` gains a `mode: "sign" | "comment-only"` prop (default "sign") and an internal `mode` state that can be overridden by the `open-sign-modal` event detail. In comment-only mode: title becomes "Create an account to comment", submit button says "Create account & post comment", done screen shows a brief "account created" card instead of selfie/share/invite widgets. All three comment dispatchers (`CommentNode`, `CommentComposer`, `NewCommentForm`) updated to fire `{ detail: { mode: "comment-only" } }`. `TabbedDocument`'s `SignModal` mount defaults to "comment-only" (overridable by event). `FloatingSignButton`'s `SignModal` mount keeps "sign" default (no change). 4 new tests; 181/181 pass.
+
+### Detail of changes made:
+- **`src/server/actions/sign-from-modal.ts`** — Added `createSignerFromModal(input)` server action. Reuses `formatDisplayName`, `extractCapturedFields`, geo fallback, `upsertSignerProfile`, and `decodePercentEncoding` from `recordSignatureFromModal`. Detects existing signer by `clerkUserId` query on the prod db before upserting; returns `alreadyExists: true` and the existing `signerId`/`displayName` without touching the DB. On new signer: upserts the signer, sends `commentAccountCreated` email (best effort), returns `{ success, signerId, displayName }`. Does NOT call `recordSignature`. Added `commentAccountCreated` to import.
+- **`src/lib/email/templates.ts`** — Added `commentAccountCreated(opts)` template: subject "Welcome to the AI Bill of Rights discussion", body mentions `accountUrl` so users can sign later. Does not include version strings (clear separation from `signConfirmation`).
+- **`src/app/SignModal.tsx`** — Added `mode?: "sign" | "comment-only"` prop (default "sign") and `mode` useState (reset on close, seeded from `modeProp`). `handleFormSubmit` and `handleCodeSubmit` both branch on `mode`: call `createSignerFromModal` in comment-only mode, else `recordSignatureFromModal`. Title, subtitle, submit button, OTP header, confirm button, and done screen all read from `mode`. In done screen: comment-only shows a blue-tinted "account created" info box; sign mode still shows selfie/share/invite section.
+- **`src/components/TabbedDocument.tsx`** — Added `signModalMode` state (default "comment-only"). `open-sign-modal` listener reads `(e as CustomEvent).detail?.mode` and calls `setSignModalMode`; passes `mode={signModalMode}` to `<SignModal>`.
+- **`src/components/CommentNode.tsx`** — `openSignModal()` now fires `{ detail: { mode: "comment-only" } }`.
+- **`src/components/CommentComposer.tsx`** — `dispatchEvent` fires `{ detail: { mode: "comment-only" } }`.
+- **`src/components/NewCommentForm.tsx`** — `dispatchEvent` fires `{ detail: { mode: "comment-only" } }`.
+- **`tests/server/create-signer-from-modal.test.ts`** — 4 new tests: (1) signer row created, no signatures row; (2) idempotency (same clerkUserId, no duplicate); (3) `commentAccountCreated` renders correct subject + accountUrl; (4) template does not include sign-confirmation language.
+
+### Potential concerns to address:
+- `createSignerFromModal` does a direct `prodDb` import (dynamic `import("@/lib/db")`) for the existing-signer check. This follows the lazy-require pattern used elsewhere (e.g. `profile.ts`), so tests that pass an explicit db bypass it. Future callers that want to test the full function will need Clerk mocks.
+- The `alreadyExists` check in `createSignerFromModal` reads from the prod db rather than going through `upsertSignerProfile`'s internal query, so there is a TOCTOU window under extreme concurrency. Acceptable given OTP authentication serialises the flow.
+- Both `TabbedDocument` and `FloatingSignButton` mount independent `<SignModal>` instances — established pattern documented in Pass 4 notes above. The two modals are independent state machines; only one will ever open at a time since one lives on the Current tab (FloatingSignButton) and the other handles event-driven opens.
+
+---
+
 ## Progress Update as of 2026-05-19 22:45 Pacific
 *(Most recent updates at top)*
 

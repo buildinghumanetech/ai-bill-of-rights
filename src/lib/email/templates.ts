@@ -1,3 +1,21 @@
+export function commentAccountCreated(opts: {
+  displayName: string;
+  siteUrl: string;
+  accountUrl: string;
+}): { subject: string; text: string } {
+  return {
+    subject: `Welcome to the AI Bill of Rights discussion`,
+    text: `Hi ${opts.displayName},
+
+You created an account to comment on the AI Bill of Rights working draft.
+
+You can also sign the bill itself any time from your account page: ${opts.accountUrl}
+
+— The AI Bill of Rights project
+`,
+  };
+}
+
 export function signConfirmation(opts: {
   displayName: string;
   version: string;

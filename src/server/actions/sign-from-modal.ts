@@ -10,7 +10,7 @@ import {
 } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
-import { signConfirmation } from "@/lib/email/templates";
+import { signConfirmation, commentAccountCreated } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 
 type NameDisplayFormat = "initials" | "first-initial" | "full";
@@ -195,6 +195,147 @@ export async function recordSignatureFromModal(
       }
     } catch (err) {
       console.error("[email] confirmation send failed:", err);
+    }
+
+    return { success: true, signerId: profile.id, displayName };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return { success: false, error: msg };
+  }
+}
+
+// ─── Comment-only account creation ────────────────────────────────────────────
+// Creates a signer row (or returns the existing one) WITHOUT inserting a
+// signatures row.  Used when a user authenticates in order to comment on the
+// working draft but has not yet chosen to sign the bill.
+
+export interface CreateSignerFromModalInput {
+  firstName: string;
+  lastName: string;
+  method: "email" | "phone";
+  shareLocation: boolean;
+  nameDisplayFormat?: NameDisplayFormat;
+  notificationPreference?: NotificationPreference;
+}
+
+export interface CreateSignerFromModalResult {
+  success: boolean;
+  error?: string;
+  alreadyExists?: boolean;
+  signerId?: string;
+  displayName?: string;
+}
+
+export async function createSignerFromModal(
+  input: CreateSignerFromModalInput,
+): Promise<CreateSignerFromModalResult> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Not authenticated. Please retry." };
+    }
+
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+    if (!firstName || !lastName) {
+      return { success: false, error: "First and last name are required." };
+    }
+    const displayName = formatDisplayName(
+      firstName,
+      lastName,
+      input.nameDisplayFormat ?? "full",
+    );
+
+    const h = await headers();
+    const fields = extractCapturedFields(h, {
+      sessionUtc: new Date().toISOString(),
+    });
+
+    // Same geo fallback as recordSignatureFromModal.
+    if (
+      input.shareLocation &&
+      !fields.ip_geo_city &&
+      !fields.ip_geo_country
+    ) {
+      try {
+        const res = await fetch("https://ipapi.co/json/", {
+          headers: { "User-Agent": "ai-bill-of-rights-dev" },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            city?: string;
+            region?: string;
+            country_code?: string;
+          };
+          fields.ip_geo_city = data.city ?? "";
+          fields.ip_geo_region = data.region ?? "";
+          fields.ip_geo_country = data.country_code ?? "";
+        }
+      } catch (err) {
+        console.warn("[createSigner] geo fallback failed:", err);
+      }
+    }
+
+    const locationText = input.shareLocation
+      ? decodePercentEncoding(
+          [fields.ip_geo_city, fields.ip_geo_region, fields.ip_geo_country]
+            .filter(Boolean)
+            .join(", "),
+        ) || null
+      : null;
+
+    const verificationMethod: "email" | "sms" =
+      input.method === "email" ? "email" : "sms";
+
+    // upsertSignerProfile returns existing profile when clerkUserId already exists.
+    // We detect that by querying first so we can set alreadyExists accurately.
+    const { db: prodDb } = await import("@/lib/db");
+    const { signers } = await import("@/lib/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    const existing = await prodDb
+      .select({ id: signers.id, displayName: signers.displayName })
+      .from(signers)
+      .where(eq(signers.clerkUserId, userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Signer already exists — nothing to do, return their current info.
+      return {
+        success: true,
+        alreadyExists: true,
+        signerId: existing[0].id,
+        displayName: existing[0].displayName,
+      };
+    }
+
+    const profile = await upsertSignerProfile(undefined, {
+      clerkUserId: userId,
+      displayName,
+      affiliation: null,
+      locationText,
+      verificationMethod,
+      notificationPreference: input.notificationPreference ?? "major",
+    });
+
+    // Confirmation email (best effort).
+    try {
+      const clerk = await clerkClient();
+      const user = await clerk.users.getUser(userId);
+      const email = user.primaryEmailAddress?.emailAddress;
+      if (email) {
+        const siteUrl =
+          process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+        const tpl = commentAccountCreated({
+          displayName,
+          siteUrl,
+          accountUrl: `${siteUrl}/account`,
+        });
+        await sendEmail({ to: email, ...tpl });
+      }
+    } catch (err) {
+      console.error("[email] comment-account confirmation failed:", err);
     }
 
     return { success: true, signerId: profile.id, displayName };

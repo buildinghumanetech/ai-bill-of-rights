@@ -51,10 +51,18 @@ export function TabbedDocument({
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const [signModalMode, setSignModalMode] = useState<"sign" | "comment-only">("comment-only");
+
   // Listen for open-sign-modal events from anywhere on the page (e.g. CommentNode).
   // This must be always mounted, even on the Proposed tab where FloatingSignButton is hidden.
+  // The event detail can carry { mode: "sign" | "comment-only" }; defaults to "comment-only"
+  // since this modal instance is primarily triggered by comment actions.
   useEffect(() => {
-    const onOpen = () => setSignModalOpen(true);
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode?: "sign" | "comment-only" } | undefined>).detail;
+      setSignModalMode(detail?.mode ?? "comment-only");
+      setSignModalOpen(true);
+    };
     window.addEventListener("open-sign-modal", onOpen);
     return () => window.removeEventListener("open-sign-modal", onOpen);
   }, []);
@@ -214,7 +222,7 @@ export function TabbedDocument({
           CommentNode and NewCommentForm dispatch open-sign-modal from any tab,
           and we handle that event here so the modal always responds. */}
       {activeTab === "current" && <FloatingSignButton />}
-      <SignModal open={signModalOpen} onClose={() => setSignModalOpen(false)} />
+      <SignModal open={signModalOpen} onClose={() => setSignModalOpen(false)} mode={signModalMode} />
     </>
   );
 }

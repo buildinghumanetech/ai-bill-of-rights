@@ -70,7 +70,7 @@ export function NewCommentForm({
         returnTo: window.location.pathname + "?draft=1",
         ts: Date.now(),
       });
-      window.dispatchEvent(new CustomEvent("open-sign-modal"));
+      window.dispatchEvent(new CustomEvent("open-sign-modal", { detail: { mode: "comment-only" } }));
       return;
     }
     startTransition(async () => {
