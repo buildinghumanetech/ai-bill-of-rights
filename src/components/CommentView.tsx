@@ -37,7 +37,8 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
         baseVersionId={baseVersionId}
         rootAnchorId={comment.anchorId}
       />
-      {/* Top-level composer for adding a sibling comment on the same quote. */}
+      {/* Top-level composer for adding a sibling comment on the same quote.
+          The quote is already shown above the thread, so don't repeat it. */}
       {comment.anchorId && baseVersionId && (
         <div className="mt-6 border-t border-zinc-200 pt-4">
           <NewCommentForm
@@ -47,6 +48,7 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
             viewerSignerId={viewerSignerId}
             isAdmin={isAdmin}
             signersForAdmin={signersForAdmin}
+            showQuote={false}
             onCancel={() => { /* no-op — composer is persistent at the bottom */ }}
           />
         </div>

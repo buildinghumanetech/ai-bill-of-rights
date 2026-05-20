@@ -375,25 +375,24 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
           {/* Inline reply composer */}
           {showReply && (
             <form onSubmit={handleReplySubmit} className="mt-2 space-y-2">
-              {/* Admin "post as" dropdown for replies */}
+              {/* Admin "post as" dropdown — sits in place of the author name. */}
               {isAdmin && signersForAdmin.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-zinc-500 shrink-0">Posting as:</label>
-                  <select
-                    value={replyActAsSignerId}
-                    onChange={(e) => setReplyActAsSignerId(e.target.value)}
-                    className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
-                  >
-                    <option value="">me ({signersForAdmin.find((s) => s.id === viewerSignerId)?.displayName ?? "admin"})</option>
-                    {signersForAdmin
-                      .filter((s) => s.id !== viewerSignerId)
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.displayName}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                <select
+                  value={replyActAsSignerId}
+                  onChange={(e) => setReplyActAsSignerId(e.target.value)}
+                  className="rounded border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                >
+                  <option value="">
+                    {signersForAdmin.find((s) => s.id === viewerSignerId)?.displayName ?? "me"}
+                  </option>
+                  {signersForAdmin
+                    .filter((s) => s.id !== viewerSignerId)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.displayName}
+                      </option>
+                    ))}
+                </select>
               )}
               <textarea
                 ref={textareaRef}
