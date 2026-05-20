@@ -37,8 +37,8 @@ function relativeTime(date: Date): string {
 function indentClass(depth: number): string {
   if (depth === 0) return "";
   const clamped = Math.min(depth, 4);
-  // Indent ~24px per level so replies are clearly nested under their parent.
-  return `pl-${clamped * 6} border-l-2 border-zinc-200`;
+  // Indent only — no vertical guide line.
+  return `pl-${clamped * 6}`;
 }
 
 function openSignModal() {
