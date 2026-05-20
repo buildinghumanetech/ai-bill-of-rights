@@ -185,10 +185,8 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
         {/* Comment content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-xs font-semibold text-zinc-700">{comment.displayName}</span>
-            <span className="text-xs text-zinc-400">{relativeTime(new Date(comment.createdAt))}</span>
-
-            {/* Score + vote arrows — black for the number, light-gray arrows */}
+            {/* Score + vote arrows — black for the number, light-gray arrows.
+                Sit to the LEFT of the author name. */}
             <span className="flex items-baseline gap-1.5 text-xs text-zinc-700 font-mono">
               <span aria-label="score">{voteState.score}</span>
               <span className="flex items-center leading-none">
@@ -218,6 +216,9 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                 </button>
               </span>
             </span>
+
+            <span className="text-xs font-semibold text-zinc-700">{comment.displayName}</span>
+            <span className="text-xs text-zinc-400">{relativeTime(new Date(comment.createdAt))}</span>
             {/* Edit / Delete for author or admin */}
             {canEditDelete && (
               <span className="ml-auto flex items-center gap-2 shrink-0">
