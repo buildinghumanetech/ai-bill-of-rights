@@ -37,7 +37,8 @@ function relativeTime(date: Date): string {
 function indentClass(depth: number): string {
   if (depth === 0) return "";
   const clamped = Math.min(depth, 4);
-  return `pl-${clamped * 4} border-l border-zinc-200`;
+  // Indent ~24px per level so replies are clearly nested under their parent.
+  return `pl-${clamped * 6} border-l-2 border-zinc-200`;
 }
 
 function openSignModal() {
@@ -50,7 +51,6 @@ function openSignModal() {
  */
 export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin, depth, baseVersionId, rootAnchorId }: Props) {
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(comment.score < -3);
   const [showReply, setShowReply] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -174,76 +174,48 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
     });
   }
 
-  if (collapsed) {
-    return (
-      <div className={`${indentClass(depth)} mt-1`}>
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="text-xs text-zinc-400 italic hover:text-zinc-600"
-        >
-          [comment hidden by community votes — show]
-        </button>
-      </div>
-    );
-  }
-
   const upActive = voteState.myVote === 1;
   const downActive = voteState.myVote === -1;
 
   return (
     <div className={`${indentClass(depth)} mt-1 space-y-1`}>
       <div className="flex gap-2">
-        {/* Vote column */}
-        <div className="flex flex-col items-center gap-0.5 pt-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => handleVote(1)}
-            disabled={isSelf}
-            title={isSelf ? "Can't vote on your own comment" : "Upvote"}
-            className={`text-sm leading-none transition-colors ${
-              isSelf
-                ? "text-zinc-200 cursor-not-allowed"
-                : upActive
-                ? "text-orange-500 hover:text-orange-400"
-                : "text-zinc-400 hover:text-zinc-700"
-            }`}
-          >
-            ▲
-          </button>
-          <span
-            className={`text-xs font-mono leading-none ${
-              voteState.score > 0
-                ? "text-orange-500"
-                : voteState.score < 0
-                ? "text-blue-500"
-                : "text-zinc-400"
-            }`}
-          >
-            {voteState.score}
-          </span>
-          <button
-            type="button"
-            onClick={() => handleVote(-1)}
-            disabled={isSelf}
-            title={isSelf ? "Can't vote on your own comment" : "Downvote"}
-            className={`text-sm leading-none transition-colors ${
-              isSelf
-                ? "text-zinc-200 cursor-not-allowed"
-                : downActive
-                ? "text-blue-500 hover:text-blue-400"
-                : "text-zinc-400 hover:text-zinc-700"
-            }`}
-          >
-            ▼
-          </button>
-        </div>
-
         {/* Comment content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-xs font-semibold text-zinc-700">{comment.displayName}</span>
             <span className="text-xs text-zinc-400">{relativeTime(new Date(comment.createdAt))}</span>
+
+            {/* Score + vote arrows — black for the number, light-gray arrows */}
+            <span className="flex items-baseline gap-1.5 text-xs text-zinc-700 font-mono">
+              <span aria-label="score">{voteState.score}</span>
+              <span className="flex items-center leading-none">
+                <button
+                  type="button"
+                  onClick={() => handleVote(1)}
+                  disabled={isSelf}
+                  title={isSelf ? "Can't vote on your own comment" : "Upvote"}
+                  aria-pressed={upActive}
+                  className={`text-[10px] leading-none transition-opacity ${
+                    isSelf ? "text-zinc-200 cursor-not-allowed" : "text-zinc-400 hover:text-zinc-600"
+                  } ${upActive ? "font-bold text-zinc-600" : ""}`}
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleVote(-1)}
+                  disabled={isSelf}
+                  title={isSelf ? "Can't vote on your own comment" : "Downvote"}
+                  aria-pressed={downActive}
+                  className={`text-[10px] leading-none transition-opacity -ml-px ${
+                    isSelf ? "text-zinc-200 cursor-not-allowed" : "text-zinc-400 hover:text-zinc-600"
+                  } ${downActive ? "font-bold text-zinc-600" : ""}`}
+                >
+                  ▼
+                </button>
+              </span>
+            </span>
             {/* Edit / Delete for author or admin */}
             {canEditDelete && (
               <span className="ml-auto flex gap-2 shrink-0">

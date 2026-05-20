@@ -47,14 +47,14 @@ export function TabbedDocument({
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Clicking outside any highlight button clears the active comment.
+  // Clicking outside any highlight span clears the active comment.
   useEffect(() => {
     const el = articleRef.current;
     if (!el) return;
     function onClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
-      // Highlight buttons are <button> children with bg-cyan-* classes
-      if (target.closest("button[data-highlight]")) return;
+      // Highlight spans have data-highlight="true"
+      if (target.closest("[data-highlight]")) return;
       setActiveCommentId(null);
     }
     el.addEventListener("click", onClickOutside);

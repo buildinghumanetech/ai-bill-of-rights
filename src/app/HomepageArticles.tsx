@@ -244,19 +244,29 @@ function applyHighlights(
   for (const span of spans) {
     if (cursor < span.start) nodes.push(sentence.slice(cursor, span.start));
     const isActive = span.comment.id === activeCommentId;
+    // Use a <span role="button"> rather than <button> so the highlight flows
+    // inline with surrounding text. <button> defaults to inline-block which
+    // is treated as an atomic unit by the line-breaker, splitting words.
     nodes.push(
-      <button
+      <span
         key={span.comment.id}
-        type="button"
+        role="button"
+        tabIndex={0}
         data-highlight="true"
         onClick={() => onHighlightClick(span.comment.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onHighlightClick(span.comment.id);
+          }
+        }}
         className={[
           "rounded-sm cursor-pointer transition-colors",
           isActive ? "bg-cyan-300" : "bg-cyan-100 hover:bg-cyan-200",
         ].join(" ")}
       >
         {sentence.slice(span.start, span.end)}
-      </button>,
+      </span>,
     );
     cursor = span.end;
   }
@@ -369,7 +379,11 @@ export function HomepageArticles({
                     <Link
                       key={pill.slug}
                       href={`/resources/${pill.slug}`}
-                      className={`rounded-md border px-3 py-1 text-xs font-medium transition-colors ${pillColor(pill.slug)}`}
+                      className={`rounded-md border px-3 py-1 text-xs font-medium transition-colors ${
+                        mode === "interactive"
+                          ? "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
+                          : pillColor(pill.slug)
+                      }`}
                     >
                       {pill.title}
                     </Link>

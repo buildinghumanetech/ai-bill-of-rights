@@ -9,14 +9,17 @@ interface Props {
   isAdmin: boolean;
   signersForAdmin: SignerForAdminPostAs[];
   baseVersionId: string;
-  onClose: () => void;
+  /** Kept for API back-compat; no longer rendered (no Close button). */
+  onClose?: () => void;
 }
 
 /**
  * Right-column comment view. Shows the selected-text quote if present,
- * then the full threaded comment tree rooted at this comment.
+ * then the threaded comment tree rooted at this comment. No close affordance —
+ * the comment stays visible until another highlight is clicked or the user
+ * clicks outside the article to clear the active state.
  */
-export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, baseVersionId, onClose }: Props) {
+export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, baseVersionId }: Props) {
   return (
     <div className="space-y-3">
       {comment.selectedText && (
@@ -33,13 +36,6 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
         baseVersionId={baseVersionId}
         rootAnchorId={comment.anchorId}
       />
-      <button
-        type="button"
-        onClick={onClose}
-        className="text-xs text-zinc-500 underline-offset-2 hover:underline"
-      >
-        Close
-      </button>
     </div>
   );
 }
