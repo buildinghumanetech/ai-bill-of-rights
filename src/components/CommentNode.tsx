@@ -294,21 +294,48 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
               {showReply ? "cancel" : "reply"}
             </button>
 
-            {flagState === "idle" ? (
-              <button
-                type="button"
-                onClick={handleFlag}
-                className="text-xs text-zinc-400 hover:text-red-500 transition-colors ml-auto"
-              >
-                flag
-              </button>
-            ) : flagState === "flagged" ? (
-              <span className="text-xs text-red-500 ml-auto">flagged</span>
-            ) : flagState === "already" ? (
-              <span className="text-xs text-zinc-400 ml-auto">already flagged</span>
-            ) : (
-              <span className="text-xs text-red-400 ml-auto">flag failed</span>
-            )}
+            {(() => {
+              const flagged =
+                flagState === "flagged" || flagState === "already";
+              const failed = flagState === "error";
+              const title = failed
+                ? "Couldn't flag"
+                : flagged
+                ? "You flagged this comment"
+                : "Flag this comment";
+              return (
+                <button
+                  type="button"
+                  onClick={handleFlag}
+                  disabled={flagged || failed}
+                  aria-label={title}
+                  aria-pressed={flagged}
+                  title={title}
+                  className={`ml-auto inline-flex transition-colors ${
+                    flagged
+                      ? "text-red-500 cursor-default"
+                      : failed
+                      ? "text-red-400 cursor-not-allowed"
+                      : "text-zinc-400 hover:text-red-500"
+                  }`}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="12"
+                    height="12"
+                    fill={flagged ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </svg>
+                </button>
+              );
+            })()}
           </div>
 
           {/* Inline reply composer */}
