@@ -63,8 +63,8 @@ export default async function ProposedPage() {
           </p>
           <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
             These nine commitments aren&apos;t a wishlist. They&apos;re the
-            line. Companies that won&apos;t agree to them are telling you
-            who they are.
+            baseline. Companies that won&apos;t agree to them are telling
+            you who they are.
           </p>
           <div className="mt-10 flex flex-col items-center gap-6">
             <Link
