@@ -155,6 +155,7 @@ export const comments = pgTable("comments", {
     .notNull()
     .references(() => signers.id),
   body: text("body").notNull(),
+  selectedText: text("selected_text"),
   parentCommentId: uuid("parent_comment_id").references((): AnyPgColumn => comments.id),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

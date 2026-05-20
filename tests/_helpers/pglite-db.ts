@@ -94,6 +94,7 @@ export async function createTestDb(): Promise<TestDb> {
       proposal_id uuid references proposed_edits(id),
       signer_id uuid not null references signers(id),
       body text not null,
+      selected_text text,
       parent_comment_id uuid references comments(id),
       created_at timestamptz not null default now(),
       hidden_at timestamptz,

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { AnchorSentence } from "@/components/AnchorSentence";
+import type { CommentWithSelection } from "@/lib/db/queries";
 
 // Pastel pill palette. Tailwind sees these as full class strings so the
 // JIT will include them in the generated CSS. Pills are colored by a tiny
@@ -209,6 +211,59 @@ export const articles: Article[] = [
   },
 ];
 
+/**
+ * Walk left-to-right through a sentence string and wrap the first occurrence
+ * of each comment's selectedText in a clickable button styled with cyan bg.
+ */
+function applyHighlights(
+  sentence: string,
+  comments: CommentWithSelection[],
+  activeCommentId: string | null,
+  onHighlightClick: (id: string) => void,
+): ReactNode[] {
+  // Collect only comments that have a selectedText we can find in this sentence.
+  // First-created wins when two comments have overlapping ranges.
+  type Span = { start: number; end: number; comment: CommentWithSelection };
+  const spans: Span[] = [];
+  for (const c of comments) {
+    if (!c.selectedText) continue;
+    const idx = sentence.indexOf(c.selectedText);
+    if (idx === -1) continue;
+    // Skip if this span overlaps an already-claimed range.
+    const overlaps = spans.some((s) => idx < s.end && idx + c.selectedText!.length > s.start);
+    if (overlaps) continue;
+    spans.push({ start: idx, end: idx + c.selectedText.length, comment: c });
+  }
+  if (spans.length === 0) return [sentence];
+
+  // Sort by position so we can slice left-to-right.
+  spans.sort((a, b) => a.start - b.start);
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const span of spans) {
+    if (cursor < span.start) nodes.push(sentence.slice(cursor, span.start));
+    const isActive = span.comment.id === activeCommentId;
+    nodes.push(
+      <button
+        key={span.comment.id}
+        type="button"
+        data-highlight="true"
+        onClick={() => onHighlightClick(span.comment.id)}
+        className={[
+          "rounded-sm cursor-pointer transition-colors",
+          isActive ? "bg-cyan-300" : "bg-cyan-100 hover:bg-cyan-200",
+        ].join(" ")}
+      >
+        {sentence.slice(span.start, span.end)}
+      </button>,
+    );
+    cursor = span.end;
+  }
+  if (cursor < sentence.length) nodes.push(sentence.slice(cursor));
+  return nodes;
+}
+
 interface Props {
   /**
    * - "static": prose paragraphs. Production look.
@@ -217,6 +272,12 @@ interface Props {
    *   inside it can be turned into comments.
    */
   mode: "static" | "interactive";
+  /** Keyed by anchorId; only relevant in interactive mode. */
+  commentsByAnchor?: Record<string, CommentWithSelection[]>;
+  /** Id of the currently "active" (bright cyan) comment highlight. */
+  activeCommentId?: string | null;
+  /** Called when the user clicks a cyan highlight button. */
+  onHighlightClick?: (commentId: string) => void;
 }
 
 /**
@@ -230,7 +291,12 @@ function splitSentences(body: string): string[] {
     .filter(Boolean);
 }
 
-export function HomepageArticles({ mode }: Props) {
+export function HomepageArticles({
+  mode,
+  commentsByAnchor = {},
+  activeCommentId = null,
+  onHighlightClick = () => {},
+}: Props) {
   return (
     <ol className="mx-auto max-w-3xl">
       {articles.map((article) => (
@@ -259,10 +325,17 @@ export function HomepageArticles({ mode }: Props) {
                 <p className="mt-5 text-lg leading-relaxed text-zinc-700">
                   {splitSentences(article.body).map((sentence, idx) => {
                     const anchorId = `article-${article.number}-s-${idx + 1}`;
+                    const anchorComments = commentsByAnchor[anchorId] ?? [];
+                    const highlighted = applyHighlights(
+                      sentence,
+                      anchorComments,
+                      activeCommentId,
+                      onHighlightClick,
+                    );
                     return (
                       <AnchorSentence key={anchorId} anchorId={anchorId}>
                         {idx > 0 ? " " : ""}
-                        {sentence}
+                        {highlighted}
                       </AnchorSentence>
                     );
                   })}

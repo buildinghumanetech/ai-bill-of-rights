@@ -186,6 +186,58 @@ export async function listCommentsForAnchor(
   return rows as CommentRow[];
 }
 
+export interface CommentWithSelection {
+  id: string;
+  body: string;
+  signerId: string;
+  displayName: string;
+  parentCommentId: string | null;
+  anchorId: string | null;
+  selectedText: string | null;
+  createdAt: Date;
+}
+
+export async function listCommentsForVersion(
+  db: any,
+  baseVersionId: string,
+): Promise<CommentWithSelection[]> {
+  const rows = await db
+    .select({
+      id: comments.id,
+      body: comments.body,
+      signerId: comments.signerId,
+      displayName: signers.displayName,
+      parentCommentId: comments.parentCommentId,
+      anchorId: comments.anchorId,
+      selectedText: comments.selectedText,
+      createdAt: comments.createdAt,
+    })
+    .from(comments)
+    .innerJoin(signers, eq(signers.id, comments.signerId))
+    .where(
+      and(
+        eq(comments.baseVersionId, baseVersionId),
+        isNull(comments.hiddenAt),
+      ),
+    )
+    .orderBy(asc(comments.createdAt));
+  return rows as CommentWithSelection[];
+}
+
+export async function listCommentsByAnchorForVersion(
+  db: any,
+  baseVersionId: string,
+): Promise<Record<string, CommentWithSelection[]>> {
+  const all = await listCommentsForVersion(db, baseVersionId);
+  const out: Record<string, CommentWithSelection[]> = {};
+  for (const c of all) {
+    if (!c.anchorId) continue;
+    if (!out[c.anchorId]) out[c.anchorId] = [];
+    out[c.anchorId].push(c);
+  }
+  return out;
+}
+
 export interface AttestationListItem {
   id: string;
   orgName: string;

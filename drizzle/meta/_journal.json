@@ -29,6 +29,13 @@
       "when": 1779298409813,
       "tag": "0003_add_attestations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1747699200000,
+      "tag": "0004_comment_selected_text",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,16 @@
-import { getCurrentVersion } from "@/lib/db/queries";
+import {
+  getCurrentVersion,
+  listCommentsForVersion,
+  listCommentsByAnchorForVersion,
+  type CommentWithSelection,
+} from "@/lib/db/queries";
 
 export interface HomepageTabData {
   currentVersion: string;
   proposedVersion: string;
   baseVersionId: string | null;
+  comments: CommentWithSelection[];
+  commentsByAnchor: Record<string, CommentWithSelection[]>;
 }
 
 function bumpPatch(version: string): string {
@@ -22,9 +29,28 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
   const current = await getCurrentVersion().catch(() => null);
   const currentVersion = current?.version ?? "0.0.1";
   const proposedVersion = bumpPatch(currentVersion);
+  const baseVersionId = current?.id ?? null;
+
+  let comments: CommentWithSelection[] = [];
+  let commentsByAnchor: Record<string, CommentWithSelection[]> = {};
+  if (baseVersionId) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { db } = require("@/lib/db") as { db: any };
+      [comments, commentsByAnchor] = await Promise.all([
+        listCommentsForVersion(db, baseVersionId),
+        listCommentsByAnchorForVersion(db, baseVersionId),
+      ]);
+    } catch {
+      // DB unavailable — serve empty maps so page still renders
+    }
+  }
+
   return {
     currentVersion,
     proposedVersion,
-    baseVersionId: current?.id ?? null,
+    baseVersionId,
+    comments,
+    commentsByAnchor,
   };
 }

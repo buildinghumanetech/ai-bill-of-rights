@@ -55,6 +55,31 @@ describe("createComment (data layer)", () => {
     expect(rows[0].body).toBe("hello world"); // trimmed
   });
 
+  it("persists selectedText when provided", async () => {
+    const { db, versionId, signerId } = await seed();
+    await createComment(db, {
+      baseVersionId: versionId,
+      signerId,
+      anchorId: "preamble-s-1",
+      body: "nice quote",
+      selectedText: "some highlighted text",
+    });
+    const rows = await db.select().from(comments);
+    expect(rows[0].selectedText).toBe("some highlighted text");
+  });
+
+  it("stores null selectedText when not provided", async () => {
+    const { db, versionId, signerId } = await seed();
+    await createComment(db, {
+      baseVersionId: versionId,
+      signerId,
+      anchorId: "preamble-s-1",
+      body: "no selection",
+    });
+    const rows = await db.select().from(comments);
+    expect(rows[0].selectedText).toBeNull();
+  });
+
   it("rejects empty bodies", async () => {
     const { db, versionId, signerId } = await seed();
     await expect(

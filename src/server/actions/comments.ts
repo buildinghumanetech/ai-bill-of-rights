@@ -13,6 +13,14 @@ function getDb() {
   return _db;
 }
 
+/**
+ * Strip control characters and trim, then cap length.
+ * Used for both comment body and selectedText.
+ */
+function sanitizeText(raw: string, maxLen: number): string {
+  return raw.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "").trim().slice(0, maxLen);
+}
+
 export interface CreateCommentInput {
   baseVersionId: string;
   signerId: string;
@@ -20,6 +28,7 @@ export interface CreateCommentInput {
   proposalId?: string;
   parentCommentId?: string;
   body: string;
+  selectedText?: string | null;
 }
 
 /**
@@ -48,6 +57,7 @@ export async function createComment(
       proposalId: input.proposalId ?? null,
       parentCommentId: input.parentCommentId ?? null,
       body,
+      selectedText: input.selectedText ?? null,
     })
     .returning({ id: comments.id });
   return { id: row.id };
@@ -71,7 +81,10 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   const anchorId = formData.get("anchorId")?.toString() || undefined;
   const proposalId = formData.get("proposalId")?.toString() || undefined;
   const parentCommentId = formData.get("parentCommentId")?.toString() || undefined;
-  const body = String(formData.get("body") ?? "");
+  const rawBody = String(formData.get("body") ?? "");
+  const body = sanitizeText(rawBody, 5000);
+  const rawSelectedText = formData.get("selectedText")?.toString() ?? "";
+  const selectedText = rawSelectedText ? sanitizeText(rawSelectedText, 1000) : null;
 
   try {
     await enforceRateLimit(db, {
@@ -93,6 +106,7 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
       proposalId,
       parentCommentId,
       body,
+      selectedText,
     });
   } catch (err) {
     return { ok: false, error: (err as Error).message };
