@@ -2,6 +2,7 @@
 
 import type { ThreadedComment, SignerForAdminPostAs } from "@/lib/db/queries";
 import { CommentNode } from "./CommentNode";
+import { NewCommentForm } from "./NewCommentForm";
 
 interface Props {
   comment: ThreadedComment;
@@ -15,9 +16,9 @@ interface Props {
 
 /**
  * Right-column comment view. Shows the selected-text quote if present,
- * then the threaded comment tree rooted at this comment. No close affordance —
- * the comment stays visible until another highlight is clicked or the user
- * clicks outside the article to clear the active state.
+ * then the threaded comment tree rooted at this comment. A new-comment
+ * composer sits below the thread so the viewer can add another top-level
+ * comment on the same selected text without replying to anyone specific.
  */
 export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin, baseVersionId }: Props) {
   return (
@@ -36,6 +37,20 @@ export function CommentView({ comment, viewerSignerId, isAdmin, signersForAdmin,
         baseVersionId={baseVersionId}
         rootAnchorId={comment.anchorId}
       />
+      {/* Top-level composer for adding a sibling comment on the same quote. */}
+      {comment.anchorId && baseVersionId && (
+        <div className="mt-6 border-t border-zinc-200 pt-4">
+          <NewCommentForm
+            baseVersionId={baseVersionId}
+            anchorId={comment.anchorId}
+            selectedText={comment.selectedText ?? ""}
+            viewerSignerId={viewerSignerId}
+            isAdmin={isAdmin}
+            signersForAdmin={signersForAdmin}
+            onCancel={() => { /* no-op — composer is persistent at the bottom */ }}
+          />
+        </div>
+      )}
     </div>
   );
 }

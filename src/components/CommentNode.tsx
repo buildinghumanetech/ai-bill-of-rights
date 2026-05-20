@@ -33,12 +33,14 @@ function relativeTime(date: Date): string {
   return date.toLocaleDateString();
 }
 
-/** Clamp indentation depth to avoid extreme nesting. */
+/** Clamp indentation depth to avoid extreme nesting.
+ *
+ * Tailwind's JIT scans for static class strings; dynamic templates like
+ * `pl-${n}` don't get picked up, so we use a static lookup table.
+ */
+const INDENT_BY_DEPTH = ["", "pl-6", "pl-12", "pl-16", "pl-20"];
 function indentClass(depth: number): string {
-  if (depth === 0) return "";
-  const clamped = Math.min(depth, 4);
-  // Indent only — no vertical guide line.
-  return `pl-${clamped * 6}`;
+  return INDENT_BY_DEPTH[Math.min(depth, 4)] ?? "pl-20";
 }
 
 function openSignModal() {
@@ -218,7 +220,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             </span>
             {/* Edit / Delete for author or admin */}
             {canEditDelete && (
-              <span className="ml-auto flex gap-2 shrink-0">
+              <span className="ml-auto flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -226,16 +228,48 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                     setEditError(null);
                     setShowEdit((v) => !v);
                   }}
-                  className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
+                  aria-label="Edit comment"
+                  title="Edit comment"
+                  className="text-zinc-400 hover:text-zinc-700 transition-colors"
                 >
-                  edit
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="12"
+                    height="12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
+                  </svg>
                 </button>
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="text-xs text-zinc-400 hover:text-red-600 transition-colors"
+                  aria-label="Delete comment"
+                  title="Delete comment"
+                  className="text-zinc-400 hover:text-red-600 transition-colors"
                 >
-                  delete
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="12"
+                    height="12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  </svg>
                 </button>
               </span>
             )}
@@ -301,8 +335,8 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
               const title = failed
                 ? "Couldn't flag"
                 : flagged
-                ? "You flagged this comment"
-                : "Flag this comment";
+                ? "You flagged this comment as inappropriate"
+                : "Flag as inappropriate";
               return (
                 <button
                   type="button"
