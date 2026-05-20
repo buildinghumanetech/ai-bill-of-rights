@@ -1,5 +1,32 @@
 # Branch Progress: feat/proposed-tabs-phase-2-comments
 
+## Progress Update as of 2026-05-19 21:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Implemented all of Phase 3 (tasks 3.1–3.8): proposed-edit queries, server actions, applyEdits utility, SuggestChangesComposer, ProposalCard, ProposalDrawer, AnchorSentence mode discriminator, updated HomepageArticles with edit overlay rendering, rewired /proposed to use ProposalDrawer, and added /admin/proposals review queue. 135 tests pass (was 120); TypeScript clean; smoke tests 200/200/307.
+
+### Detail of changes made:
+- **`src/lib/db/queries.ts`** — added `ProposalRow` interface and four new query functions: `countProposalsByAnchor` (returns `{pending, accepted}` per anchor), `listProposalsByAnchor` (proposals for a specific anchor, pending+accepted, ASC), `getAcceptedProposalsForVersion` (accepted-only for the full /proposed render), `listPendingProposalsForVersion` (admin queue). All join upvote counts via a separate query because pglite doesn't support SQL COUNT + GROUP BY easily in Drizzle.
+- **`src/server/actions/proposals.ts`** — new file. Pure data-layer functions: `createProposal` (validates kind != delete requires newText), `acceptProposal` (sets accepted + auto-rejects conflicting pending replaces on same anchor; rejects insert_afters when accepting a delete), `rejectProposal`. Server action wrappers: `submitProposalAction` (auth + soft-ban + rate-limit 10/hr), `acceptProposalAction` (admin-gated), `rejectProposalAction` (admin-gated), `toggleProposalUpvoteAction` (auth + soft-ban).
+- **`src/lib/proposed/apply-edits.ts`** — new file. `applyEdits(ProposalRow[]) -> EditsByAnchor`. Per-anchor map with `replaceWith`, `isDeleted`, `insertsAfter[]`. Skips non-accepted proposals. Inserts get synthetic ids `${anchorId}-ins-${editId.slice(0,8)}`.
+- **`src/components/AnchorSentence.tsx`** — added `mode: "comments" | "proposals"` prop (defaults to `"comments"`). Badge now dispatches `anchor-open` event with `{ mode, anchorId }` instead of `anchor-open-comments`. Badge icon/aria-label adapts to mode.
+- **`src/components/CommentDrawer.tsx`** — updated to listen for `anchor-open` (not `anchor-open-comments`) and filter on `detail.mode === "comments"`.
+- **`src/components/SuggestChangesComposer.tsx`** — new file. Radio kind selector (replace/insert_after/delete), proposed-text textarea (hidden for delete), rationale textarea (optional). Anonymous → sessionStorage draft + open-sign-modal. Submits via `submitProposalAction`.
+- **`src/components/ProposalCard.tsx`** — new file. Renders kind badge, status badge, diff view (red strikethrough for replaced original, green for replacement, blue for insert), rationale, upvote count, Accept/Reject buttons (admin only, pending only).
+- **`src/components/ProposalDrawer.tsx`** — new file. Right-panel drawer, listens for `anchor-open` with `mode="proposals"` and `compose-suggest`. Shows original text header, lists ProposalCards, has footer with SuggestChangesComposer toggle.
+- **`src/app/HomepageArticles.tsx`** — added `anchorMode`, `editsByAnchor`, `proposalCounts` props. Interactive mode now applies per-anchor overrides: isDeleted → dim strikethrough span; replaceWith → green left border + replacement text; insertsAfter → additional AnchorSentence elements with blue border; pending proposals → amber underline + count badge.
+- **`src/app/proposed/page.tsx`** — full rewrite. Fetches `countProposalsByAnchor`, `listProposalsByAnchor` (for all anchors with proposals), `getAcceptedProposalsForVersion`. Builds `originalTextByAnchor` from `articles[]` using the same `splitSentences()` regex. Computes `editsByAnchor` via `applyEdits`. Renders `ProposalDrawer` (not CommentDrawer) and `HighlightPopover` with `enableSuggestChanges={true}`.
+- **`src/app/admin/proposals/page.tsx`** — new file. Admin-gated list of pending proposals for the current version with inline Accept/Reject form buttons. Shows kind, anchor, author, timestamp, newText diff, rationale, upvote count.
+
+### Potential concerns to address:
+- `originalTextByAnchor` on /proposed is computed server-side from `articles[]` using `splitSentences()` — must stay in sync with the same function in HomepageArticles.tsx. Currently duplicated; could be extracted to a shared utility if articles change frequently.
+- `countProposalsByAnchor` and `listProposalsByAnchor` are still called with `undefined as any` for the db arg (matching the established lazy-load pattern). This is consistent with existing comment queries.
+- ProposalDrawer upvote counts are SSR-fetched — the count displayed in ProposalCard doesn't update optimistically after a client-side upvote (just calls `router.refresh()`). Acceptable for now; could be enhanced with optimistic state later.
+- CommentDrawer is now unused by any page (/ is static; /proposed uses ProposalDrawer). The component is left intact per the task spec — no deletion.
+
+---
+
 ## Progress Update as of 2026-05-19 18:00 Pacific
 *(Most recent updates at top)*
 

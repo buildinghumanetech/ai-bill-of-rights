@@ -3,15 +3,19 @@ import HeroSection from "@/app/HeroSection";
 import FloatingSignButton from "@/app/FloatingSignButton";
 import SignatureCount from "@/app/SignatureCount";
 import { TabBar } from "@/components/TabBar";
-import { HomepageArticles } from "@/app/HomepageArticles";
+import { HomepageArticles, articles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
-import { CommentDrawer } from "@/components/CommentDrawer";
+import { ProposalDrawer } from "@/components/ProposalDrawer";
 import { HighlightPopover } from "@/components/HighlightPopover";
 import {
-  countCommentsByAnchor,
-  listCommentsForAnchor,
+  countProposalsByAnchor,
+  listProposalsByAnchor,
+  getAcceptedProposalsForVersion,
   getCurrentVersion,
+  type ProposalRow,
 } from "@/lib/db/queries";
+import { applyEdits } from "@/lib/proposed/apply-edits";
+import { getCurrentAdmin } from "@/lib/admin/check";
 
 export const dynamic = "force-dynamic";
 
@@ -23,32 +27,81 @@ function bumpPatch(version: string): string {
   return `${parts[0]}.${parts[1]}.${patch + 1}`;
 }
 
+/**
+ * Naive sentence splitter matching the one in HomepageArticles.tsx.
+ * Must be kept in sync.
+ */
+function splitSentences(body: string): string[] {
+  return body
+    .split(/(?<=[.!?])\s+(?=[A-Z"„])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Build originalTextByAnchor from the articles[] array.
+ * Maps "article-NN-s-I" → sentence text, matching the anchorId scheme
+ * used by HomepageArticles interactive mode.
+ */
+function buildOriginalTextByAnchor(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const article of articles) {
+    const sentences = splitSentences(article.body);
+    sentences.forEach((sentence, idx) => {
+      map[`article-${article.number}-s-${idx + 1}`] = sentence;
+    });
+  }
+  return map;
+}
+
 export default async function ProposedPage() {
   const current = await getCurrentVersion().catch(() => null);
 
-  let currentVersion = current?.version ?? "0.0.1";
+  const currentVersion = current?.version ?? "0.0.1";
   const proposedVersion = bumpPatch(currentVersion);
 
-  let anchorCounts: Record<string, number> = {};
-  const commentsByAnchor: Record<
-    string,
-    Awaited<ReturnType<typeof listCommentsForAnchor>>
-  > = {};
+  const originalTextByAnchor = buildOriginalTextByAnchor();
+
+  // Determine if visitor is an admin (used to show Accept/Reject buttons).
+  const adminCtx = await getCurrentAdmin().catch(() => null);
+  const isAdmin = adminCtx?.state === "admin";
+
+  let proposalCounts: Record<string, { pending: number; accepted: number }> = {};
+  const proposalsByAnchor: Record<string, ProposalRow[]> = {};
+  let acceptedProposals: ProposalRow[] = [];
 
   if (current) {
     try {
-      anchorCounts = await countCommentsByAnchor(undefined as any, current.id);
-      for (const anchorId of Object.keys(anchorCounts)) {
-        commentsByAnchor[anchorId] = await listCommentsForAnchor(
-          undefined as any,
-          current.id,
-          anchorId,
-        );
-      }
+      proposalCounts = await countProposalsByAnchor(undefined as any, current.id);
+
+      // Fetch proposal lists for every anchor that has proposals.
+      const anchorIds = Object.keys(proposalCounts);
+      await Promise.all(
+        anchorIds.map(async (anchorId) => {
+          proposalsByAnchor[anchorId] = await listProposalsByAnchor(
+            undefined as any,
+            current.id,
+            anchorId,
+          );
+        }),
+      );
+
+      acceptedProposals = await getAcceptedProposalsForVersion(
+        undefined as any,
+        current.id,
+      );
     } catch {
       // DB unreachable in preview — fall through with empty maps.
     }
   }
+
+  // Build per-anchor count for the badge (total pending + accepted).
+  const anchorCounts: Record<string, number> = {};
+  for (const [anchorId, counts] of Object.entries(proposalCounts)) {
+    anchorCounts[anchorId] = counts.pending + counts.accepted;
+  }
+
+  const editsByAnchor = applyEdits(acceptedProposals);
 
   return (
     <div className="flex-1">
@@ -96,7 +149,7 @@ export default async function ProposedPage() {
 
         {/* Working draft banner */}
         <p className="mx-auto mb-8 max-w-3xl text-center text-sm text-zinc-500">
-          Working draft · v{proposedVersion} · Hover any sentence to comment
+          Working draft · v{proposedVersion} · Hover any sentence to propose a change
         </p>
 
         <TabBar
@@ -106,7 +159,13 @@ export default async function ProposedPage() {
         />
 
         <ArticleSelectionContainer>
-          <HomepageArticles mode="interactive" anchorCounts={anchorCounts} />
+          <HomepageArticles
+            mode="interactive"
+            anchorMode="proposals"
+            anchorCounts={anchorCounts}
+            editsByAnchor={editsByAnchor}
+            proposalCounts={proposalCounts}
+          />
         </ArticleSelectionContainer>
       </section>
 
@@ -133,11 +192,13 @@ export default async function ProposedPage() {
 
       <FloatingSignButton />
 
-      <HighlightPopover enableSuggestChanges={false} />
+      <HighlightPopover enableSuggestChanges={true} />
       {current ? (
-        <CommentDrawer
+        <ProposalDrawer
           baseVersionId={current.id}
-          commentsByAnchor={commentsByAnchor}
+          proposalsByAnchor={proposalsByAnchor}
+          originalTextByAnchor={originalTextByAnchor}
+          isAdmin={isAdmin}
         />
       ) : null}
     </div>

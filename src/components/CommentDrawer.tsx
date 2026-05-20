@@ -6,6 +6,7 @@ import { CommentComposer } from "./CommentComposer";
 import { CommentThread } from "./CommentThread";
 
 interface OpenDetail {
+  mode: string;
   anchorId: string;
 }
 
@@ -25,6 +26,8 @@ export function CommentDrawer({ baseVersionId, commentsByAnchor }: Props) {
   useEffect(() => {
     const onOpen = (e: Event) => {
       const d = (e as CustomEvent<OpenDetail>).detail;
+      // Only respond to "comments" mode events (not "proposals").
+      if (d.mode !== "comments") return;
       setOpenAnchor(d.anchorId);
       setComposeAnchor(null);
     };
@@ -33,10 +36,10 @@ export function CommentDrawer({ baseVersionId, commentsByAnchor }: Props) {
       setOpenAnchor(d.anchorId);
       setComposeAnchor(d.anchorId);
     };
-    window.addEventListener("anchor-open-comments", onOpen);
+    window.addEventListener("anchor-open", onOpen);
     window.addEventListener("compose-comment", onCompose);
     return () => {
-      window.removeEventListener("anchor-open-comments", onOpen);
+      window.removeEventListener("anchor-open", onOpen);
       window.removeEventListener("compose-comment", onCompose);
     };
   }, []);
