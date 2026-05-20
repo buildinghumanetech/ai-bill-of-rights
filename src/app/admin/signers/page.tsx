@@ -117,7 +117,7 @@ export default async function AdminSignersPage() {
         </Link>
       </header>
 
-      <div className="mb-8 flex flex-col gap-4">
+      <div className="mb-8 flex flex-wrap items-start gap-4">
         <AdminAddSignerForm />
         <AdminAddNonSignerForm />
       </div>
@@ -183,9 +183,13 @@ export default async function AdminSignersPage() {
                       <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
                         Admin
                       </span>
-                    ) : (
+                    ) : latestVersionBySigner.has(row.id) ? (
                       <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
                         Signer
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">
+                        Commenter
                       </span>
                     )}
                   </td>

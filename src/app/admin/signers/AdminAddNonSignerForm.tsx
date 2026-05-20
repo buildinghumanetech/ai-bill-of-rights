@@ -93,7 +93,7 @@ export default function AdminAddNonSignerForm() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-full bg-zinc-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-500"
+        className="rounded-md bg-zinc-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-500"
       >
         + Add a user (non-signer)
       </button>
@@ -313,7 +313,7 @@ export default function AdminAddNonSignerForm() {
         <button
           type="submit"
           disabled={pending}
-          className="flex-1 rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex-1 rounded-md bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? "Adding…" : "Add user"}
         </button>
@@ -323,7 +323,7 @@ export default function AdminAddNonSignerForm() {
             reset();
             setOpen(false);
           }}
-          className="rounded-full bg-zinc-100 px-6 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+          className="rounded-md bg-zinc-100 px-6 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
         >
           Cancel
         </button>

@@ -96,7 +96,7 @@ export default function AdminAddSignerForm() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-700"
+        className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-700"
       >
         + Add signer manually
       </button>
@@ -317,7 +317,7 @@ export default function AdminAddSignerForm() {
         <button
           type="submit"
           disabled={pending}
-          className="flex-1 rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex-1 rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? "Adding…" : "Add signer + signature"}
         </button>
@@ -327,7 +327,7 @@ export default function AdminAddSignerForm() {
             reset();
             setOpen(false);
           }}
-          className="rounded-full bg-zinc-100 px-6 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+          className="rounded-md bg-zinc-100 px-6 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
         >
           Cancel
         </button>
