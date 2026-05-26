@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -168,6 +169,23 @@ export default async function AdminAttestationsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">
+      <nav className="mb-4 flex gap-4 text-sm">
+        <Link
+          href="/admin/signers"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Signers
+        </Link>
+        <Link
+          href="/admin/selfies"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Selfies
+        </Link>
+        <Link href="/admin/attestations" className="font-medium text-zinc-900">
+          Attestations
+        </Link>
+      </nav>
       <h1 className="text-3xl font-semibold tracking-tight">Admin · Attestations</h1>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Manage all attestations. Approve pending claims, or delete any attestation permanently.
