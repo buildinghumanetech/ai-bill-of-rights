@@ -190,23 +190,105 @@ export function attestationVerifyEmail(opts: {
   version: string;
   verifyUrl: string;
   submitterEmail: string;
-}): { subject: string; text: string } {
-  return {
-    subject: `Admin review: ${opts.orgName}'s attestation for AI Bill of Rights v${opts.version}`,
-    text: `An attestation has been submitted and is waiting for an admin to verify it:
+  productUrl?: string | null;
+  adminDashboardUrl?: string;
+}): { subject: string; text: string; html: string } {
+  const subject = `Admin review needed: ${opts.orgName} attestation for AI Bill of Rights v${opts.version}`;
+
+  const dashboardLine = opts.adminDashboardUrl
+    ? `  Admin dashboard (review before approving):\n  ${opts.adminDashboardUrl}\n`
+    : "";
+  const productLine = opts.productUrl
+    ? `  Their product page:\n  ${opts.productUrl}\n`
+    : "";
+
+  const text = `An attestation has been submitted and needs your review before it goes live.
 
   Product:      ${opts.productName}
   Organization: ${opts.orgName}
   Version:      v${opts.version}
   Submitter:    ${opts.submitterEmail}
 
-You're receiving this because you're an admin on the AI Bill of Rights project. Any admin can publish this attestation by clicking the link below. The first click wins.
+─────────────────────────────────────────────
+STEP 1 — INVESTIGATE FIRST
+─────────────────────────────────────────────
 
-${opts.verifyUrl}
+Do NOT approve yet. Look it up first.
 
-If this looks fake or low-quality, just ignore it — unpublished attestations stay in the queue and can be hidden from the admin dashboard.
+${dashboardLine}${productLine}
+─────────────────────────────────────────────
+STEP 2 — APPROVE ONLY WHEN READY
+─────────────────────────────────────────────
+
+⚠  Only click the link below once you have confirmed this is a real
+   company and product and you are ready to publish it publicly.
+   The first admin to click IMMEDIATELY publishes the attestation.
+
+  → APPROVE & PUBLISH NOW:
+  ${opts.verifyUrl}
+
+─────────────────────────────────────────────
+
+Not sure? Skip this email. Unpublished attestations stay in the
+queue — you can approve or hide them any time from the admin dashboard.
 
 — The AI Bill of Rights project
-`,
-  };
+`;
+
+  const esc = escapeHtml;
+  const productRowHtml = opts.productUrl
+    ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px;">Product URL</td><td style="padding:4px 0;font-size:14px;"><a href="${esc(opts.productUrl)}" style="color:#0369a1;">${esc(opts.productUrl)}</a></td></tr>`
+    : "";
+  const dashboardBtnHtml = opts.adminDashboardUrl
+    ? `<a href="${esc(opts.adminDashboardUrl)}" style="display:inline-block;padding:10px 20px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;color:#111827;font-size:14px;font-weight:500;text-decoration:none;">View in Admin Dashboard</a>`
+    : "";
+  const productBtnHtml = opts.productUrl
+    ? `<a href="${esc(opts.productUrl)}" style="display:inline-block;padding:10px 20px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;color:#111827;font-size:14px;font-weight:500;text-decoration:none;">Visit Product Page</a>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:system-ui,sans-serif;">
+<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;">
+
+  <div style="padding:24px 28px;border-bottom:1px solid #e5e7eb;">
+    <p style="margin:0 0 4px;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">AI Bill of Rights · Admin</p>
+    <h1 style="margin:0;font-size:20px;font-weight:600;color:#111827;">New attestation to review</h1>
+  </div>
+
+  <div style="padding:24px 28px;border-bottom:1px solid #e5e7eb;">
+    <table style="border-collapse:collapse;">
+      <tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px;">Product</td><td style="padding:4px 0;font-size:14px;font-weight:500;">${esc(opts.productName)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px;">Organization</td><td style="padding:4px 0;font-size:14px;font-weight:500;">${esc(opts.orgName)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px;">Version</td><td style="padding:4px 0;font-size:14px;">v${esc(opts.version)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px;">Submitter</td><td style="padding:4px 0;font-size:14px;">${esc(opts.submitterEmail)}</td></tr>
+      ${productRowHtml}
+    </table>
+  </div>
+
+  <div style="padding:24px 28px;border-bottom:1px solid #e5e7eb;">
+    <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Step 1 — Investigate first</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;">Look it up before approving. Does this company and product actually exist?</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      ${dashboardBtnHtml}
+      ${productBtnHtml}
+    </div>
+  </div>
+
+  <div style="padding:24px 28px;background:#fefce8;border-bottom:1px solid #fde68a;">
+    <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.05em;">Step 2 — Approve only when ready</p>
+    <p style="margin:0 0 4px;font-size:14px;color:#78350f;font-weight:500;">⚠ Only click the button below once you have confirmed this is a real company and product.</p>
+    <p style="margin:0 0 20px;font-size:13px;color:#92400e;">The first admin to click will <strong>immediately publish</strong> the attestation publicly. This cannot be undone without going to the admin dashboard.</p>
+    <a href="${esc(opts.verifyUrl)}" style="display:inline-block;padding:12px 28px;background:#15803d;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">Approve &amp; Publish Attestation</a>
+  </div>
+
+  <div style="padding:16px 28px;">
+    <p style="margin:0;font-size:13px;color:#9ca3af;">Not sure? Skip this email — the attestation stays in the queue. You can approve or hide it any time from the admin dashboard.</p>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+  return { subject, text, html };
 }
