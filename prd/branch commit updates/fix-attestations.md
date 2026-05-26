@@ -1,5 +1,21 @@
 # Branch Progress: fix-attestations
 
+## Progress Update as of 2026-05-25 18:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added "Attestations" link to the admin navigation across all three admin pages (signers, selfies, attestations) so admins can easily navigate to the attestation management view.
+
+### Detail of changes made:
+- **`src/app/admin/signers/page.tsx`** — Added "Attestations" nav link (inactive style) to the inline admin nav.
+- **`src/app/admin/selfies/page.tsx`** — Added "Attestations" nav link (inactive style) to the inline admin nav.
+- **`src/app/admin/attestations/page.tsx`** — Added shared admin nav with "Attestations" as the active link. Added `Link` import from `next/link`.
+
+### Potential concerns to address:
+- Admin nav is duplicated inline across three pages. A shared layout or nav component would reduce duplication but is outside current scope.
+
+---
+
 ## Progress Update as of 2026-05-25 13:30 Pacific
 *(Most recent updates at top)*
 

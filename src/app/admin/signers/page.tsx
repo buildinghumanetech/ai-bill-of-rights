@@ -94,6 +94,12 @@ export default async function AdminSignersPage() {
         >
           Selfies
         </Link>
+        <Link
+          href="/admin/attestations"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Attestations
+        </Link>
       </nav>
       <header className="mb-8 flex items-end justify-between">
         <div>
