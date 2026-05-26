@@ -16,26 +16,110 @@ You can also sign the bill itself any time from your account page: ${opts.accoun
   };
 }
 
+function getNextMilestone(current: number): number {
+  const milestones = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
+  for (const m of milestones) {
+    if (current < m) return m;
+  }
+  return Math.ceil(current / 5000) * 5000 + 5000;
+}
+
 export function signConfirmation(opts: {
   displayName: string;
   version: string;
   signerPageUrl: string;
   revokeUrl: string;
-}): { subject: string; text: string } {
-  return {
-    subject: `You signed the AI Bill of Rights v${opts.version}`,
-    text: `Hi ${opts.displayName},
+  signatureNumber?: number;
+  totalSignatures?: number;
+}): { subject: string; text: string; html: string } {
+  const sigNum = opts.signatureNumber ?? 1;
+  const total = opts.totalSignatures ?? sigNum;
+  const milestone = getNextMilestone(total);
+  const firstName = opts.displayName.split(/\s+/)[0];
 
-You just signed v${opts.version} of the AI Bill of Rights. Thank you for helping ensure a future with AI that supports human flourishing.
+  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
+  const shareUrl = opts.signerPageUrl;
+  const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+  const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+  const emailShareHref = `mailto:?subject=${encodeURIComponent("Sign the AI Bill of Rights")}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;
 
-Share your public signature page so others can join you: ${opts.signerPageUrl}
+  const subject = `You signed the AI Bill of Rights v${opts.version}`;
+
+  const text = `Hi ${opts.displayName},
+
+You're Signer #${sigNum.toLocaleString()} of the AI Bill of Rights (v${opts.version}). Thank you for helping ensure a future with AI that supports human flourishing.
+
+We're at ${total.toLocaleString()} signatures — help us reach ${milestone.toLocaleString()}!
+
+Bring two friends — share your signature:
+
+  Share on X: ${twitterHref}
+  Share on LinkedIn: ${linkedinHref}
+  Share via Email: ${emailShareHref}
+
+View your public signature page: ${opts.signerPageUrl}
 
 Your data, your choice — you can revoke any time:
 ${opts.revokeUrl}
 
 — The AI Bill of Rights project
-`,
-  };
+`;
+
+  const esc = escapeHtml;
+  const html = `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:system-ui,-apple-system,sans-serif;">
+<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;">
+
+  <!-- Green congrats banner -->
+  <div style="background:#059669;padding:28px 28px 24px;text-align:center;">
+    <div style="display:inline-block;width:48px;height:48px;line-height:48px;border-radius:50%;background:rgba(255,255,255,0.2);font-size:24px;color:#fff;">&#10003;</div>
+    <h1 style="margin:12px 0 0;font-size:22px;font-weight:700;color:#fff;">Thank you for signing, ${esc(firstName)}!</h1>
+    <p style="margin:6px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">AI Bill of Rights v${esc(opts.version)}</p>
+  </div>
+
+  <!-- Signer number + milestone -->
+  <div style="padding:24px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
+    <p style="margin:0 0 2px;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">You are</p>
+    <p style="margin:0;font-size:36px;font-weight:800;color:#111827;">Signer #${sigNum.toLocaleString()}</p>
+    <p style="margin:8px 0 0;font-size:14px;color:#6b7280;">${total.toLocaleString()} signatures so far &mdash; help us reach <strong style="color:#111827;">${milestone.toLocaleString()}</strong>!</p>
+  </div>
+
+  <!-- Bring Two Friends -->
+  <div style="padding:24px 28px;background:#fffbeb;border-bottom:1px solid #fde68a;">
+    <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;color:#92400e;">Bring Two Friends</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#78350f;">Every signature strengthens the movement. Share yours now:</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+      <tr>
+        <td style="padding:0 6px 0 0;">
+          <a href="${esc(twitterHref)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 20px;background:#111827;border-radius:6px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">Share on X</a>
+        </td>
+        <td style="padding:0 6px;">
+          <a href="${esc(linkedinHref)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 20px;background:#0a66c2;border-radius:6px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">LinkedIn</a>
+        </td>
+        <td style="padding:0 0 0 6px;">
+          <a href="${esc(emailShareHref)}" style="display:inline-block;padding:10px 20px;background:#d1d5db;border-radius:6px;color:#111827;font-size:14px;font-weight:600;text-decoration:none;">Email</a>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- View My Signature CTA -->
+  <div style="padding:24px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
+    <a href="${esc(opts.signerPageUrl)}" style="display:inline-block;padding:12px 32px;background:#059669;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View My Signature</a>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding:16px 28px;">
+    <p style="margin:0;font-size:13px;color:#9ca3af;">Your data, your choice &mdash; <a href="${esc(opts.revokeUrl)}" style="color:#6b7280;text-decoration:underline;">revoke any time</a>.</p>
+    <p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">&mdash; The AI Bill of Rights project</p>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+  return { subject, text, html };
 }
 
 export function signerNotification(opts: {

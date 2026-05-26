@@ -121,11 +121,24 @@ export async function submitSignAction(formData: FormData): Promise<void> {
     if (email) {
       const { signConfirmation } = await import("@/lib/email/templates");
       const { sendEmail } = await import("@/lib/email/send");
+      const { getSignatureCount, getSignatureNumber } = await import("@/lib/db/queries");
+      let signatureNumber = 1;
+      let totalSignatures = 1;
+      try {
+        [signatureNumber, totalSignatures] = await Promise.all([
+          getSignatureNumber(signer.id),
+          getSignatureCount(),
+        ]);
+      } catch (err) {
+        console.warn("[email] failed to fetch signature counts:", err);
+      }
       const tpl = signConfirmation({
         displayName: signer.displayName,
         version: versionString,
         signerPageUrl,
         revokeUrl: `${siteUrl}/account/revoke`,
+        signatureNumber,
+        totalSignatures,
       });
       await sendEmail({ to: email, ...tpl });
     }
