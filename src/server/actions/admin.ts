@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
+  attestations,
   consentRecords,
   signatures,
   signers,
@@ -82,6 +83,23 @@ export async function deleteSignerAction(signerId: string): Promise<void> {
   await db.delete(signers).where(eq(signers.id, signerId));
   revalidatePath("/admin/signers");
   revalidatePath("/signers");
+}
+
+export async function deleteAttestationAction(
+  attestationId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdminOrBootstrap();
+  const db = getDb();
+  try {
+    await db
+      .delete(attestations)
+      .where(eq(attestations.id, attestationId));
+    revalidatePath("/admin/attestations");
+    revalidatePath("/attestations");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
 }
 
 export async function setAdminFlagAction(

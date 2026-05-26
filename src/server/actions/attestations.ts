@@ -151,6 +151,8 @@ export async function submitAttestationAction(formData: FormData): Promise<{
       version: versionString,
       verifyUrl: `${siteUrl}/attestations/verify/${result.verificationToken}`,
       submitterEmail: contactEmail,
+      productUrl: productUrl ?? null,
+      adminDashboardUrl: `${siteUrl}/admin/attestations`,
     });
     const recipients = await getAdminVerifierEmails();
     if (recipients.length === 0) {

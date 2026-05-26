@@ -504,6 +504,57 @@ export async function listPublishedAttestations(
   return rows as AttestationListItem[];
 }
 
+export interface AdminAttestationListItem {
+  id: string;
+  orgName: string;
+  productName: string;
+  productUrl: string | null;
+  contactEmail: string;
+  claimedAt: Date;
+  emailVerifiedAt: Date | null;
+  version: string;
+  status: "pending" | "approved" | "hidden";
+}
+
+export async function listAllAttestationsForAdmin(
+  db: any = null,
+): Promise<AdminAttestationListItem[]> {
+  const client = db ?? getDefaultDb();
+  const rows = await client
+    .select({
+      id: attestations.id,
+      orgName: attestations.orgName,
+      productName: attestations.productName,
+      productUrl: attestations.productUrl,
+      contactEmail: attestations.contactEmail,
+      claimedAt: attestations.claimedAt,
+      emailVerifiedAt: attestations.emailVerifiedAt,
+      published: attestations.published,
+      hiddenAt: attestations.hiddenAt,
+      manuallyApproved: attestations.manuallyApproved,
+      version: versions.version,
+    })
+    .from(attestations)
+    .innerJoin(versions, eq(versions.id, attestations.versionId))
+    .orderBy(desc(attestations.claimedAt));
+
+  return rows.map((r: any) => ({
+    id: r.id,
+    orgName: r.orgName,
+    productName: r.productName,
+    productUrl: r.productUrl,
+    contactEmail: r.contactEmail,
+    claimedAt: r.claimedAt,
+    emailVerifiedAt: r.emailVerifiedAt,
+    version: r.version,
+    status: r.hiddenAt
+      ? ("hidden" as const)
+      : r.published || r.manuallyApproved
+        ? ("approved" as const)
+        : ("pending" as const),
+  }));
+}
+
 export async function listPendingReviewAttestations(db: any = null) {
   const client = db ?? getDefaultDb();
   return client
