@@ -32,6 +32,28 @@ export async function getSignatureCount(db: any = getDefaultDb()): Promise<numbe
   return Number(rows[0]?.value ?? 0);
 }
 
+export async function getSignatureNumber(
+  signerId: string,
+  db: any = getDefaultDb(),
+): Promise<number> {
+  // 1. Get the signer's signedAt timestamp
+  const sigRow = await db
+    .select({ signedAt: signatures.signedAt })
+    .from(signatures)
+    .where(eq(signatures.signerId, signerId))
+    .orderBy(asc(signatures.signedAt))
+    .limit(1);
+  if (sigRow.length === 0) return 1;
+  const signedAt = sigRow[0].signedAt;
+
+  // 2. Count how many signatures exist at or before that timestamp
+  const rows = await db
+    .select({ value: count() })
+    .from(signatures)
+    .where(sql`${signatures.signedAt} <= ${signedAt}`);
+  return Number(rows[0]?.value ?? 1);
+}
+
 export async function getSignerCount(db: any = getDefaultDb()): Promise<number> {
   const rows = await db.select({ value: count() }).from(signers);
   return Number(rows[0]?.value ?? 0);

@@ -15,6 +15,10 @@ import {
   commentAccountCreated,
   signerNotification,
 } from "@/lib/email/templates";
+import {
+  getSignatureCount,
+  getSignatureNumber,
+} from "@/lib/db/queries";
 import { sendEmail } from "@/lib/email/send";
 
 const TEAM_NOTIFICATION_EMAIL = "hello@ai-for-people.org";
@@ -193,11 +197,23 @@ export async function recordSignatureFromModal(
       const user = await clerk.users.getUser(userId);
       const email = user.primaryEmailAddress?.emailAddress;
       if (email) {
+        let signatureNumber = 1;
+        let totalSignatures = 1;
+        try {
+          [signatureNumber, totalSignatures] = await Promise.all([
+            getSignatureNumber(profile.id),
+            getSignatureCount(),
+          ]);
+        } catch (err) {
+          console.warn("[email] failed to fetch signature counts:", err);
+        }
         const tpl = signConfirmation({
           displayName,
           version: input.versionString,
           signerPageUrl,
           revokeUrl: `${siteUrl}/account/revoke`,
+          signatureNumber,
+          totalSignatures,
         });
         await sendEmail({ to: email, ...tpl });
       }
