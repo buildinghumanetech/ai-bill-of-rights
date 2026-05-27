@@ -45,6 +45,8 @@ export function signConfirmation(opts: {
 
   const subject = `You signed the AI Bill of Rights v${opts.version}`;
 
+  const suggestedMessage = `${shareText} ${shareUrl}`;
+
   const text = `Hi ${opts.displayName},
 
 You're Signer #${sigNum.toLocaleString()} of the AI Bill of Rights (v${opts.version}). Thank you for helping ensure a future with AI that supports human flourishing.
@@ -52,6 +54,9 @@ You're Signer #${sigNum.toLocaleString()} of the AI Bill of Rights (v${opts.vers
 We're at ${total.toLocaleString()} signatures — help us reach ${milestone.toLocaleString()}!
 
 Bring two friends — share your signature:
+
+  Suggested message for LinkedIn (copy & paste):
+  "${suggestedMessage}"
 
   Share on X: ${twitterHref}
   Share on LinkedIn: ${linkedinHref}
@@ -88,7 +93,11 @@ ${opts.revokeUrl}
   <!-- Bring Two Friends -->
   <div style="padding:24px 28px;background:#fffbeb;border-bottom:1px solid #fde68a;">
     <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;color:#92400e;">Bring Two Friends</h2>
-    <p style="margin:0 0 20px;font-size:14px;color:#78350f;">Every signature strengthens the movement. Share yours now:</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#78350f;">Every signature strengthens the movement. Share yours now:</p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px 16px;margin:0 0 20px;">
+      <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;">Suggested message (copy &amp; paste for LinkedIn):</p>
+      <p style="margin:0;font-size:14px;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;line-height:1.5;">${esc(suggestedMessage)}</p>
+    </div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
       <tr>
         <td style="padding:0 6px 0 0;">

@@ -112,6 +112,14 @@ export default function AboutPage() {
           >
             humanebench.ai
           </a>
+          <a
+            href="https://humanetech.substack.com/p/an-ai-bill-of-rights-written-by-us"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-blue-600 underline underline-offset-4 hover:text-blue-800"
+          >
+            Read the story →
+          </a>
         </div>
       </section>
 

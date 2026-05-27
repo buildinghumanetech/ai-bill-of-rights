@@ -1,5 +1,22 @@
 # Branch Progress: signer-email
 
+## Progress Update as of 2026-05-26 13:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Added a Substack link ("Read the story →") to the About/Who Created This page, redesigned the per-signer OG image to a two-tone card layout (green banner with signer number badge, white lower section with circular avatar, amber CTA footer), and added a pre-formatted LinkedIn copy-paste message to the plain-text sign confirmation email.
+
+### Detail of changes made:
+- `src/app/about/page.tsx`: Added "Read the story →" link pointing to https://humanetech.substack.com/p/an-ai-bill-of-rights-written-by-us in the Erika Anderson founder section, alongside existing buildinghumanetech.com and humanebench.ai links.
+- `src/app/api/og/signer/[id]/route.tsx`: Refactored OG image from a simple side-by-side layout to a three-zone card: (1) emerald green top banner with "Signer of the AI Bill of Rights" title and "Signer #N" pill badge, (2) white lower section with circular avatar (photo or initial fallback in green/white) overlapping the boundary and name+subtitle, (3) amber footer with "Join them — sign the AI Bill of Rights" CTA. Now fetches `getSignatureNumber` alongside `getSignerById` via `Promise.all`.
+- `src/lib/email/templates.ts`: Added `suggestedMessage` local variable (`${shareText} ${shareUrl}`) and outputs it as a quoted, copy-paste-ready "Suggested message for LinkedIn" block in the plain-text email, placed just before the X/LinkedIn/Email share links.
+
+### Potential concerns to address:
+- The OG image `marginTop: -60` on the avatar div is an approximation for the overlap effect; if banner height or lower-section padding changes, the overlap may need recalibration.
+- `suggestedMessage` in the plain-text email duplicates `shareText`/`shareUrl` that are already rendered separately — keep them in sync if share copy changes.
+
+---
+
 ## Progress Update as of 2026-05-26 10:00 Pacific
 *(Most recent updates at top)*
 
