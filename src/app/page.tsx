@@ -56,7 +56,7 @@ export default async function Home() {
         <TabbedDocument initialTab="current" {...data} />
       </section>
 
-      <section className="border-t border-zinc-200 bg-zinc-50 px-6 py-24 text-center">
+      <section className="border-t border-zinc-200 bg-zinc-50 px-6 pt-24 pb-40 text-center">
         <div className="mx-auto max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
             Version {data.currentVersion} — a living document
