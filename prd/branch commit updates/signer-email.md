@@ -1,5 +1,19 @@
 # Branch Progress: signer-email
 
+## Progress Update as of 2026-05-26 10:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Fixed a production bug where the "Building AI? Implement this in your code →" attestation link at the bottom of the homepage was hidden under the floating "Sign" button. Increased the bottom padding of the gray bottom section from `py-24` (96px) to `pt-24 pb-40` (top: 96px, bottom: 160px) to ensure the link is fully visible above the fixed floating button.
+
+### Detail of changes made:
+- `src/app/page.tsx`: Changed the gray bottom section's padding from `py-24` to `pt-24 pb-40`. The `FloatingSignButton` (fixed at `bottom-6`, ~100px total height from bottom) was covering the "Building AI?" link because `py-24` only gives 96px of bottom clearance. `pb-40` (160px) gives a comfortable ~60px margin above the floating button.
+
+### Potential concerns to address:
+- The bottom padding fix works for the current floating button height; if the button ever gets taller (e.g., wrapping text on narrow screens), the padding may need adjustment again. A more robust fix would hide the FloatingSignButton when the user has scrolled past the main article section, but that requires scroll tracking.
+
+---
+
 ## Progress Update as of 2026-05-25 12:00 Pacific
 *(Most recent updates at top)*
 
