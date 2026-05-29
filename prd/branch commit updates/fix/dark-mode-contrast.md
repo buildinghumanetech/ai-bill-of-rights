@@ -1,6 +1,23 @@
 # Branch Progress: fix/dark-mode-contrast
 
-## Progress Update as of 2026-05-29 14:30 Pacific
+## Progress Update as of 2026-05-29 13:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Code-review/simplification pass: removed all 126 now-dead `dark:` Tailwind utilities across 17 files. Since the previous commit made dark mode globally inert (`@custom-variant dark` with no `.dark` class ever applied), these variants rendered nothing — they were dead code implying a dark theme that no longer exists. This is a pure dead-code removal; rendered output is byte-identical to the previous commit (already verified light-readable in the browser).
+
+### Detail of changes made:
+- Mechanically stripped every `dark:…` token from className strings in 17 files (heaviest: `src/app/v/[version]/as-code/page.tsx` 40, `src/app/admin/attestations/page.tsx` 15, `src/components/AttestationForm.tsx` 12; full list in the commit). Base light-mode utilities were preserved untouched.
+- `src/app/globals.css` was intentionally **not** stripped: the `@custom-variant dark (&:where(.dark, .dark *))` line is kept as a one-line guard so any future stray `dark:` utility (or copy-pasted snippet) can't silently reintroduce media-query dark mode.
+- Review confirmed: no `.dark` class is ever added anywhere (variant stays inert), no other `prefers-color-scheme` sources, only one CSS file, and all formerly-`dark:`-paired hardcoded-dark elements (buttons/inputs in sign flow, admin) fall back to their readable light bases.
+- Verified the sweep produced no malformed class strings (no double/leading/trailing spaces, no emptied classNames, template-literal `cfg` class objects handled correctly).
+
+### Potential concerns to address:
+- Build/lint of this 17-file sweep should be re-run (the edits are pure string-content removals, so syntax is unaffected, but a fresh `npm run lint` / `npm run build` is the final automated gate before push).
+
+---
+
+## Progress Update as of 2026-05-29 12:30 Pacific
 *(Most recent updates at top)*
 
 ### Summary of changes since last update

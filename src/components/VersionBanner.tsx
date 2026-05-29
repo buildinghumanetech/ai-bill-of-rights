@@ -10,7 +10,7 @@ export function VersionBanner({ version, publishedAt, changelogUrl }: Props) {
       ? new Date(publishedAt)
       : publishedAt;
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
       <span className="font-medium">v{version}</span>
       <span className="mx-2 text-zinc-400">·</span>
       <span>Published {date.toISOString().slice(0, 10)}</span>

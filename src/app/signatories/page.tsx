@@ -22,7 +22,7 @@ export default async function SignatoriesPage({
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight">Signatories</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-sm text-zinc-600">
         Everyone who has signed, newest first.
       </p>
       <div className="mt-8 flex flex-col gap-3">
@@ -42,7 +42,7 @@ export default async function SignatoriesPage({
         <div className="mt-8 flex justify-center">
           <a
             href={`/signatories?page=${pageNum + 1}`}
-            className="rounded-full border border-zinc-300 px-6 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            className="rounded-full border border-zinc-300 px-6 py-2 text-sm font-medium hover:bg-zinc-100"
           >
             Next page →
           </a>

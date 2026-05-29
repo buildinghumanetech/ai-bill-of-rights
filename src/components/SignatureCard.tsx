@@ -16,7 +16,7 @@ export function SignatureCard({ item, activeSelfies }: Props) {
   return (
     <Link
       href={`/signatories/${item.signerId}`}
-      className="flex items-center gap-3 rounded-lg border border-zinc-200 p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+      className="flex items-center gap-3 rounded-lg border border-zinc-200 p-4 transition-colors hover:bg-zinc-50"
     >
       <SelfieAvatar
         size="sm"
@@ -26,12 +26,12 @@ export function SignatureCard({ item, activeSelfies }: Props) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+          <span className="text-base font-semibold text-zinc-950">
             {item.displayName}
           </span>
           <VerificationBadge method={item.verificationMethod} />
         </div>
-        <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        <div className="mt-1 text-sm text-zinc-600">
           {[item.locationText, item.affiliation].filter(Boolean).join(" · ") ||
             "—"}
         </div>

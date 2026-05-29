@@ -54,21 +54,21 @@ async function hideFormAction(formData: FormData): Promise<void> {
 const STATUS_CONFIG = {
   pending: {
     label: "Pending review",
-    border: "border-amber-300 dark:border-amber-700",
-    bg: "bg-amber-50 dark:bg-amber-950/30",
-    badge: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    border: "border-amber-300",
+    bg: "bg-amber-50",
+    badge: "bg-amber-100 text-amber-800",
   },
   approved: {
     label: "Approved",
-    border: "border-emerald-300 dark:border-emerald-700",
-    bg: "bg-emerald-50 dark:bg-emerald-950/30",
-    badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+    border: "border-emerald-300",
+    bg: "bg-emerald-50",
+    badge: "bg-emerald-100 text-emerald-800",
   },
   hidden: {
     label: "Hidden",
-    border: "border-zinc-300 dark:border-zinc-700",
-    bg: "bg-zinc-50 dark:bg-zinc-900/30",
-    badge: "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300",
+    border: "border-zinc-300",
+    bg: "bg-zinc-50",
+    badge: "bg-zinc-200 text-zinc-600",
   },
 } as const;
 
@@ -80,7 +80,7 @@ function AttestationRow({ item }: { item: AdminAttestationListItem }) {
     >
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span className="text-lg font-semibold">{item.orgName}</span>
-        <span className="text-sm text-zinc-600 dark:text-zinc-400">
+        <span className="text-sm text-zinc-600">
           · {item.productName}
         </span>
         <span
@@ -89,7 +89,7 @@ function AttestationRow({ item }: { item: AdminAttestationListItem }) {
           {cfg.label}
         </span>
       </div>
-      <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <div className="mt-1 text-sm text-zinc-600">
         Version: v{item.version} · Contact: {item.contactEmail}
       </div>
       {item.productUrl ? (
@@ -187,7 +187,7 @@ export default async function AdminAttestationsPage() {
         </Link>
       </nav>
       <h1 className="text-3xl font-semibold tracking-tight">Admin · Attestations</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-sm text-zinc-600">
         Manage all attestations. Approve pending claims, or delete any attestation permanently.
       </p>
 
