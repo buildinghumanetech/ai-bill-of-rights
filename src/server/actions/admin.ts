@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   attestations,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
+import { anonymizeSigner } from "./revoke";
 
 let _db: any | null = null;
 function getDb() {
@@ -30,6 +31,31 @@ async function requireAdminOrBootstrap() {
   return ctx;
 }
 
+/**
+ * Refuses an operation that would drop the admin count to zero. The bootstrap
+ * path (any signer can self-promote when no admin exists) means a zero-admin
+ * state silently re-opens the entire admin surface, so we never let the UI get
+ * there. No-op when the target isn't currently an admin (removing them can't
+ * change the admin count).
+ */
+export async function assertNotLastAdmin(db: any, signerId: string): Promise<void> {
+  const target = await db
+    .select({ isAdmin: signers.isAdmin })
+    .from(signers)
+    .where(eq(signers.id, signerId))
+    .limit(1);
+  if (!target[0]?.isAdmin) return;
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(signers)
+    .where(eq(signers.isAdmin, true));
+  if (Number(value ?? 0) <= 1) {
+    throw new Error(
+      "Cannot remove the last remaining admin. Promote another signer to admin first.",
+    );
+  }
+}
+
 export async function bootstrapAdminAction(): Promise<void> {
   const ctx = await getCurrentAdmin();
   if (ctx.state !== "no-admins-yet") {
@@ -44,45 +70,23 @@ export async function bootstrapAdminAction(): Promise<void> {
   revalidatePath("/admin/signers");
 }
 
+/**
+ * Admin "Remove signer". Routes through the same `anonymizeSigner` used by the
+ * user-facing revoke flow: scrubs private data (captured_fields, selfie blobs)
+ * and renames to "Anonymized signer #N", while keeping the signature + count.
+ * This both fixes the old hard-delete's FK violations (it omitted selfies and
+ * every comment-system table, so it 500'd for any active signer) and keeps the
+ * two removal paths consistent. To take down abusive *content*, admins use
+ * `hideCommentAction` / the soft-ban, not this button.
+ */
 export async function deleteSignerAction(signerId: string): Promise<void> {
   await requireAdminOrBootstrap();
   const db = getDb();
-  // Cascade manually since neon-http has no transaction support. Order
-  // matters for FK constraints; we delete children before parents.
-  //
-  // The production DB still has `comments`, `comment_upvotes`, `reports`
-  // tables left behind from an earlier Phase 3 db:push, even though those
-  // tables aren't in the current schema.ts (the Phase 3 PRs were closed).
-  // The FKs from those tables to `signers` were blocking the final
-  // DELETE FROM signers and 500ing the admin Delete button.
-  //
-  // Wrap each defensive DELETE in try/catch so "relation does not exist" is
-  // a no-op (pglite tests + cleaned dev branches have no such tables; prod
-  // still does).
-  async function tryExec(stmt: ReturnType<typeof sql>): Promise<void> {
-    try {
-      await db.execute(stmt);
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      if (!/does not exist|undefined_table/i.test(msg)) throw err;
-    }
-  }
-  await tryExec(sql`
-    DELETE FROM reports
-    WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`
-    DELETE FROM comment_upvotes
-    WHERE signer_id = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
-  await db.delete(signatures).where(eq(signatures.signerId, signerId));
-  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
-  await db.delete(signers).where(eq(signers.id, signerId));
+  await assertNotLastAdmin(db, signerId);
+  await anonymizeSigner(db, signerId);
   revalidatePath("/admin/signers");
   revalidatePath("/signers");
+  revalidatePath(`/signatories/${signerId}`);
 }
 
 export async function deleteAttestationAction(
@@ -107,7 +111,9 @@ export async function setAdminFlagAction(
   makeAdmin: boolean,
 ): Promise<void> {
   await requireAdminOrBootstrap();
-  await getDb()
+  const db = getDb();
+  if (!makeAdmin) await assertNotLastAdmin(db, signerId);
+  await db
     .update(signers)
     .set({ isAdmin: makeAdmin })
     .where(eq(signers.id, signerId));

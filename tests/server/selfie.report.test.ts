@@ -155,9 +155,37 @@ describe("resolveSelfieReports", () => {
       selfieId: id,
       adminSignerId: admin,
       resolution: "hidden",
+      blobBackend: createInMemoryBackend(),
     });
     const [row] = await db.select().from(selfies).where(eq(selfies.id, id));
     expect(row.status).toBe("rejected");
     expect(row.rejectionReason).toBe("other");
+  });
+
+  it("with resolution=hidden deletes the selfie's blobs", async () => {
+    const db = await createTestDb();
+    const owner = await makeSigner(db, "owner");
+    const admin = await makeSigner(db, "admin", true);
+    const r = await makeSigner(db, "r");
+    const backend = createInMemoryBackend();
+    const { selfieId } = await submitSelfie(db, {
+      signerId: owner,
+      buffer: tinyPngBuffer(),
+      mime: "image/png",
+      captureMethod: "live",
+      blobBackend: backend,
+    });
+    await approveSelfie(db, { selfieId, adminSignerId: admin });
+    await reportSelfie(db, { selfieId, reporterSignerId: r });
+    expect(backend.store.size).toBe(3);
+
+    await resolveSelfieReports(db, {
+      selfieId,
+      adminSignerId: admin,
+      resolution: "hidden",
+      blobBackend: backend,
+    });
+
+    expect(backend.store.size).toBe(0);
   });
 });

@@ -11,7 +11,7 @@ import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
 
 describe("removeMySelfie", () => {
-  it("marks the active selfie as removed and deletes public blobs (keeps original)", async () => {
+  it("marks the active selfie as removed and deletes all blobs including the original", async () => {
     const db = await createTestDb();
     const [signer] = await db
       .insert(signers)
@@ -53,10 +53,9 @@ describe("removeMySelfie", () => {
       .from(selfies)
       .where(eq(selfies.id, selfieId));
     expect(row.removedAt).not.toBeNull();
-    // Original still in store, display + thumbnail removed.
-    expect(backend.store.size).toBe(1);
-    const remaining = Array.from(backend.store.keys());
-    expect(remaining[0]).toContain("original.jpg");
+    // All three blobs (including the original) are deleted — the disclaimer
+    // promises removal, so nothing should linger in storage.
+    expect(backend.store.size).toBe(0);
   });
 
   it("no-op when no active selfie exists", async () => {

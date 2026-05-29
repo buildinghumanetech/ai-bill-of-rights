@@ -332,4 +332,9 @@ export const attestations = pgTable("attestations", {
   manuallyApproved: boolean("manually_approved"),
   published: boolean("published").notNull().default(false),
   hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  // SHA-256 of the submitter's IP, used only to rate-limit anonymous
+  // submissions. Hashed (not raw) so we don't introduce a new piece of PII for
+  // an unauthenticated, un-consented flow. Nullable: rows created before this
+  // column, and server/admin paths without a request IP, have none.
+  submitterIpHash: text("submitter_ip_hash"),
 });

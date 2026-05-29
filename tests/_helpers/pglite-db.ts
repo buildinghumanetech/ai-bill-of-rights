@@ -207,7 +207,8 @@ export async function createTestDb(): Promise<TestDb> {
       manually_reviewed_at timestamptz,
       manually_approved boolean,
       published boolean not null default false,
-      hidden_at timestamptz
+      hidden_at timestamptz,
+      submitter_ip_hash text
     );
     create index attestations_version_published
       on attestations (version_id) where published = true;

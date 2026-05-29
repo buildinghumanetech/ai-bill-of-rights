@@ -9,6 +9,9 @@ import {
   approveAttestation,
   hideAttestation,
 } from "@/server/actions/attestations";
+import { enforceRateLimit } from "@/lib/ratelimit/enforce";
+
+const ATTESTATION_COUNT_SQL = `SELECT count(*)::int as n FROM attestations WHERE submitter_ip_hash = $1 AND claimed_at > now() - interval '1 hour'`;
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -64,6 +67,60 @@ describe("createAttestation", () => {
     });
     const [row] = await db.select().from(attestations);
     expect(row.needsManualReview).toBe(true);
+  });
+});
+
+describe("attestation submitter IP hash + rate limit", () => {
+  it("persists submitterIpHash on the row", async () => {
+    const db = await seed();
+    await createAttestation(db, {
+      orgName: "Acme",
+      productName: "Bot",
+      productUrl: null,
+      versionString: "1.0.0",
+      contactEmail: "a@b.com",
+      submitterIpHash: "hash-abc",
+    });
+    const [row] = await db.select().from(attestations);
+    expect(row.submitterIpHash).toBe("hash-abc");
+  });
+
+  it("rate-limit countSql blocks once the per-IP limit is reached", async () => {
+    const db = await seed();
+    const hash = "deadbeefdeadbeef";
+    const opts = {
+      bucket: "attestation",
+      signerId: hash,
+      windowSec: 3600,
+      max: 5,
+      countSql: ATTESTATION_COUNT_SQL,
+    };
+    for (let i = 0; i < 4; i++) {
+      await createAttestation(db, {
+        orgName: `Org ${i}`,
+        productName: "P",
+        productUrl: null,
+        versionString: "1.0.0",
+        contactEmail: "a@b.com",
+        submitterIpHash: hash,
+      });
+    }
+    // 4 existing rows < 5 → still allowed.
+    await expect(enforceRateLimit(db, opts)).resolves.toBeUndefined();
+    // A different IP is unaffected.
+    await expect(
+      enforceRateLimit(db, { ...opts, signerId: "other-ip" }),
+    ).resolves.toBeUndefined();
+    // 5th row reaches the limit → next attempt blocked.
+    await createAttestation(db, {
+      orgName: "Org 5",
+      productName: "P",
+      productUrl: null,
+      versionString: "1.0.0",
+      contactEmail: "a@b.com",
+      submitterIpHash: hash,
+    });
+    await expect(enforceRateLimit(db, opts)).rejects.toThrow(/Rate limit/);
   });
 });
 
