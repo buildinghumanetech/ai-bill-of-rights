@@ -143,11 +143,8 @@ export async function createTestDb(): Promise<TestDb> {
       id uuid primary key default gen_random_uuid(),
       signer_id uuid not null references signers(id),
       status text not null check (status in ('pending','approved','rejected','auto_hidden','removed')),
-      original_blob_url text not null,
       display_blob_url text not null,
       thumbnail_blob_url text not null,
-      original_mime text not null,
-      original_bytes integer not null,
       capture_method text not null check (capture_method in ('live','upload')),
       submitted_at timestamptz not null default now(),
       reviewed_at timestamptz,
@@ -207,8 +204,7 @@ export async function createTestDb(): Promise<TestDb> {
       manually_reviewed_at timestamptz,
       manually_approved boolean,
       published boolean not null default false,
-      hidden_at timestamptz,
-      submitter_ip_hash text
+      hidden_at timestamptz
     );
     create index attestations_version_published
       on attestations (version_id) where published = true;

@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { count, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { signers } from "@/lib/db/schema";
 
 let _db: any | null = null;
@@ -21,17 +21,13 @@ export interface SignerRecord {
 export type AdminCheckResult =
   | { state: "unauthenticated" }
   | { state: "not-a-signer"; clerkUserId: string }
-  | { state: "no-admins-yet"; signer: SignerRecord }
   | { state: "not-admin"; signer: SignerRecord }
   | { state: "admin"; signer: SignerRecord };
 
 /**
- * Resolves the current Clerk session into an admin state.
- *
- * Bootstrap path: when no admin exists yet in the system, any signed-in
- * signer can promote themselves to the first admin (see bootstrapAdminAction
- * in src/server/actions/admin.ts). After that, only existing admins can
- * grant the role to others.
+ * Resolves the current Clerk session into an admin state. Admin is granted
+ * only by an existing admin (or, for the very first admin, a one-off database
+ * UPDATE — there is no in-app self-promotion path).
  */
 export async function getCurrentAdmin(): Promise<AdminCheckResult> {
   const { userId } = await auth();
@@ -51,16 +47,6 @@ export async function getCurrentAdmin(): Promise<AdminCheckResult> {
 
   if (signer.isAdmin) {
     return { state: "admin", signer };
-  }
-
-  const adminCount = await db
-    .select({ value: count() })
-    .from(signers)
-    .where(eq(signers.isAdmin, true));
-  const adminTotal = Number(adminCount[0]?.value ?? 0);
-
-  if (adminTotal === 0) {
-    return { state: "no-admins-yet", signer };
   }
   return { state: "not-admin", signer };
 }

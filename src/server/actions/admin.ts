@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { count, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   attestations,
@@ -23,51 +23,12 @@ function getDb() {
   return _db;
 }
 
-async function requireAdminOrBootstrap() {
+async function requireAdmin() {
   const ctx = await getCurrentAdmin();
-  if (ctx.state !== "admin" && ctx.state !== "no-admins-yet") {
+  if (ctx.state !== "admin") {
     throw new Error("Forbidden: admin only");
   }
   return ctx;
-}
-
-/**
- * Refuses an operation that would drop the admin count to zero. The bootstrap
- * path (any signer can self-promote when no admin exists) means a zero-admin
- * state silently re-opens the entire admin surface, so we never let the UI get
- * there. No-op when the target isn't currently an admin (removing them can't
- * change the admin count).
- */
-export async function assertNotLastAdmin(db: any, signerId: string): Promise<void> {
-  const target = await db
-    .select({ isAdmin: signers.isAdmin })
-    .from(signers)
-    .where(eq(signers.id, signerId))
-    .limit(1);
-  if (!target[0]?.isAdmin) return;
-  const [{ value }] = await db
-    .select({ value: count() })
-    .from(signers)
-    .where(eq(signers.isAdmin, true));
-  if (Number(value ?? 0) <= 1) {
-    throw new Error(
-      "Cannot remove the last remaining admin. Promote another signer to admin first.",
-    );
-  }
-}
-
-export async function bootstrapAdminAction(): Promise<void> {
-  const ctx = await getCurrentAdmin();
-  if (ctx.state !== "no-admins-yet") {
-    throw new Error(
-      "Bootstrap not available — an admin already exists or you are not signed in.",
-    );
-  }
-  await getDb()
-    .update(signers)
-    .set({ isAdmin: true })
-    .where(eq(signers.id, ctx.signer.id));
-  revalidatePath("/admin/signers");
 }
 
 /**
@@ -79,20 +40,26 @@ export async function bootstrapAdminAction(): Promise<void> {
  * two removal paths consistent. To take down abusive *content*, admins use
  * `hideCommentAction` / the soft-ban, not this button.
  */
-export async function deleteSignerAction(signerId: string): Promise<void> {
-  await requireAdminOrBootstrap();
+export async function deleteSignerAction(
+  signerId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   const db = getDb();
-  await assertNotLastAdmin(db, signerId);
-  await anonymizeSigner(db, signerId);
-  revalidatePath("/admin/signers");
-  revalidatePath("/signers");
-  revalidatePath(`/signatories/${signerId}`);
+  try {
+    await anonymizeSigner(db, signerId);
+    revalidatePath("/admin/signers");
+    revalidatePath("/signers");
+    revalidatePath(`/signatories/${signerId}`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
 }
 
 export async function deleteAttestationAction(
   attestationId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  await requireAdminOrBootstrap();
+  await requireAdmin();
   const db = getDb();
   try {
     await db
@@ -109,15 +76,19 @@ export async function deleteAttestationAction(
 export async function setAdminFlagAction(
   signerId: string,
   makeAdmin: boolean,
-): Promise<void> {
-  await requireAdminOrBootstrap();
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   const db = getDb();
-  if (!makeAdmin) await assertNotLastAdmin(db, signerId);
-  await db
-    .update(signers)
-    .set({ isAdmin: makeAdmin })
-    .where(eq(signers.id, signerId));
-  revalidatePath("/admin/signers");
+  try {
+    await db
+      .update(signers)
+      .set({ isAdmin: makeAdmin })
+      .where(eq(signers.id, signerId));
+    revalidatePath("/admin/signers");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
 }
 
 export interface EditSignerInput {
@@ -130,7 +101,7 @@ export interface EditSignerInput {
 export async function editSignerAction(
   input: EditSignerInput,
 ): Promise<{ success: boolean; error?: string }> {
-  await requireAdminOrBootstrap();
+  await requireAdmin();
   const displayName = input.displayName.trim();
   if (!displayName) {
     return { success: false, error: "Display name is required." };
@@ -176,7 +147,7 @@ export interface AdminAddSignerResult {
 export async function adminAddSignerAction(
   input: AdminAddSignerInput,
 ): Promise<AdminAddSignerResult> {
-  const ctx = await requireAdminOrBootstrap();
+  const ctx = await requireAdmin();
   const db = getDb();
 
   const displayName = input.displayName.trim();
@@ -197,13 +168,12 @@ export async function adminAddSignerAction(
   }
   const versionRow = versionRows[0];
 
-  const adminSigner =
-    ctx.state === "admin" ? ctx.signer : ctx.state === "no-admins-yet" ? ctx.signer : null;
+  const adminSigner = ctx.signer;
   const syntheticClerkId = `admin-added-${randomUUID()}`;
   const contactValue = (input.contactValue ?? "").trim();
   const capturedFields = {
     source: "admin_added" as const,
-    admin_signer_id: adminSigner?.id ?? null,
+    admin_signer_id: adminSigner.id,
     added_at_utc: new Date().toISOString(),
     contact_method: input.verificationMethod,
     // Stored privately on the consent record for outreach — never surfaced
@@ -277,16 +247,13 @@ export interface AdminAddNonSignerResult {
 export async function adminAddNonSignerAction(
   input: AdminAddNonSignerInput,
 ): Promise<AdminAddNonSignerResult> {
-  const ctx = await requireAdminOrBootstrap();
+  const ctx = await requireAdmin();
   const db = getDb();
 
   const displayName = input.displayName.trim();
   if (!displayName) {
     return { success: false, error: "Display name is required." };
   }
-
-  const adminSigner =
-    ctx.state === "admin" || ctx.state === "no-admins-yet" ? ctx.signer : null;
 
   const result = await insertNonSigner(db, {
     displayName,
@@ -296,7 +263,7 @@ export async function adminAddNonSignerAction(
     contactValue: input.contactValue,
     isAdmin: input.isAdmin,
     notificationPreference: input.notificationPreference,
-    adminSignerId: adminSigner?.id ?? null,
+    adminSignerId: ctx.signer.id,
   });
 
   if (result.success) {

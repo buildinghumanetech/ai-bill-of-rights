@@ -1,7 +1,6 @@
 "use server";
 
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { headers } from "next/headers";
 import {
   attestations,
   consentRecords,
@@ -10,8 +9,7 @@ import {
 } from "@/lib/db/schema";
 import { needsManualReview } from "@/lib/attestations/allowlist";
 import { generateVerificationToken } from "@/lib/attestations/token";
-import { sha256Hex } from "@/lib/consent/hash";
-import { enforceRateLimit } from "@/lib/ratelimit/enforce";
+import { validateAttestationFields } from "@/lib/attestations/validate";
 
 let _db: any | null = null;
 function getDb() {
@@ -19,22 +17,12 @@ function getDb() {
   return _db;
 }
 
-// Mirror the validation already used by the contact form (src/server/actions/
-// contact.ts). The attestation form is intentionally anonymous (any company can
-// attest), so it has no auth gate — these server-side checks + the per-IP rate
-// limit below are what stop garbage rows and admin-inbox flooding.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MAX_TEXT = 200;
-const MAX_URL = 500;
-const ATTESTATION_MAX_PER_HOUR = 5;
-
 export interface CreateAttestationInput {
   orgName: string;
   productName: string;
   productUrl: string | null;
   versionString: string;
   contactEmail: string;
-  submitterIpHash?: string | null;
 }
 
 export async function createAttestation(
@@ -66,7 +54,6 @@ export async function createAttestation(
       contactEmail: input.contactEmail,
       verificationToken,
       needsManualReview: flagged,
-      submitterIpHash: input.submitterIpHash ?? null,
     })
     .returning({ id: attestations.id });
   return {
@@ -145,54 +132,24 @@ export async function submitAttestationAction(formData: FormData): Promise<{
   const productUrl = (formData.get("productUrl")?.toString() ?? "").trim() || null;
   const versionString = String(formData.get("version") ?? "");
   const contactEmail = String(formData.get("contactEmail") ?? "").trim();
-  if (orgName.length === 0 || productName.length === 0 || contactEmail.length === 0) {
-    throw new Error("orgName, productName, and contactEmail are required");
-  }
-  // Server-side validation (client maxLength/type are bypassable).
-  if (
-    orgName.length > MAX_TEXT ||
-    productName.length > MAX_TEXT ||
-    contactEmail.length > MAX_TEXT
-  ) {
-    throw new Error("One or more fields is too long.");
-  }
-  if (!EMAIL_RE.test(contactEmail)) {
-    throw new Error("A valid contact email is required.");
-  }
-  if (productUrl) {
-    if (productUrl.length > MAX_URL) {
-      throw new Error("Product URL is too long.");
-    }
-    // Only http(s) links — keeps a javascript:/data: URL out of the href we
-    // render on the public attestations page (defense-in-depth alongside
-    // React 19's own URL sanitization).
-    if (!/^https?:\/\//i.test(productUrl)) {
-      throw new Error("Product URL must start with http:// or https://.");
-    }
-  }
 
-  // Per-IP rate limit. We hash the IP rather than store it, and bucket all
-  // attestations created from that hash in the last hour.
-  const db = getDb();
-  const hdrs = await headers();
-  const ip =
-    (hdrs.get("x-forwarded-for") ?? "").split(",")[0]?.trim() || "unknown";
-  const submitterIpHash = sha256Hex(ip);
-  await enforceRateLimit(db, {
-    bucket: "attestation",
-    signerId: submitterIpHash,
-    windowSec: 3600,
-    max: ATTESTATION_MAX_PER_HOUR,
-    countSql: `SELECT count(*)::int as n FROM attestations WHERE submitter_ip_hash = $1 AND claimed_at > now() - interval '1 hour'`,
+  const validationError = validateAttestationFields({
+    orgName,
+    productName,
+    productUrl,
+    contactEmail,
   });
+  if (validationError) {
+    throw new Error(validationError);
+  }
 
+  const db = getDb();
   const result = await createAttestation(db, {
     orgName,
     productName,
     productUrl,
     versionString,
     contactEmail,
-    submitterIpHash,
   });
   try {
     const { attestationVerifyEmail } = await import("@/lib/email/templates");
@@ -209,8 +166,8 @@ export async function submitAttestationAction(formData: FormData): Promise<{
     });
     const recipients = await getAdminVerifierEmails();
     if (recipients.length === 0) {
-      // No admins configured — fall back to the submitter so the system stays
-      // unblocked during the no-admins-yet bootstrap window.
+      // No admin verifier email resolved — fall back to the submitter so the
+      // verification flow stays unblocked rather than silently dropping.
       console.warn(
         "[email] no admins to verify attestation; falling back to submitter email",
       );

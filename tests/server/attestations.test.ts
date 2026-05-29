@@ -9,9 +9,7 @@ import {
   approveAttestation,
   hideAttestation,
 } from "@/server/actions/attestations";
-import { enforceRateLimit } from "@/lib/ratelimit/enforce";
-
-const ATTESTATION_COUNT_SQL = `SELECT count(*)::int as n FROM attestations WHERE submitter_ip_hash = $1 AND claimed_at > now() - interval '1 hour'`;
+import { validateAttestationFields } from "@/lib/attestations/validate";
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -70,57 +68,59 @@ describe("createAttestation", () => {
   });
 });
 
-describe("attestation submitter IP hash + rate limit", () => {
-  it("persists submitterIpHash on the row", async () => {
-    const db = await seed();
-    await createAttestation(db, {
-      orgName: "Acme",
-      productName: "Bot",
-      productUrl: null,
-      versionString: "1.0.0",
-      contactEmail: "a@b.com",
-      submitterIpHash: "hash-abc",
-    });
-    const [row] = await db.select().from(attestations);
-    expect(row.submitterIpHash).toBe("hash-abc");
+describe("validateAttestationFields", () => {
+  const valid = {
+    orgName: "Acme",
+    productName: "Bot",
+    productUrl: "https://acme.example",
+    contactEmail: "a@b.com",
+  };
+
+  it("returns null for valid input", () => {
+    expect(validateAttestationFields(valid)).toBeNull();
   });
 
-  it("rate-limit countSql blocks once the per-IP limit is reached", async () => {
-    const db = await seed();
-    const hash = "deadbeefdeadbeef";
-    const opts = {
-      bucket: "attestation",
-      signerId: hash,
-      windowSec: 3600,
-      max: 5,
-      countSql: ATTESTATION_COUNT_SQL,
-    };
-    for (let i = 0; i < 4; i++) {
-      await createAttestation(db, {
-        orgName: `Org ${i}`,
-        productName: "P",
-        productUrl: null,
-        versionString: "1.0.0",
-        contactEmail: "a@b.com",
-        submitterIpHash: hash,
-      });
-    }
-    // 4 existing rows < 5 → still allowed.
-    await expect(enforceRateLimit(db, opts)).resolves.toBeUndefined();
-    // A different IP is unaffected.
-    await expect(
-      enforceRateLimit(db, { ...opts, signerId: "other-ip" }),
-    ).resolves.toBeUndefined();
-    // 5th row reaches the limit → next attempt blocked.
-    await createAttestation(db, {
-      orgName: "Org 5",
-      productName: "P",
-      productUrl: null,
-      versionString: "1.0.0",
-      contactEmail: "a@b.com",
-      submitterIpHash: hash,
-    });
-    await expect(enforceRateLimit(db, opts)).rejects.toThrow(/Rate limit/);
+  it("accepts a null productUrl", () => {
+    expect(validateAttestationFields({ ...valid, productUrl: null })).toBeNull();
+  });
+
+  it("requires orgName, productName, and contactEmail", () => {
+    expect(validateAttestationFields({ ...valid, orgName: "" })).toMatch(
+      /required/,
+    );
+    expect(validateAttestationFields({ ...valid, productName: "" })).toMatch(
+      /required/,
+    );
+    expect(validateAttestationFields({ ...valid, contactEmail: "" })).toMatch(
+      /required/,
+    );
+  });
+
+  it("rejects an over-length field", () => {
+    expect(
+      validateAttestationFields({ ...valid, orgName: "x".repeat(201) }),
+    ).toMatch(/too long/);
+  });
+
+  it("rejects a malformed email", () => {
+    expect(
+      validateAttestationFields({ ...valid, contactEmail: "not-an-email" }),
+    ).toMatch(/valid contact email/);
+  });
+
+  it("rejects a non-http(s) product URL", () => {
+    expect(
+      validateAttestationFields({ ...valid, productUrl: "javascript:alert(1)" }),
+    ).toMatch(/http:\/\/ or https:\/\//);
+  });
+
+  it("rejects an over-length product URL", () => {
+    expect(
+      validateAttestationFields({
+        ...valid,
+        productUrl: "https://acme.example/" + "a".repeat(500),
+      }),
+    ).toMatch(/Product URL is too long/);
   });
 });
 

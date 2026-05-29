@@ -98,7 +98,6 @@ export async function submitSelfie(
       {
         signerId: input.signerId,
         selfieId,
-        original: processed.original,
         display: processed.display,
         thumbnail: processed.thumbnail,
       },
@@ -109,11 +108,8 @@ export async function submitSelfie(
       id: selfieId,
       signerId: input.signerId,
       status: "pending",
-      originalBlobUrl: uploaded.originalUrl,
       displayBlobUrl: uploaded.displayUrl,
       thumbnailBlobUrl: uploaded.thumbnailUrl,
-      originalMime: "image/jpeg",
-      originalBytes: processed.original.byteLength,
       captureMethod: input.captureMethod,
     });
 
@@ -122,7 +118,6 @@ export async function submitSelfie(
     if (uploaded) {
       await deleteSelfieBlobsByUrls(
         {
-          originalUrl: uploaded.originalUrl,
           displayUrl: uploaded.displayUrl,
           thumbnailUrl: uploaded.thumbnailUrl,
         },
@@ -288,11 +283,10 @@ export async function rejectSelfie(
     })
     .where(eq(selfies.id, input.selfieId));
 
-  // A rejected photo was never cleared for public display — delete all three
-  // blobs so it doesn't linger in (public) storage. Best-effort; never throws.
+  // A rejected photo was never cleared for public display — delete its blobs
+  // so it doesn't linger in (public) storage. Best-effort; never throws.
   await deleteSelfieBlobsByUrls(
     {
-      originalUrl: rows[0].originalBlobUrl,
       displayUrl: rows[0].displayBlobUrl,
       thumbnailUrl: rows[0].thumbnailBlobUrl,
     },
@@ -455,7 +449,6 @@ export async function resolveSelfieReports(
     // then delete the blobs — hidden-on-report content should not stay live.
     const [target] = await db
       .select({
-        originalBlobUrl: selfies.originalBlobUrl,
         displayBlobUrl: selfies.displayBlobUrl,
         thumbnailBlobUrl: selfies.thumbnailBlobUrl,
       })
@@ -474,7 +467,6 @@ export async function resolveSelfieReports(
     if (target) {
       await deleteSelfieBlobsByUrls(
         {
-          originalUrl: target.originalBlobUrl,
           displayUrl: target.displayBlobUrl,
           thumbnailUrl: target.thumbnailBlobUrl,
         },
@@ -588,14 +580,9 @@ export async function removeMySelfie(
     );
   for (const row of rows) {
     // The disclaimer promises users can remove their photo anytime — so delete
-    // all three blobs, including the original. (Previously the original was
-    // kept for an "audit window," which left the face fetchable post-removal.)
+    // its blobs from (public) storage before marking the row removed.
     await deleteSelfieBlobsByUrls(
-      {
-        originalUrl: row.originalBlobUrl,
-        displayUrl: row.displayBlobUrl,
-        thumbnailUrl: row.thumbnailBlobUrl,
-      },
+      { displayUrl: row.displayBlobUrl, thumbnailUrl: row.thumbnailBlobUrl },
       input.blobBackend,
     );
     await db

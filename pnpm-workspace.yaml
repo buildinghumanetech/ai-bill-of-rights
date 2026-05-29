@@ -4,11 +4,11 @@
 overrides:
   js-cookie@<3.0.6: '>=3.0.6'
   postcss@<8.5.10: '>=8.5.10'
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
 allowBuilds:
   '@clerk/shared': set this to true or false
   esbuild: set this to true or false
   sharp: set this to true or false
   unrs-resolver: set this to true or false
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
