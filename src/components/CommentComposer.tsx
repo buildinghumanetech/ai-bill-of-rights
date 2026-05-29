@@ -74,7 +74,7 @@ export function CommentComposer(props: Props) {
         onChange={(e) => setBody(e.target.value)}
         rows={3}
         placeholder="Add a comment…"
-        className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
       />
       {error ? (
         <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
