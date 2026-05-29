@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   attestations,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
-import { deleteSigner } from "@/server/signers/delete";
+import { anonymizeSigner } from "@/server/signers/anonymize";
 import {
   insertNonSigner,
   type AdminAddNonSignerResult,
@@ -25,6 +25,31 @@ async function requireAdminOrBootstrap() {
     throw new Error("Forbidden: admin only");
   }
   return ctx;
+}
+
+/**
+ * Refuses an operation that would drop the admin count to zero. The bootstrap
+ * path (any signer can self-promote when no admin exists) means a zero-admin
+ * state silently re-opens the entire admin surface, so we never let the UI get
+ * there. No-op when the target isn't currently an admin (removing them can't
+ * change the admin count).
+ */
+export async function assertNotLastAdmin(db: any, signerId: string): Promise<void> {
+  const target = await db
+    .select({ isAdmin: signers.isAdmin })
+    .from(signers)
+    .where(eq(signers.id, signerId))
+    .limit(1);
+  if (!target[0]?.isAdmin) return;
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(signers)
+    .where(eq(signers.isAdmin, true));
+  if (Number(value ?? 0) <= 1) {
+    throw new Error(
+      "Cannot remove the last remaining admin. Promote another signer to admin first.",
+    );
+  }
 }
 
 export async function bootstrapAdminAction(): Promise<void> {
@@ -41,17 +66,23 @@ export async function bootstrapAdminAction(): Promise<void> {
   revalidatePath("/admin/signers");
 }
 
+/**
+ * Admin "Remove signer". Routes through the same `anonymizeSigner` used by the
+ * user-facing revoke flow: scrubs private data (captured_fields, selfie blobs)
+ * and renames to "Anonymized signer #N", while keeping the signature + count.
+ * This both fixes the old hard-delete's FK violations (it omitted selfies and
+ * every comment-system table, so it 500'd for any active signer) and keeps the
+ * two removal paths consistent. To take down abusive *content*, admins use
+ * `hideCommentAction` / the soft-ban, not this button.
+ */
 export async function deleteSignerAction(signerId: string): Promise<void> {
   await requireAdminOrBootstrap();
   const db = getDb();
-  // Delegate to the one cascade in @/server/signers/delete. This action used
-  // to carry its own partial copy (reports, comment_upvotes, comments, signatures,
-  // consent_records) which drifted out of date as tables were added: the
-  // Delete button 500'd with SQLSTATE 23503 on anyone who had endorsed a
-  // version, voted on a comment, proposed an edit or uploaded a selfie.
-  await deleteSigner(db, signerId);
+  await assertNotLastAdmin(db, signerId);
+  await anonymizeSigner(db, signerId);
   revalidatePath("/admin/signers");
   revalidatePath("/signers");
+  revalidatePath(`/signatories/${signerId}`);
 }
 
 export async function deleteAttestationAction(
@@ -76,7 +107,9 @@ export async function setAdminFlagAction(
   makeAdmin: boolean,
 ): Promise<void> {
   await requireAdminOrBootstrap();
-  await getDb()
+  const db = getDb();
+  if (!makeAdmin) await assertNotLastAdmin(db, signerId);
+  await db
     .update(signers)
     .set({ isAdmin: makeAdmin })
     .where(eq(signers.id, signerId));

@@ -5,6 +5,14 @@ import { consentRecords, signers } from "@/lib/db/schema";
 import { createAttestation } from "@/server/attestations/core";
 import { getDb } from "@/lib/db/lazy";
 
+// Mirror the validation already used by the contact form (src/server/actions/
+// contact.ts). The attestation form is intentionally anonymous (any company can
+// attest), so it has no auth gate — these server-side checks are what stop
+// garbage rows and admin-inbox flooding.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_TEXT = 200;
+const MAX_URL = 500;
+
 /**
  * PUBLIC BY DESIGN — this is the "we comply" form on /attestations, open to
  * anyone, and there is no account to sign in to. The claim is not published on
@@ -33,6 +41,28 @@ export async function submitAttestationAction(formData: FormData): Promise<{
   const contactEmail = String(formData.get("contactEmail") ?? "").trim();
   if (orgName.length === 0 || productName.length === 0 || contactEmail.length === 0) {
     throw new Error("orgName, productName, and contactEmail are required");
+  }
+  // Server-side validation (client maxLength/type are bypassable).
+  if (
+    orgName.length > MAX_TEXT ||
+    productName.length > MAX_TEXT ||
+    contactEmail.length > MAX_TEXT
+  ) {
+    throw new Error("One or more fields is too long.");
+  }
+  if (!EMAIL_RE.test(contactEmail)) {
+    throw new Error("A valid contact email is required.");
+  }
+  if (productUrl) {
+    if (productUrl.length > MAX_URL) {
+      throw new Error("Product URL is too long.");
+    }
+    // Only http(s) links — keeps a javascript:/data: URL out of the href we
+    // render on the public attestations page (defense-in-depth alongside
+    // React 19's own URL sanitization).
+    if (!/^https?:\/\//i.test(productUrl)) {
+      throw new Error("Product URL must start with http:// or https://.");
+    }
   }
   const result = await createAttestation(getDb(), {
     orgName,

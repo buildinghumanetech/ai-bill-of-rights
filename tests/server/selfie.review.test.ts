@@ -99,12 +99,37 @@ describe("rejectSelfie", () => {
       adminSignerId: admin,
       reason: "not_a_face",
       note: "looks like a logo",
+      blobBackend: createInMemoryBackend(),
     });
     const [row] = await db.select().from(selfies).where(eq(selfies.id, id));
     expect(row.status).toBe("rejected");
     expect(row.rejectionReason).toBe("not_a_face");
     expect(row.rejectionNote).toBe("looks like a logo");
     expect(row.reviewedBy).toBe(admin);
+  });
+
+  it("deletes all blobs when a selfie is rejected", async () => {
+    const db = await createTestDb();
+    const signer = await makeSigner(db, "u1");
+    const admin = await makeSigner(db, "admin", true);
+    const backend = createInMemoryBackend();
+    const { selfieId } = await submitSelfie(db, {
+      signerId: signer,
+      buffer: tinyPngBuffer(),
+      mime: "image/png",
+      captureMethod: "live",
+      blobBackend: backend,
+    });
+    expect(backend.store.size).toBe(3);
+
+    await rejectSelfie(db, {
+      selfieId,
+      adminSignerId: admin,
+      reason: "offensive",
+      blobBackend: backend,
+    });
+
+    expect(backend.store.size).toBe(0);
   });
 
   it("validates the rejection reason", async () => {

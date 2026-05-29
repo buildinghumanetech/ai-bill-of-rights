@@ -4,14 +4,18 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { signers } from "@/lib/db/schema";
-import { deleteSigner } from "@/server/signers/delete";
+import { anonymizeSigner } from "@/server/signers/anonymize";
 import { getDb } from "@/lib/db/lazy";
 
 /**
- * Self-service account deletion. The cascade itself lives in
- * `@/server/signers/delete` — a plain, non-`"use server"` module — because
+ * Self-service revocation. The scrub itself lives in
+ * `@/server/signers/anonymize` — a plain, non-`"use server"` module — because
  * everything exported from this file is a POST-reachable Server Function and
- * `deleteSigner` is keyed by a signer id that is public by design.
+ * `anonymizeSigner` is keyed by a signer id that is public by design.
+ *
+ * This anonymizes rather than deletes: `content/consent/v1.md` tells the signer
+ * that revoking converts their public signature to "Anonymized signer #N" and
+ * that the signature itself remains. See the docstring on `anonymizeSigner`.
  */
 export async function submitRevokeAction(): Promise<void> {
   const { userId } = await auth();
@@ -23,6 +27,6 @@ export async function submitRevokeAction(): Promise<void> {
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
   if (rows.length === 0) redirect("/");
-  await deleteSigner(db, rows[0].id);
+  await anonymizeSigner(db, rows[0].id);
   redirect("/account?revoked=1");
 }
