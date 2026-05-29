@@ -17,6 +17,7 @@
 import { eq, sql } from "drizzle-orm";
 import {
   signers,
+  signatures,
   selfies,
   selfieReports,
   consentRecords,
@@ -37,16 +38,20 @@ import { getSignatureNumber } from "@/lib/db/queries";
  * since fixed that separately, so the FK argument is no longer what motivates
  * this — the consent text is.)
  *
- * What we do:
- *   1. Delete the signer's selfie blobs + rows — a face is private data.
+ * What we do (ordered fail-safe — the neon-http driver has no transactions, so
+ * each statement commits on its own; we scrub the recoverable, reversible state
+ * first and leave the one irreversible step (blob deletion) for last, so a
+ * mid-way failure never leaves a face live next to a still-named profile):
+ *   1. Blank the public profile fields, drop admin, and rename to
+ *      "Anonymized signer #N" (N = the signer's signature ordinal) — or
+ *      "Anonymized account" if they never actually signed. Because every public
+ *      surface joins signers.display_name, this propagates to /signatories,
+ *      /signers, the OG image, the live banner, and their retained comments.
  *   2. Null out consent_records.captured_fields (IP, geo, UA, contact_value)
  *      and stamp revoked_at. The row + consent_text_hash stay so the signature
  *      remains provable.
- *   3. Blank the public profile fields, drop admin, and rename to
- *      "Anonymized signer #N" (N = the signer's signature ordinal). Because
- *      every public surface joins signers.display_name, this propagates to
- *      /signatories, /signers, the OG image, the live banner, and their
- *      retained comments.
+ *   3. Delete the signer's selfie rows + blobs — a face is private data. Last,
+ *      because deleting a public blob is the only step we cannot undo.
  *
  * Signatures, comments, votes, endorsements, etc. are retained, now attributed
  * to the anonymized name. The `blobBackend` arg lets tests swap a fake.
@@ -58,12 +63,42 @@ export async function anonymizeSigner(
   signerId: string,
   blobBackend?: SelfieBlobBackend,
 ): Promise<void> {
-  // 1) Selfies are private biometric data — delete blobs, then rows. Reports
-  //    are deleted first (FK to selfies): both those authored by this signer
-  //    and those filed against this signer's selfies.
+  // 1) Anonymize the public profile FIRST (reversible, and the part the consent
+  //    text promises). Use the signature ordinal as N when the signer actually
+  //    signed; getSignatureNumber returns 1 for a signature-less signer, which
+  //    would collide with the genuine first signer, so fall back to a plain
+  //    "Anonymized account" label in that case.
+  const sig = await db
+    .select({ id: signatures.id })
+    .from(signatures)
+    .where(eq(signatures.signerId, signerId))
+    .limit(1);
+  const displayName =
+    sig.length === 0
+      ? "Anonymized account"
+      : `Anonymized signer #${await getSignatureNumber(signerId, db)}`;
+  await db
+    .update(signers)
+    .set({
+      displayName,
+      affiliation: null,
+      locationText: null,
+      isAdmin: false,
+    })
+    .where(eq(signers.id, signerId));
+
+  // 2) Scrub the private capture fields but keep the consent record: its hash
+  //    proves what was agreed to, and signatures.consent_record_id FKs to it.
+  await db
+    .update(consentRecords)
+    .set({ capturedFields: null, revokedAt: new Date() })
+    .where(eq(consentRecords.signerId, signerId));
+
+  // 3) Selfies are private biometric data — delete blobs + rows LAST (the only
+  //    irreversible step). Reports are deleted first (FK to selfies): both those
+  //    authored by this signer and those filed against this signer's selfies.
   const signerSelfies = await db
     .select({
-      originalBlobUrl: selfies.originalBlobUrl,
       displayBlobUrl: selfies.displayBlobUrl,
       thumbnailBlobUrl: selfies.thumbnailBlobUrl,
     })
@@ -71,11 +106,7 @@ export async function anonymizeSigner(
     .where(eq(selfies.signerId, signerId));
   for (const s of signerSelfies) {
     await deleteSelfieBlobsByUrls(
-      {
-        originalUrl: s.originalBlobUrl,
-        displayUrl: s.displayBlobUrl,
-        thumbnailUrl: s.thumbnailBlobUrl,
-      },
+      { displayUrl: s.displayBlobUrl, thumbnailUrl: s.thumbnailBlobUrl },
       blobBackend,
     );
   }
@@ -87,24 +118,4 @@ export async function anonymizeSigner(
     WHERE selfie_id IN (SELECT id FROM selfies WHERE signer_id = ${signerId})
   `);
   await db.delete(selfies).where(eq(selfies.signerId, signerId));
-
-  // 2) Scrub the private capture fields but keep the consent record: its hash
-  //    proves what was agreed to, and signatures.consent_record_id FKs to it.
-  await db
-    .update(consentRecords)
-    .set({ capturedFields: null, revokedAt: new Date() })
-    .where(eq(consentRecords.signerId, signerId));
-
-  // 3) Anonymize the public profile. N is the signature ordinal so the label is
-  //    stable and matches the "Anonymized signer #N" wording in the consent text.
-  const n = await getSignatureNumber(signerId, db);
-  await db
-    .update(signers)
-    .set({
-      displayName: `Anonymized signer #${n}`,
-      affiliation: null,
-      locationText: null,
-      isAdmin: false,
-    })
-    .where(eq(signers.id, signerId));
 }

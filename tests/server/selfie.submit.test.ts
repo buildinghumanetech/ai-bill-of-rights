@@ -36,7 +36,8 @@ describe("submitSelfie", () => {
     expect(rows[0].id).toBe(selfieId);
     expect(rows[0].status).toBe("pending");
     expect(rows[0].captureMethod).toBe("live");
-    expect(backend.store.size).toBe(3);
+    // Two blobs per selfie: display + thumbnail (no full-res original).
+    expect(backend.store.size).toBe(2);
   });
 
   it("uploads under selfies/<signerId>/<selfieId>/ prefix", async () => {
@@ -54,7 +55,8 @@ describe("submitSelfie", () => {
     for (const url of paths) {
       expect(url).toContain(`selfies/${signerId}/${selfieId}/`);
     }
-    expect(paths.some((p) => p.includes("original.jpg"))).toBe(true);
+    // No original.jpg — only the display + thumbnail derivatives are stored.
+    expect(paths.some((p) => p.includes("original.jpg"))).toBe(false);
     expect(paths.some((p) => p.includes("display.webp"))).toBe(true);
     expect(paths.some((p) => p.includes("thumbnail.webp"))).toBe(true);
   });

@@ -120,7 +120,7 @@ describe("rejectSelfie", () => {
       captureMethod: "live",
       blobBackend: backend,
     });
-    expect(backend.store.size).toBe(3);
+    expect(backend.store.size).toBe(2);
 
     await rejectSelfie(db, {
       selfieId,

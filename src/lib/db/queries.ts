@@ -46,24 +46,30 @@ export async function getSignatureNumber(
   signerId: string,
   db: any = getDefaultDb(),
 ): Promise<number> {
-  // 1. Get the signer's signedAt timestamp
-  const sigRow = await db
-    .select({ signedAt: signatures.signedAt })
-    .from(signatures)
-    .where(eq(signatures.signerId, signerId))
-    .orderBy(asc(signatures.signedAt))
-    .limit(1);
-  if (sigRow.length === 0) return 1;
-  const signedAt = sigRow[0].signedAt;
-
-  // 2. Count how many distinct people signed at or before that timestamp.
-  //    Distinct for the same reason as getSignatureCount: a person who signs
-  //    more than one version must not advance everyone else's signer number.
+  // Count signatures at-or-before this signer's first signature. The comparison
+  // stays ENTIRELY in SQL on purpose: reading the timestamp into JS first
+  // truncates it to millisecond precision, but Postgres `timestamptz` keeps
+  // microseconds — so a round-tripped value fails the `<=` boundary against the
+  // signer's own row on the neon-http driver and returns a number one too low
+  // ("signer #0"). pglite round-trips at ms precision, which is why this only
+  // bites on real Neon. Keeping the subquery server-side preserves precision.
+  //
+  // DISTINCT on signer_id for the same reason as getSignatureCount: someone who
+  // signs more than one version must not advance everyone else's signer number.
   const rows = await db
     .select({ value: countDistinct(signatures.signerId) })
     .from(signatures)
-    .where(sql`${signatures.signedAt} <= ${signedAt}`);
-  return Number(rows[0]?.value ?? 1);
+    .where(
+      sql`${signatures.signedAt} <= (
+        select ${signatures.signedAt} from ${signatures}
+        where ${signatures.signerId} = ${signerId}
+        order by ${signatures.signedAt} asc
+        limit 1
+      )`,
+    );
+  const n = Number(rows[0]?.value ?? 0);
+  // No signature for this signer → preserve the historical "return 1" contract.
+  return n === 0 ? 1 : n;
 }
 
 /**

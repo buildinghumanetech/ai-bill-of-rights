@@ -172,7 +172,9 @@ describe("anonymizeSigner", () => {
       blobBackend: backend,
     });
     await approveSelfie(db, { selfieId, adminSignerId: admin.id });
-    expect(backend.store.size).toBe(3);
+    // Two blobs per selfie now (display + thumbnail); the full-res original is
+    // never persisted.
+    expect(backend.store.size).toBe(2);
 
     // A third-party reports the signer's selfie
     await reportSelfie(db, {
@@ -200,9 +202,35 @@ describe("anonymizeSigner", () => {
       .from(signers)
       .where(eq(signers.id, signer.id));
     expect(signerAfter).toBeDefined();
-    expect(signerAfter.displayName).toMatch(/^Anonymized signer #\d+$/);
+    // This signer never signed (selfie only), so the label has no ordinal.
+    expect(signerAfter.displayName).toBe("Anonymized account");
 
-    // Blobs cleaned best-effort (3 sizes deleted)
+    // Blobs cleaned best-effort (both sizes deleted)
     expect(backend.store.size).toBe(0);
+  });
+
+  it("labels a signature-less signer 'Anonymized account' (no colliding ordinal)", async () => {
+    const db = await createTestDb();
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "u-no-sig",
+        displayName: "Commenter Only",
+        affiliation: "Some org",
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+
+    await anonymizeSigner(db, signer.id);
+
+    const [after] = await db
+      .select()
+      .from(signers)
+      .where(eq(signers.id, signer.id));
+    // getSignatureNumber would return 1 for a signer who never signed, which
+    // would collide with the genuine first signer — so we use a plain label.
+    expect(after.displayName).toBe("Anonymized account");
+    expect(after.affiliation).toBeNull();
   });
 });

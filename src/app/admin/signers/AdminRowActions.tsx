@@ -24,20 +24,29 @@ export default function AdminRowActions({
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [editOpen, setEditOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function handleDelete() {
     const confirmed = window.confirm(
-      `Delete ${displayName}? This permanently removes their signatures and consent records.`,
+      `Anonymize ${displayName}? This scrubs their private data (contact info, location, any photo) and renames them to "Anonymized signer #N". Their signature and the public count are kept.`,
     );
     if (!confirmed) return;
+    setError(null);
     startTransition(async () => {
-      await deleteSignerAction(signerId);
+      const result = await deleteSignerAction(signerId);
+      if (!result.success) {
+        setError(result.error ?? "Couldn't anonymize this signer.");
+      }
     });
   }
 
   function handleToggleAdmin() {
+    setError(null);
     startTransition(async () => {
-      await setAdminFlagAction(signerId, !isAdmin);
+      const result = await setAdminFlagAction(signerId, !isAdmin);
+      if (!result.success) {
+        setError(result.error ?? "Couldn't update admin role.");
+      }
     });
   }
 
@@ -73,6 +82,9 @@ export default function AdminRowActions({
           Delete
         </button>
       </div>
+      {error ? (
+        <p className="mt-1 text-right text-xs text-red-700">{error}</p>
+      ) : null}
       <AdminEditSignerModal
         open={editOpen}
         onClose={() => setEditOpen(false)}

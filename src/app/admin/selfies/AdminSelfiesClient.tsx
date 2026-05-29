@@ -131,12 +131,18 @@ function ReviewCard({ row, tab }: { row: AdminSelfieClientRow; tab: Tab }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={row.displayBlobUrl}
-        alt={`${row.signer.displayName} selfie`}
-        className="aspect-square w-full bg-zinc-100 object-cover"
-      />
+      {row.displayBlobUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={row.displayBlobUrl}
+          alt={`${row.signer.displayName} selfie`}
+          className="aspect-square w-full bg-zinc-100 object-cover"
+        />
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center bg-zinc-100 text-xs text-zinc-400">
+          Photo removed
+        </div>
+      )}
       <div className="p-4">
         <div className="flex items-baseline justify-between gap-3">
           <Link

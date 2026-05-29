@@ -1,8 +1,8 @@
 "use server";
 
 import { sendEmail } from "@/lib/email/send";
+import { EMAIL_RE } from "@/lib/validation/input";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONTACT_TO = "hello@ai-for-people.org";
 
 export interface ContactResult {

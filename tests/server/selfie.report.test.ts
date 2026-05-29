@@ -177,7 +177,7 @@ describe("resolveSelfieReports", () => {
     });
     await approveSelfie(db, { selfieId, adminSignerId: admin });
     await reportSelfie(db, { selfieId, reporterSignerId: r });
-    expect(backend.store.size).toBe(3);
+    expect(backend.store.size).toBe(2);
 
     await resolveSelfieReports(db, {
       selfieId,

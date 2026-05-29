@@ -5,12 +5,10 @@ export interface CapturedFields {
   ip_geo_city: string;
   ip_geo_region: string;
   ip_geo_country: string;
-  user_agent_raw: string;
   browser_name: string;
   browser_version: string;
   os_name: string;
   os_version: string;
-  device_type: string;
   screen_resolution: string;
   timezone: string;
   language: string;
@@ -41,7 +39,6 @@ export function extractCapturedFields(
   const parser = new UAParser(ua);
   const browser = parser.getBrowser();
   const os = parser.getOS();
-  const device = parser.getDevice();
 
   return {
     ip,
@@ -51,12 +48,10 @@ export function extractCapturedFields(
     ip_geo_city: decodeHeaderValue(headers.get("x-vercel-ip-city")),
     ip_geo_region: decodeHeaderValue(headers.get("x-vercel-ip-country-region")),
     ip_geo_country: decodeHeaderValue(headers.get("x-vercel-ip-country")),
-    user_agent_raw: ua,
     browser_name: browser.name ?? "",
     browser_version: browser.version ?? "",
     os_name: os.name ?? "",
     os_version: os.version ?? "",
-    device_type: device.type ?? "desktop",
     screen_resolution: context.screenResolution ?? "",
     timezone: headers.get("x-vercel-ip-timezone") ?? "",
     language: headers.get("accept-language") ?? "",

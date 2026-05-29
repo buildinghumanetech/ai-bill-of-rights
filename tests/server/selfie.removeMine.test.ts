@@ -41,7 +41,7 @@ describe("removeMySelfie", () => {
       blobBackend: backend,
     });
     await approveSelfie(db, { selfieId, adminSignerId: admin.id });
-    expect(backend.store.size).toBe(3);
+    expect(backend.store.size).toBe(2);
 
     await removeMySelfie(db, {
       signerId: signer.id,

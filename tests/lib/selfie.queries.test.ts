@@ -32,11 +32,8 @@ async function insertSelfie(db: any, signerId: string, overrides: any = {}) {
     .values({
       signerId,
       status: "pending",
-      originalBlobUrl: "o",
       displayBlobUrl: "d",
       thumbnailBlobUrl: "t",
-      originalMime: "image/jpeg",
-      originalBytes: 1,
       captureMethod: "live",
       ...overrides,
     })

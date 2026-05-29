@@ -24,11 +24,8 @@ describe("selfies schema", () => {
       .values({
         signerId,
         status: "pending",
-        originalBlobUrl: "x",
         displayBlobUrl: "y",
         thumbnailBlobUrl: "z",
-        originalMime: "image/jpeg",
-        originalBytes: 1024,
         captureMethod: "live",
       })
       .returning();
@@ -42,22 +39,16 @@ describe("selfies schema", () => {
     await db.insert(selfies).values({
       signerId,
       status: "approved",
-      originalBlobUrl: "a",
       displayBlobUrl: "b",
       thumbnailBlobUrl: "c",
-      originalMime: "image/jpeg",
-      originalBytes: 1,
       captureMethod: "live",
     });
     await expect(
       db.insert(selfies).values({
         signerId,
         status: "approved",
-        originalBlobUrl: "d",
         displayBlobUrl: "e",
         thumbnailBlobUrl: "f",
-        originalMime: "image/jpeg",
-        originalBytes: 1,
         captureMethod: "live",
       }),
     ).rejects.toThrow();
@@ -70,11 +61,8 @@ describe("selfies schema", () => {
       await db.insert(selfies).values({
         signerId,
         status: "pending",
-        originalBlobUrl: `o${i}`,
         displayBlobUrl: `d${i}`,
         thumbnailBlobUrl: `t${i}`,
-        originalMime: "image/jpeg",
-        originalBytes: 1,
         captureMethod: "live",
       });
     }
@@ -90,11 +78,8 @@ describe("selfies schema", () => {
       .values({
         signerId,
         status: "approved",
-        originalBlobUrl: "a",
         displayBlobUrl: "b",
         thumbnailBlobUrl: "c",
-        originalMime: "image/jpeg",
-        originalBytes: 1,
         captureMethod: "live",
       })
       .returning({ id: selfies.id });
@@ -105,11 +90,8 @@ describe("selfies schema", () => {
       .values({
         signerId,
         status: "pending",
-        originalBlobUrl: "d",
         displayBlobUrl: "e",
         thumbnailBlobUrl: "f",
-        originalMime: "image/jpeg",
-        originalBytes: 1,
         captureMethod: "live",
       })
       .returning({ id: selfies.id });
@@ -134,11 +116,8 @@ describe("selfies schema", () => {
       .values({
         signerId: owner,
         status: "approved",
-        originalBlobUrl: "a",
         displayBlobUrl: "b",
         thumbnailBlobUrl: "c",
-        originalMime: "image/jpeg",
-        originalBytes: 1,
         captureMethod: "live",
       })
       .returning({ id: selfies.id });
