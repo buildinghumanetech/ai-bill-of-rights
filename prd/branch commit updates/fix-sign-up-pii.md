@@ -1,5 +1,46 @@
 # Branch Progress: fix/sign-up-pii
 
+## Progress Update as of [2026-05-29 18:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Committed the KISS restructuring as `18da41e`. Resolved the two open follow-ups:
+(A) rewrote the `/account/revoke` page copy so it tells the truth about what
+revoke does, and (B) decided to flag — not fix — the flaky duplicate-report tests
+after they proved unreproducible and out of scope.
+
+### Detail of changes made:
+- **Revoke-page honesty fix** (`src/app/account/revoke/page.tsx`). The old bullet
+  list claimed revoke would "Delete your signature from every version," "Delete the
+  consent records," and "Free up your email/phone so you can sign again." All three
+  were false against the actual code: `anonymizeSigner` (`revoke.ts`) keeps the
+  signature row (still counts), keeps the consent record (only nulls
+  `captured_fields`, retains the hash + stamps `revoked_at`), and never touches
+  Clerk — and the retained signature still trips the per-version unique constraint
+  (`sign-from-modal.ts:179`), so no re-sign is enabled. Rewrote to match the
+  canonical promise in `content/consent/v1.md:26`: anonymize the public entry to
+  "Anonymized signer #N" (clarified inline that N = the signature number), erase the
+  private captured fields (consent record kept as proof), delete the photo. Three
+  accurate bullets replacing five, one false. Added a matching bullet to the PR body.
+- **Flaky duplicate-report tests — flagged, not fixed (decision).** `reportSelfie`
+  (`selfie.ts:393`) and `reportComment` (`comment-reports.ts:25`) swallow the
+  unique-violation on a duplicate report. Verified the catch logic is **byte-
+  identical on `main`** (pre-existing, not from this branch) and could not reproduce
+  the flake in 8 consecutive runs (5× the two report files, 3× the full 198-test
+  suite — all green). A fix would be unverifiable against a flake I can't trigger,
+  and `comment-reports.ts` is otherwise untouched by this PR, so the proportionate
+  call is to leave the code and keep the existing PR-body follow-up note. `tsc` clean.
+
+### Potential concerns to address:
+- The revoke page body now describes anonymization accurately, but the heading
+  ("Remove your signature") and submit button ("Yes, remove my signature") still use
+  the colloquial "remove" verb. Left as-is since the body explains it anonymizes.
+- Flaky report tests remain a latent risk if CI is added; robust fix (check
+  `err.cause?.message`/`err.cause?.code`, not just `err.message`/`err.code`) noted in
+  the PR body.
+
+---
+
 ## Progress Update as of [2026-05-29 19:45 Pacific]
 *(Most recent updates at top)*
 

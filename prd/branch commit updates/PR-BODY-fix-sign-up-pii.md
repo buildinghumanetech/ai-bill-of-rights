@@ -31,6 +31,12 @@ problem and removes the rest. Net change is a reduction (~−140 lines).
   hard delete; it anonymizes), and `deleteSignerAction`/`setAdminFlagAction` now
   return `{success, error?}` so the client can surface failures (Next redacts
   *thrown* server-action messages in prod).
+- **Honest revoke-page copy** (`account/revoke/page.tsx`). The old bullet list
+  promised things revoke never did — delete the signature, delete the consent
+  record, free up the email/phone to re-sign. Rewrote it to match the actual
+  behavior and the consent text (`content/consent/v1.md`): anonymize the public
+  entry (signature still counts), erase the private captured fields (consent
+  record kept as proof), delete the photo.
 - **Dependency CVE overrides** (`pnpm-workspace.yaml`: js-cookie ≥3.0.6,
   postcss ≥8.5.10).
 
