@@ -11,13 +11,16 @@ attestation input is validated, and the app stops storing data it never uses.
 
 ## Changes
 
-- **Anonymizing revocation** (`revoke.ts`). Revoke previously hard-deleted the
-  signer/signature, which broke the promise in `content/consent/v1.md` (the
-  signature is supposed to remain, anonymized) *and* threw foreign-key violations
-  for anyone who had commented, voted, endorsed, or been @mentioned. It now
-  anonymizes in place: the signature keeps counting, but the public entry becomes
-  "Anonymized signer #N" and the private data is erased. Ordered to be **fail-safe**
-  under Neon's HTTP driver (no transactions): scrub the public identity first, null
+- **Anonymizing revocation** (`revoke.ts`). The consent text
+  (`content/consent/v1.md`) has always told signers that revoking *anonymizes*
+  their signature in place — the signature remains and keeps counting, only the
+  personal data is removed. The code didn't actually do that: it hard-deleted the
+  signer/signature row, which contradicted that promise *and* threw foreign-key
+  violations for anyone who had commented, voted, endorsed, or been @mentioned.
+  This change brings the code in line with the promise the user already agreed to:
+  the public entry becomes "Anonymized signer #N" and the private data is erased,
+  while the signature itself is retained. Ordered to be **fail-safe** under Neon's
+  HTTP driver (no transactions): scrub the public identity first, null
   `captured_fields` next, delete selfie rows/blobs last (the only irreversible
   step). Signature-less accounts get the label "Anonymized account" (no ordinal) so
   they can't collide with the genuine first signer.
