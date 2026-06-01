@@ -95,7 +95,7 @@ ${opts.revokeUrl}
     <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;color:#92400e;">Bring Two Friends</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#78350f;">Every signature strengthens the movement. Share yours now:</p>
     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px 16px;margin:0 0 20px;">
-      <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;">Suggested message (copy &amp; paste for LinkedIn):</p>
+      <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#0a66c2;text-transform:uppercase;letter-spacing:.04em;">Suggested message (copy &amp; paste for LinkedIn):</p>
       <p style="margin:0;font-size:14px;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;line-height:1.5;">${esc(suggestedMessage)}</p>
     </div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
