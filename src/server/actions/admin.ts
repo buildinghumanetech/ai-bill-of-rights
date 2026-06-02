@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   attestations,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
+import { anonymizeSigner } from "./revoke";
 
 let _db: any | null = null;
 function getDb() {
@@ -22,73 +23,43 @@ function getDb() {
   return _db;
 }
 
-async function requireAdminOrBootstrap() {
+async function requireAdmin() {
   const ctx = await getCurrentAdmin();
-  if (ctx.state !== "admin" && ctx.state !== "no-admins-yet") {
+  if (ctx.state !== "admin") {
     throw new Error("Forbidden: admin only");
   }
   return ctx;
 }
 
-export async function bootstrapAdminAction(): Promise<void> {
-  const ctx = await getCurrentAdmin();
-  if (ctx.state !== "no-admins-yet") {
-    throw new Error(
-      "Bootstrap not available — an admin already exists or you are not signed in.",
-    );
-  }
-  await getDb()
-    .update(signers)
-    .set({ isAdmin: true })
-    .where(eq(signers.id, ctx.signer.id));
-  revalidatePath("/admin/signers");
-}
-
-export async function deleteSignerAction(signerId: string): Promise<void> {
-  await requireAdminOrBootstrap();
+/**
+ * Admin "Remove signer". Routes through the same `anonymizeSigner` used by the
+ * user-facing revoke flow: scrubs private data (captured_fields, selfie blobs)
+ * and renames to "Anonymized signer #N", while keeping the signature + count.
+ * This both fixes the old hard-delete's FK violations (it omitted selfies and
+ * every comment-system table, so it 500'd for any active signer) and keeps the
+ * two removal paths consistent. To take down abusive *content*, admins use
+ * `hideCommentAction` / the soft-ban, not this button.
+ */
+export async function deleteSignerAction(
+  signerId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
   const db = getDb();
-  // Cascade manually since neon-http has no transaction support. Order
-  // matters for FK constraints; we delete children before parents.
-  //
-  // The production DB still has `comments`, `comment_upvotes`, `reports`
-  // tables left behind from an earlier Phase 3 db:push, even though those
-  // tables aren't in the current schema.ts (the Phase 3 PRs were closed).
-  // The FKs from those tables to `signers` were blocking the final
-  // DELETE FROM signers and 500ing the admin Delete button.
-  //
-  // Wrap each defensive DELETE in try/catch so "relation does not exist" is
-  // a no-op (pglite tests + cleaned dev branches have no such tables; prod
-  // still does).
-  async function tryExec(stmt: ReturnType<typeof sql>): Promise<void> {
-    try {
-      await db.execute(stmt);
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      if (!/does not exist|undefined_table/i.test(msg)) throw err;
-    }
+  try {
+    await anonymizeSigner(db, signerId);
+    revalidatePath("/admin/signers");
+    revalidatePath("/signers");
+    revalidatePath(`/signatories/${signerId}`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
   }
-  await tryExec(sql`
-    DELETE FROM reports
-    WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`
-    DELETE FROM comment_upvotes
-    WHERE signer_id = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
-  await db.delete(signatures).where(eq(signatures.signerId, signerId));
-  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
-  await db.delete(signers).where(eq(signers.id, signerId));
-  revalidatePath("/admin/signers");
-  revalidatePath("/signers");
 }
 
 export async function deleteAttestationAction(
   attestationId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  await requireAdminOrBootstrap();
+  await requireAdmin();
   const db = getDb();
   try {
     await db
@@ -105,13 +76,19 @@ export async function deleteAttestationAction(
 export async function setAdminFlagAction(
   signerId: string,
   makeAdmin: boolean,
-): Promise<void> {
-  await requireAdminOrBootstrap();
-  await getDb()
-    .update(signers)
-    .set({ isAdmin: makeAdmin })
-    .where(eq(signers.id, signerId));
-  revalidatePath("/admin/signers");
+): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
+  const db = getDb();
+  try {
+    await db
+      .update(signers)
+      .set({ isAdmin: makeAdmin })
+      .where(eq(signers.id, signerId));
+    revalidatePath("/admin/signers");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
 }
 
 export interface EditSignerInput {
@@ -124,7 +101,7 @@ export interface EditSignerInput {
 export async function editSignerAction(
   input: EditSignerInput,
 ): Promise<{ success: boolean; error?: string }> {
-  await requireAdminOrBootstrap();
+  await requireAdmin();
   const displayName = input.displayName.trim();
   if (!displayName) {
     return { success: false, error: "Display name is required." };
@@ -170,7 +147,7 @@ export interface AdminAddSignerResult {
 export async function adminAddSignerAction(
   input: AdminAddSignerInput,
 ): Promise<AdminAddSignerResult> {
-  const ctx = await requireAdminOrBootstrap();
+  const ctx = await requireAdmin();
   const db = getDb();
 
   const displayName = input.displayName.trim();
@@ -191,13 +168,12 @@ export async function adminAddSignerAction(
   }
   const versionRow = versionRows[0];
 
-  const adminSigner =
-    ctx.state === "admin" ? ctx.signer : ctx.state === "no-admins-yet" ? ctx.signer : null;
+  const adminSigner = ctx.signer;
   const syntheticClerkId = `admin-added-${randomUUID()}`;
   const contactValue = (input.contactValue ?? "").trim();
   const capturedFields = {
     source: "admin_added" as const,
-    admin_signer_id: adminSigner?.id ?? null,
+    admin_signer_id: adminSigner.id,
     added_at_utc: new Date().toISOString(),
     contact_method: input.verificationMethod,
     // Stored privately on the consent record for outreach — never surfaced
@@ -271,16 +247,13 @@ export interface AdminAddNonSignerResult {
 export async function adminAddNonSignerAction(
   input: AdminAddNonSignerInput,
 ): Promise<AdminAddNonSignerResult> {
-  const ctx = await requireAdminOrBootstrap();
+  const ctx = await requireAdmin();
   const db = getDb();
 
   const displayName = input.displayName.trim();
   if (!displayName) {
     return { success: false, error: "Display name is required." };
   }
-
-  const adminSigner =
-    ctx.state === "admin" || ctx.state === "no-admins-yet" ? ctx.signer : null;
 
   const result = await insertNonSigner(db, {
     displayName,
@@ -290,7 +263,7 @@ export async function adminAddNonSignerAction(
     contactValue: input.contactValue,
     isAdmin: input.isAdmin,
     notificationPreference: input.notificationPreference,
-    adminSignerId: adminSigner?.id ?? null,
+    adminSignerId: ctx.signer.id,
   });
 
   if (result.success) {

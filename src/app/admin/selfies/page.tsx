@@ -14,11 +14,13 @@ export const dynamic = "force-dynamic";
 
 type Tab = "pending" | "auto_hidden" | "rejected" | "approved";
 
-function asClientRow(r: AdminSelfieRow): AdminSelfieClientRow {
+function asClientRow(r: AdminSelfieRow, tab: Tab): AdminSelfieClientRow {
   return {
     id: r.id,
     signerId: r.signerId,
-    displayBlobUrl: r.displayBlobUrl,
+    // Rejected/hidden selfies have had their blobs deleted from storage, so the
+    // URL would 404 — blank it and let the client render a placeholder.
+    displayBlobUrl: tab === "rejected" ? "" : r.displayBlobUrl,
     submittedAt: r.submittedAt.toISOString(),
     reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
     captureMethod: r.captureMethod,
@@ -92,7 +94,7 @@ export default async function AdminSelfiesPage({
         </div>
       </header>
       <AdminSelfiesClient
-        rows={rows.map(asClientRow)}
+        rows={rows.map((r) => asClientRow(r, tab))}
         currentTab={tab}
         counts={{ pending: pendingCount, auto_hidden: autoHiddenCount }}
       />

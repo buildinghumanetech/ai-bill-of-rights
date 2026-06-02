@@ -68,7 +68,10 @@ export default async function AccountPage({
     if (status !== "none") {
       selfieCard = {
         status,
-        thumbnailUrl: latestSelfie.thumbnailBlobUrl,
+        // Rejected selfies have their blobs deleted (moderation cleanup), so
+        // there's no thumbnail to show — the card renders a placeholder.
+        thumbnailUrl:
+          status === "rejected" ? null : latestSelfie.thumbnailBlobUrl,
         rejectionReason:
           (latestSelfie.rejectionReason as RejectionReason | null) ?? null,
         submittedAt: latestSelfie.submittedAt.toISOString(),

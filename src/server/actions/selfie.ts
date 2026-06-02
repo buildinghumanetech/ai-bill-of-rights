@@ -98,7 +98,6 @@ export async function submitSelfie(
       {
         signerId: input.signerId,
         selfieId,
-        original: processed.original,
         display: processed.display,
         thumbnail: processed.thumbnail,
       },
@@ -109,11 +108,8 @@ export async function submitSelfie(
       id: selfieId,
       signerId: input.signerId,
       status: "pending",
-      originalBlobUrl: uploaded.originalUrl,
       displayBlobUrl: uploaded.displayUrl,
       thumbnailBlobUrl: uploaded.thumbnailUrl,
-      originalMime: "image/jpeg",
-      originalBytes: processed.original.byteLength,
       captureMethod: input.captureMethod,
     });
 
@@ -122,7 +118,6 @@ export async function submitSelfie(
     if (uploaded) {
       await deleteSelfieBlobsByUrls(
         {
-          originalUrl: uploaded.originalUrl,
           displayUrl: uploaded.displayUrl,
           thumbnailUrl: uploaded.thumbnailUrl,
         },
@@ -258,6 +253,7 @@ export interface RejectSelfieInput {
   adminSignerId: string;
   reason: RejectionReason;
   note?: string;
+  blobBackend?: SelfieBlobBackend;
 }
 
 export async function rejectSelfie(
@@ -286,6 +282,16 @@ export async function rejectSelfie(
       rejectionNote: input.note ?? null,
     })
     .where(eq(selfies.id, input.selfieId));
+
+  // A rejected photo was never cleared for public display — delete its blobs
+  // so it doesn't linger in (public) storage. Best-effort; never throws.
+  await deleteSelfieBlobsByUrls(
+    {
+      displayUrl: rows[0].displayBlobUrl,
+      thumbnailUrl: rows[0].thumbnailBlobUrl,
+    },
+    input.blobBackend,
+  );
 }
 
 async function emailSelfieDecision(
@@ -412,6 +418,7 @@ export interface ResolveSelfieReportsInput {
   selfieId: string;
   adminSignerId: string;
   resolution: "allowed" | "hidden";
+  blobBackend?: SelfieBlobBackend;
 }
 
 export async function resolveSelfieReports(
@@ -438,6 +445,16 @@ export async function resolveSelfieReports(
       .set({ autoHiddenAt: null })
       .where(eq(selfies.id, input.selfieId));
   } else {
+    // Capture the blob URLs before we lose track of them, flip to rejected,
+    // then delete the blobs — hidden-on-report content should not stay live.
+    const [target] = await db
+      .select({
+        displayBlobUrl: selfies.displayBlobUrl,
+        thumbnailBlobUrl: selfies.thumbnailBlobUrl,
+      })
+      .from(selfies)
+      .where(eq(selfies.id, input.selfieId))
+      .limit(1);
     await db
       .update(selfies)
       .set({
@@ -447,6 +464,15 @@ export async function resolveSelfieReports(
         reviewedBy: input.adminSignerId,
       })
       .where(eq(selfies.id, input.selfieId));
+    if (target) {
+      await deleteSelfieBlobsByUrls(
+        {
+          displayUrl: target.displayBlobUrl,
+          thumbnailUrl: target.thumbnailBlobUrl,
+        },
+        input.blobBackend,
+      );
+    }
   }
 }
 
@@ -553,14 +579,10 @@ export async function removeMySelfie(
       ),
     );
   for (const row of rows) {
-    // Best-effort delete public derivatives. The original is kept for an
-    // audit window — it gets purged only on full /account/revoke.
+    // The disclaimer promises users can remove their photo anytime — so delete
+    // its blobs from (public) storage before marking the row removed.
     await deleteSelfieBlobsByUrls(
-      {
-        originalUrl: null,
-        displayUrl: row.displayBlobUrl,
-        thumbnailUrl: row.thumbnailBlobUrl,
-      },
+      { displayUrl: row.displayBlobUrl, thumbnailUrl: row.thumbnailBlobUrl },
       input.blobBackend,
     );
     await db

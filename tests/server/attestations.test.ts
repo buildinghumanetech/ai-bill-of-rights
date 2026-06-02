@@ -9,6 +9,7 @@ import {
   approveAttestation,
   hideAttestation,
 } from "@/server/actions/attestations";
+import { validateAttestationFields } from "@/lib/attestations/validate";
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -64,6 +65,62 @@ describe("createAttestation", () => {
     });
     const [row] = await db.select().from(attestations);
     expect(row.needsManualReview).toBe(true);
+  });
+});
+
+describe("validateAttestationFields", () => {
+  const valid = {
+    orgName: "Acme",
+    productName: "Bot",
+    productUrl: "https://acme.example",
+    contactEmail: "a@b.com",
+  };
+
+  it("returns null for valid input", () => {
+    expect(validateAttestationFields(valid)).toBeNull();
+  });
+
+  it("accepts a null productUrl", () => {
+    expect(validateAttestationFields({ ...valid, productUrl: null })).toBeNull();
+  });
+
+  it("requires orgName, productName, and contactEmail", () => {
+    expect(validateAttestationFields({ ...valid, orgName: "" })).toMatch(
+      /required/,
+    );
+    expect(validateAttestationFields({ ...valid, productName: "" })).toMatch(
+      /required/,
+    );
+    expect(validateAttestationFields({ ...valid, contactEmail: "" })).toMatch(
+      /required/,
+    );
+  });
+
+  it("rejects an over-length field", () => {
+    expect(
+      validateAttestationFields({ ...valid, orgName: "x".repeat(201) }),
+    ).toMatch(/too long/);
+  });
+
+  it("rejects a malformed email", () => {
+    expect(
+      validateAttestationFields({ ...valid, contactEmail: "not-an-email" }),
+    ).toMatch(/valid contact email/);
+  });
+
+  it("rejects a non-http(s) product URL", () => {
+    expect(
+      validateAttestationFields({ ...valid, productUrl: "javascript:alert(1)" }),
+    ).toMatch(/http:\/\/ or https:\/\//);
+  });
+
+  it("rejects an over-length product URL", () => {
+    expect(
+      validateAttestationFields({
+        ...valid,
+        productUrl: "https://acme.example/" + "a".repeat(500),
+      }),
+    ).toMatch(/Product URL is too long/);
   });
 });
 

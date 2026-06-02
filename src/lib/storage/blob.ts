@@ -36,34 +36,31 @@ function getDefaultBackend(): SelfieBlobBackend {
 export interface UploadSelfieBlobsInput {
   signerId: string;
   selfieId: string;
-  original: Buffer;
   display: Buffer;
   thumbnail: Buffer;
 }
 
 export interface UploadedSelfieBlobs {
-  originalUrl: string;
   displayUrl: string;
   thumbnailUrl: string;
 }
 
 /**
- * Uploads all three derived sizes for one selfie submission. The path scheme
- * keeps a signer's selfies grouped (helpful when bulk-cleaning during
- * revocation). Vercel Blob URLs include a hard-to-guess random suffix
- * (addRandomSuffix: true) so although the bucket is "public," enumeration
- * is not realistic. Pre-approval, the URLs are simply never linked in the
- * rendered HTML — they exist but aren't surfaced anywhere.
+ * Uploads the two derived sizes (display + thumbnail) for one selfie
+ * submission. We deliberately do NOT persist the full-resolution original —
+ * once display/thumbnail are derived in memory, the original is discarded, so
+ * a removed/rejected face can never linger in storage. The path scheme keeps a
+ * signer's selfies grouped (helpful when bulk-cleaning during revocation).
+ * Vercel Blob URLs include a hard-to-guess random suffix (addRandomSuffix:
+ * true) so although the bucket is "public," enumeration is not realistic.
+ * Pre-approval, the URLs are simply never linked in the rendered HTML — they
+ * exist but aren't surfaced anywhere.
  */
 export async function uploadSelfieBlobs(
   input: UploadSelfieBlobsInput,
   backend: SelfieBlobBackend = getDefaultBackend(),
 ): Promise<UploadedSelfieBlobs> {
   const base = `selfies/${input.signerId}/${input.selfieId}`;
-  const original = await backend.put(`${base}/original.jpg`, input.original, {
-    contentType: "image/jpeg",
-    access: "public",
-  });
   const display = await backend.put(`${base}/display.webp`, input.display, {
     contentType: "image/webp",
     access: "public",
@@ -74,7 +71,6 @@ export async function uploadSelfieBlobs(
     { contentType: "image/webp", access: "public" },
   );
   return {
-    originalUrl: original.url,
     displayUrl: display.url,
     thumbnailUrl: thumbnail.url,
   };
@@ -86,13 +82,12 @@ export async function uploadSelfieBlobs(
  */
 export async function deleteSelfieBlobsByUrls(
   urls: {
-    originalUrl?: string | null;
     displayUrl?: string | null;
     thumbnailUrl?: string | null;
   },
   backend: SelfieBlobBackend = getDefaultBackend(),
 ): Promise<void> {
-  for (const url of [urls.originalUrl, urls.displayUrl, urls.thumbnailUrl]) {
+  for (const url of [urls.displayUrl, urls.thumbnailUrl]) {
     if (!url) continue;
     try {
       await backend.del(url);

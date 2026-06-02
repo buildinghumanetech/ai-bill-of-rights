@@ -8,9 +8,13 @@ import {
   signatures,
   selfies,
   selfieReports,
+  versions,
+  endorsements,
+  comments,
+  commentVotes,
 } from "@/lib/db/schema";
 import { recordSignature } from "@/server/actions/sign";
-import { deleteSigner } from "@/server/actions/revoke";
+import { anonymizeSigner } from "@/server/actions/revoke";
 import {
   approveSelfie,
   reportSelfie,
@@ -28,8 +32,8 @@ published_at: 2026-05-18
 x {#preamble-s-1}
 `;
 
-describe("deleteSigner", () => {
-  it("removes the signer row plus all dependent signatures and consent records", async () => {
+describe("anonymizeSigner", () => {
+  it("scrubs private data and anonymizes the public profile while keeping the signature", async () => {
     const db = await createTestDb();
     await syncVersions(db, [
       {
@@ -42,6 +46,11 @@ describe("deleteSigner", () => {
         gitCommitSha: null,
       },
     ]);
+    const [version] = await db
+      .select({ id: versions.id })
+      .from(versions)
+      .limit(1);
+
     const [signer] = await db
       .insert(signers)
       .values({
@@ -51,35 +60,78 @@ describe("deleteSigner", () => {
         locationText: "A city",
         verificationMethod: "email",
         verifiedAt: new Date(),
+        isAdmin: true,
       })
       .returning({ id: signers.id });
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "1.0.0",
       consentTextHash: "a".repeat(64),
-      capturedFields: { ip: "203.0.113.45" } as any,
+      capturedFields: { ip: "203.0.113.45", ip_geo_city: "A city" } as any,
     });
 
-    await deleteSigner(db, signer.id);
+    // Rows in comment-system tables that the OLD hard-delete never cascaded —
+    // their presence used to make DELETE FROM signers throw an FK violation.
+    await db
+      .insert(endorsements)
+      .values({ signerId: signer.id, baseVersionId: version.id });
+    const [comment] = await db
+      .insert(comments)
+      .values({
+        baseVersionId: version.id,
+        signerId: signer.id,
+        anchorId: "preamble-s-1",
+        body: "my comment",
+      })
+      .returning({ id: comments.id });
+    await db
+      .insert(commentVotes)
+      .values({ commentId: comment.id, signerId: signer.id, direction: 1 });
 
-    const signersAfter = await db
+    // Must not throw despite the comment-system rows above.
+    await anonymizeSigner(db, signer.id);
+
+    // Signer row remains, but the public profile is anonymized.
+    const [signerAfter] = await db
       .select()
       .from(signers)
       .where(eq(signers.id, signer.id));
-    expect(signersAfter).toHaveLength(0);
-    const recordsAfter = await db
+    expect(signerAfter).toBeDefined();
+    expect(signerAfter.displayName).toMatch(/^Anonymized signer #\d+$/);
+    expect(signerAfter.affiliation).toBeNull();
+    expect(signerAfter.locationText).toBeNull();
+    expect(signerAfter.isAdmin).toBe(false);
+
+    // Consent record remains (proves the signature) but private capture is gone.
+    const [record] = await db
       .select()
       .from(consentRecords)
       .where(eq(consentRecords.signerId, signer.id));
-    expect(recordsAfter).toHaveLength(0);
+    expect(record).toBeDefined();
+    expect(record.capturedFields).toBeNull();
+    expect(record.revokedAt).not.toBeNull();
+
+    // The signature itself survives.
     const sigsAfter = await db
       .select()
       .from(signatures)
       .where(eq(signatures.signerId, signer.id));
-    expect(sigsAfter).toHaveLength(0);
+    expect(sigsAfter).toHaveLength(1);
+
+    // Retained content is still attributed to the (now anonymized) signer.
+    const commentsAfter = await db
+      .select()
+      .from(comments)
+      .where(eq(comments.signerId, signer.id));
+    expect(commentsAfter).toHaveLength(1);
+    const endorsementsAfter = await db
+      .select()
+      .from(endorsements)
+      .where(eq(endorsements.signerId, signer.id));
+    expect(endorsementsAfter).toHaveLength(1);
   });
 
-  it("purges selfies, selfie_reports, and best-effort deletes blobs on revoke", async () => {
+  it("purges selfies, selfie_reports, and best-effort deletes blobs while keeping the signer", async () => {
     const db = await createTestDb();
     const [signer] = await db
       .insert(signers)
@@ -120,7 +172,9 @@ describe("deleteSigner", () => {
       blobBackend: backend,
     });
     await approveSelfie(db, { selfieId, adminSignerId: admin.id });
-    expect(backend.store.size).toBe(3);
+    // Two blobs per selfie now (display + thumbnail); the full-res original is
+    // never persisted.
+    expect(backend.store.size).toBe(2);
 
     // A third-party reports the signer's selfie
     await reportSelfie(db, {
@@ -128,13 +182,7 @@ describe("deleteSigner", () => {
       reporterSignerId: otherReporter.id,
     });
 
-    // The signer themselves also reports someone else's selfie (so we have
-    // a row authored by them too). For symmetry insert one against admin's
-    // (no selfie for admin), then a row authored by the signer pointing at
-    // their own selfie just to exercise the authored-by path.
-    // (Skip the "report someone else" case to keep the FK graph minimal.)
-
-    await deleteSigner(db, signer.id, backend);
+    await anonymizeSigner(db, signer.id, backend);
 
     const selfiesAfter = await db
       .select()
@@ -148,13 +196,41 @@ describe("deleteSigner", () => {
       .where(eq(selfieReports.selfieId, selfieId));
     expect(reportsAfter).toHaveLength(0);
 
-    const signersAfter = await db
+    // The signer row remains (anonymized), unlike the old hard-delete.
+    const [signerAfter] = await db
       .select()
       .from(signers)
       .where(eq(signers.id, signer.id));
-    expect(signersAfter).toHaveLength(0);
+    expect(signerAfter).toBeDefined();
+    // This signer never signed (selfie only), so the label has no ordinal.
+    expect(signerAfter.displayName).toBe("Anonymized account");
 
-    // Blobs cleaned best-effort (3 sizes deleted)
+    // Blobs cleaned best-effort (both sizes deleted)
     expect(backend.store.size).toBe(0);
+  });
+
+  it("labels a signature-less signer 'Anonymized account' (no colliding ordinal)", async () => {
+    const db = await createTestDb();
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "u-no-sig",
+        displayName: "Commenter Only",
+        affiliation: "Some org",
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+
+    await anonymizeSigner(db, signer.id);
+
+    const [after] = await db
+      .select()
+      .from(signers)
+      .where(eq(signers.id, signer.id));
+    // getSignatureNumber would return 1 for a signer who never signed, which
+    // would collide with the genuine first signer — so we use a plain label.
+    expect(after.displayName).toBe("Anonymized account");
+    expect(after.affiliation).toBeNull();
   });
 });

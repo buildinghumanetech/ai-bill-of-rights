@@ -23,7 +23,6 @@ export interface SelfieRow {
   status: string;
   displayBlobUrl: string;
   thumbnailBlobUrl: string;
-  originalBlobUrl: string;
   submittedAt: Date;
   reviewedAt: Date | null;
   rejectionReason: string | null;
@@ -116,7 +115,6 @@ export interface AdminSelfieRow {
   id: string;
   signerId: string;
   displayBlobUrl: string;
-  originalBlobUrl: string;
   submittedAt: Date;
   reviewedAt: Date | null;
   captureMethod: string;
@@ -140,7 +138,6 @@ async function adminSelfieRows(
       id: selfies.id,
       signerId: selfies.signerId,
       displayBlobUrl: selfies.displayBlobUrl,
-      originalBlobUrl: selfies.originalBlobUrl,
       submittedAt: selfies.submittedAt,
       reviewedAt: selfies.reviewedAt,
       captureMethod: selfies.captureMethod,
@@ -160,7 +157,6 @@ async function adminSelfieRows(
     id: r.id,
     signerId: r.signerId,
     displayBlobUrl: r.displayBlobUrl,
-    originalBlobUrl: r.originalBlobUrl,
     submittedAt: r.submittedAt,
     reviewedAt: r.reviewedAt,
     captureMethod: r.captureMethod,

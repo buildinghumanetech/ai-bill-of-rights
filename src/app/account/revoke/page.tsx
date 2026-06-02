@@ -12,14 +12,21 @@ export default async function RevokePage() {
         Remove your signature
       </h1>
       <p className="mt-6 text-zinc-700 dark:text-zinc-300">
-        This will permanently:
+        This permanently anonymizes your signature. We will:
       </p>
       <ul className="mt-3 list-disc pl-6 text-zinc-700 dark:text-zinc-300">
-        <li>Delete your signature from every version of the AI Bill of Rights you signed.</li>
-        <li>Delete your name, location, and affiliation from the public signers list.</li>
-        <li>Delete the consent records and any private fingerprint fields we captured.</li>
-        <li>Delete any photo you uploaded, including all backup copies.</li>
-        <li>Free up your email/phone so you can sign again later if you want.</li>
+        <li>
+          Replace your public entry with an anonymized label (&ldquo;Anonymized
+          signer #N,&rdquo; where N is your signature number) &mdash; your signature
+          still counts toward the total, but your name, location, and affiliation no
+          longer appear.
+        </li>
+        <li>
+          Erase the private fields we captured (IP, device, approximate location,
+          contact details); we keep the consent record itself, minus those fields, as
+          proof of what you agreed to.
+        </li>
+        <li>Delete any photo you uploaded.</li>
       </ul>
       <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
         This is irreversible. Are you sure?

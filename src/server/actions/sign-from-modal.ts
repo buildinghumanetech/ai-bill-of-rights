@@ -158,15 +158,14 @@ export async function recordSignatureFromModal(
     });
     const consentTextHash = sha256Hex(consentText);
 
-    // Persist the name-format choice (and the raw names that produced the
-    // masked displayName) alongside the existing fingerprint fields. Lets us
-    // re-apply / debug the format later if a signer's row ever needs to be
-    // reformatted (e.g., after a bug that defaulted to "full").
+    // Persist the name-format choice alongside the existing fingerprint fields
+    // so we can re-apply the masking later if a signer's row ever needs to be
+    // reformatted (e.g., after a bug that defaulted to "full"). We intentionally
+    // do NOT store the raw first/last name — the masked displayName is the only
+    // form we keep.
     const capturedWithNamePrefs = {
       ...fields,
       name_display_format: input.nameDisplayFormat ?? "full",
-      raw_first_name: input.firstName.trim(),
-      raw_last_name: input.lastName.trim(),
     };
     try {
       await recordSignature(undefined, {

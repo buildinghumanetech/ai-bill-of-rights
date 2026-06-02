@@ -4,7 +4,7 @@
  *
  * We test via the exported `insertNonSigner` data-layer function to avoid
  * needing to mock Clerk auth. The action wrapper (`adminAddNonSignerAction`)
- * just calls requireAdminOrBootstrap() then delegates to insertNonSigner.
+ * just calls requireAdmin() then delegates to insertNonSigner.
  */
 
 import { describe, expect, it } from "vitest";

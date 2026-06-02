@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { getCurrentVersion, getSignatureCount, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
 import { signers, consentRecords, signatures, versions } from "@/lib/db/schema";
 
 const sample = (version: string, isCurrent: boolean) => ({
@@ -117,6 +117,63 @@ describe("listRecentSignersSince", () => {
 
     const rows = await listRecentSignersSince(null, db);
     expect(rows.map((r) => r.displayName)).toEqual(["Newest", "Middle", "Oldest"]);
+  });
+});
+
+describe("getSignatureNumber", () => {
+  async function addSigner(db: any, i: number, signedAt: Date) {
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: `gsn-${i}`,
+        displayName: `Signer ${i}`,
+        verificationMethod: "email" as const,
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+    const [record] = await db
+      .insert(consentRecords)
+      .values({
+        signerId: signer.id,
+        consentTextHash: "a".repeat(64),
+        capturedFields: {} as any,
+      })
+      .returning({ id: consentRecords.id });
+    const [v] = await db.select().from(versions).limit(1);
+    await db.insert(signatures).values({
+      signerId: signer.id,
+      versionId: v.id,
+      versionHashAtSigning: v.markdownHash,
+      consentRecordId: record.id,
+      signedAt,
+    });
+    return signer.id as string;
+  }
+
+  it("is the 1-based global sequence number, in sign order", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", true)]);
+    const a = await addSigner(db, 0, new Date("2026-01-01T00:00:00Z"));
+    const b = await addSigner(db, 1, new Date("2026-01-02T00:00:00Z"));
+    const c = await addSigner(db, 2, new Date("2026-01-03T00:00:00Z"));
+    // First signer is #1, never #0.
+    expect(await getSignatureNumber(a, db)).toBe(1);
+    expect(await getSignatureNumber(b, db)).toBe(2);
+    expect(await getSignatureNumber(c, db)).toBe(3);
+  });
+
+  it("returns 1 for a signer with no signature (historical contract)", async () => {
+    const db = await createTestDb();
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "gsn-nosig",
+        displayName: "No Sig",
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+    expect(await getSignatureNumber(signer.id, db)).toBe(1);
   });
 });
 

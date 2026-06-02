@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/schema";
 import { needsManualReview } from "@/lib/attestations/allowlist";
 import { generateVerificationToken } from "@/lib/attestations/token";
+import { validateAttestationFields } from "@/lib/attestations/validate";
 
 let _db: any | null = null;
 function getDb() {
@@ -131,10 +132,19 @@ export async function submitAttestationAction(formData: FormData): Promise<{
   const productUrl = (formData.get("productUrl")?.toString() ?? "").trim() || null;
   const versionString = String(formData.get("version") ?? "");
   const contactEmail = String(formData.get("contactEmail") ?? "").trim();
-  if (orgName.length === 0 || productName.length === 0 || contactEmail.length === 0) {
-    throw new Error("orgName, productName, and contactEmail are required");
+
+  const validationError = validateAttestationFields({
+    orgName,
+    productName,
+    productUrl,
+    contactEmail,
+  });
+  if (validationError) {
+    throw new Error(validationError);
   }
-  const result = await createAttestation(null, {
+
+  const db = getDb();
+  const result = await createAttestation(db, {
     orgName,
     productName,
     productUrl,
@@ -156,8 +166,8 @@ export async function submitAttestationAction(formData: FormData): Promise<{
     });
     const recipients = await getAdminVerifierEmails();
     if (recipients.length === 0) {
-      // No admins configured — fall back to the submitter so the system stays
-      // unblocked during the no-admins-yet bootstrap window.
+      // No admin verifier email resolved — fall back to the submitter so the
+      // verification flow stays unblocked rather than silently dropping.
       console.warn(
         "[email] no admins to verify attestation; falling back to submitter email",
       );
