@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { signers } from "@/lib/db/schema";
+import { resolveReferrerId } from "@/lib/referral/attribution";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -23,6 +24,11 @@ export interface ProfileInput {
   locationText: string | null;
   verificationMethod: "email" | "sms";
   notificationPreference?: NotificationPreference;
+  /**
+   * Raw ref value (a signer id) from the visitor's attribution cookie.
+   * Applied on INSERT only — see the note in upsertSignerProfile.
+   */
+  referredBySignerId?: string | null;
 }
 
 export async function upsertSignerProfile(
@@ -38,6 +44,9 @@ export async function upsertSignerProfile(
   const notificationPreference = input.notificationPreference ?? "major";
 
   if (existing.length > 0) {
+    // Deliberately omits referredBySignerId: attribution is a fact about how
+    // someone first arrived, so it is written once at INSERT and never
+    // rewritten by a later profile edit.
     await db
       .update(signers)
       .set({
@@ -51,6 +60,13 @@ export async function upsertSignerProfile(
     return { id: existing[0].id };
   }
 
+  // Validated against the signers table (and against self-referral) so a
+  // stale or hostile ref can't fail the insert. Returns null on any doubt.
+  const referredBySignerId = await resolveReferrerId(db, {
+    ref: input.referredBySignerId,
+    clerkUserId: input.clerkUserId,
+  });
+
   const [row] = await db
     .insert(signers)
     .values({
@@ -60,6 +76,7 @@ export async function upsertSignerProfile(
       locationText: input.locationText,
       verificationMethod: input.verificationMethod,
       notificationPreference,
+      referredBySignerId,
       verifiedAt: new Date(),
     })
     .returning({ id: signers.id });
