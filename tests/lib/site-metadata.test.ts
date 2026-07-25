@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  PRODUCTION_ORIGIN,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_TAGLINE,
@@ -57,8 +58,17 @@ describe("buildRootMetadata", () => {
     const meta = buildRootMetadata();
     expect(meta.description).toBe(SITE_DESCRIPTION);
     expect(meta.description).not.toBe(SITE_TAGLINE);
-    // The card should say what signing this means, not just restate the title.
-    expect(SITE_DESCRIPTION.length).toBeGreaterThan(SITE_TAGLINE.length);
+    // Search results truncate around 160 characters; stay inside that window
+    // so the call to action at the end of the sentence survives.
+    expect(SITE_DESCRIPTION.length).toBeLessThanOrEqual(160);
+  });
+
+  it("omits an absolute og:url so child routes cannot inherit it", () => {
+    // Next merges metadata shallowly: any route without its own `openGraph`
+    // inherits this object wholesale. An absolute root url would make /about
+    // and /resources/[slug] advertise themselves as the homepage.
+    const og = buildRootMetadata().openGraph as { url?: unknown };
+    expect(og.url).toBeUndefined();
   });
 
   it("sets a summary card on Twitter and a website OG type", () => {
@@ -68,19 +78,55 @@ describe("buildRootMetadata", () => {
     expect((meta.openGraph as { siteName?: string }).siteName).toBe(SITE_NAME);
   });
 
-  it("derives metadataBase and the OG url from NEXT_PUBLIC_SITE_URL", () => {
+  it("derives metadataBase from NEXT_PUBLIC_SITE_URL", () => {
     const meta = buildRootMetadata();
     expect(new URL(String(meta.metadataBase)).origin).toBe(
       "https://example.test",
     );
-    expect((meta.openGraph as { url?: string }).url).toBe("https://example.test");
   });
 });
 
 describe("getSiteUrl", () => {
-  it("falls back to the production origin when unset", () => {
+  const ORIGINAL_VERCEL_URL = process.env.VERCEL_URL;
+
+  afterEach(() => {
+    if (ORIGINAL_VERCEL_URL === undefined) delete process.env.VERCEL_URL;
+    else process.env.VERCEL_URL = ORIGINAL_VERCEL_URL;
+  });
+
+  it("falls back to the production origin when nothing is configured", () => {
     delete process.env.NEXT_PUBLIC_SITE_URL;
-    expect(getSiteUrl()).toBe("https://ai-for-people.org");
-    expect(() => new URL(getSiteUrl())).not.toThrow();
+    delete process.env.VERCEL_URL;
+    expect(getSiteUrl()).toBe(PRODUCTION_ORIGIN);
+  });
+
+  it("prefers NEXT_PUBLIC_SITE_URL over VERCEL_URL", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "https://explicit.test";
+    process.env.VERCEL_URL = "preview.vercel.app";
+    expect(getSiteUrl()).toBe("https://explicit.test");
+  });
+
+  it("uses VERCEL_URL so previews advertise themselves, not production", () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    process.env.VERCEL_URL = "preview.vercel.app";
+    expect(getSiteUrl()).toBe("https://preview.vercel.app");
+  });
+
+  it("degrades to production instead of throwing on a scheme-less value", () => {
+    // This value reaches `new URL()` at module scope in the root layout, so
+    // throwing here would take down every route rather than one bad link.
+    process.env.NEXT_PUBLIC_SITE_URL = "ai-for-people.org";
+    expect(() => getSiteUrl()).not.toThrow();
+    expect(getSiteUrl()).toBe(PRODUCTION_ORIGIN);
+    expect(() => buildRootMetadata()).not.toThrow();
+  });
+
+  it("always returns a parseable absolute URL with no trailing slash", () => {
+    for (const value of ["https://ok.test/", "not a url", "", "//nope"]) {
+      process.env.NEXT_PUBLIC_SITE_URL = value;
+      const url = getSiteUrl();
+      expect(() => new URL(url)).not.toThrow();
+      expect(url.endsWith("/")).toBe(false);
+    }
   });
 });

@@ -15,9 +15,15 @@ export async function generateMetadata({
   const { slug } = await params;
   const r = getResource(slug);
   if (!r) return { title: "Resource not found" };
+  const title = `${r.title} — AI Bill of Rights`;
+  const description = r.subtitle || r.title;
   return {
-    title: `${r.title} — AI Bill of Rights`,
-    description: r.subtitle || r.title,
+    title,
+    description,
+    // Next merges metadata shallowly, so without its own openGraph/twitter this
+    // page would inherit the root's and share as if it were the homepage.
+    openGraph: { title, description },
+    twitter: { title, description },
   };
 }
 

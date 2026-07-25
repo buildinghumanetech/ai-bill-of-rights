@@ -2,10 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import ContactForm from "./ContactForm";
 
+const ABOUT_TITLE = "About — AI Bill of Rights";
+const ABOUT_DESCRIPTION =
+  "The AI Bill of Rights is a project of the Building Humane Technology community, founded by Erika Anderson.";
+
 export const metadata: Metadata = {
-  title: "About — AI Bill of Rights",
-  description:
-    "The AI Bill of Rights is a project of the Building Humane Technology community, founded by Erika Anderson.",
+  title: ABOUT_TITLE,
+  description: ABOUT_DESCRIPTION,
+  // Next merges metadata shallowly, so without its own openGraph/twitter this
+  // page would inherit the root's and share as if it were the homepage.
+  openGraph: { title: ABOUT_TITLE, description: ABOUT_DESCRIPTION },
+  twitter: { title: ABOUT_TITLE, description: ABOUT_DESCRIPTION },
 };
 
 export default function AboutPage() {
