@@ -347,6 +347,26 @@ describe("parseMentions", () => {
       expect(result).toHaveLength(1);
       expect(result[0].signerId).toBe("3");
     });
+
+    // A slash is only a URL separator in context. Blanket-rejecting it drops
+    // the natural shorthand for addressing two people.
+    it("matches both mentions in @Alice/@Bob", () => {
+      const result = parseMentions("@Alice/@Bob please review", signers);
+      expect(result.map((m) => m.signerId)).toEqual(["3", "4"]);
+    });
+
+    it("matches a mention after a non-host slash run", () => {
+      const result = parseMentions("and/or/@Alice", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+
+    it("ignores an email address with an astral-script local part", () => {
+      // U+10428 (Deseret) is a surrogate pair; indexing body[i-1] would see a
+      // lone low surrogate, which matches no Unicode property.
+      const body = "write \u{10428}@alice.com";
+      expect(parseMentions(body, signers)).toEqual([]);
+    });
   });
 
   describe("hyphen as punctuation rather than part of a name", () => {
@@ -365,6 +385,46 @@ describe("parseMentions", () => {
     it("still rejects a name cut short by a hyphenated given name", () => {
       const jean = [{ id: "1", displayName: "Jean Dupont" }];
       expect(parseMentions("@Jean-Pierre hi", jean)).toEqual([]);
+    });
+
+    // Typographic hyphens arrive via paste and autocorrect.
+    it.each([
+      ["U+2010 hyphen", "‐"],
+      ["U+2011 non-breaking hyphen", "‑"],
+    ])("rejects a partial name before a %s", (_label, hyphen) => {
+      const jean = [{ id: "1", displayName: "Jean Dupont" }];
+      expect(parseMentions(`@Jean${hyphen}Pierre hi`, jean)).toEqual([]);
+    });
+  });
+
+  // These are deliberate non-mentions; pinning them means a future change to
+  // MENTION_BLOCKER can't loosen them silently.
+  describe("email-local characters before the @", () => {
+    it.each([
+      ["letter", "bob@alice.com"],
+      ["dot", "bob.smith@alice.com"],
+      ["plus", "bob+tag@alice.com"],
+      ["percent", "bob%tag@alice.com"],
+      ["hyphen", "bob-smith@alice.com"],
+      ["underscore", "bob_smith@alice.com"],
+      ["digit", "bob2@alice.com"],
+    ])("does not open a mention after a %s", (_label, body) => {
+      expect(parseMentions(`write ${body}`, signers)).toEqual([]);
+    });
+
+    // Punctuation that an address doesn't realistically need must NOT block,
+    // or ordinary prose loses its mentions.
+    it.each([
+      ["exclamation", "Great!@Alice"],
+      ["question mark", "Really?@Alice"],
+      ["tilde", "~@Alice"],
+      ["ampersand", "Bob&@Alice"],
+      ["hash", "#@Alice"],
+      ["equals", "=@Alice"],
+    ])("still opens a mention after a %s", (_label, body) => {
+      const result = parseMentions(body, signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
     });
   });
 
