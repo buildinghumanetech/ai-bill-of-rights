@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { findCommentInTree } from "@/lib/db/queries";
 import { countComments, commentCountLabel } from "@/lib/comments/count";
+import { COMPOSER_CLOSED_EVENT } from "@/app/ArticleSelectionContainer";
 import { NewCommentForm } from "./NewCommentForm";
 import { CommentView } from "./CommentView";
 
@@ -51,29 +52,52 @@ export function CommentsColumn({
 }: Props) {
   const [pendingSelection, setPendingSelection] = useState<SelectionEvent | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
+  /** Mirrors whether the composer is open, readable from event handlers. */
+  const composerOpenRef = useRef(false);
 
   // Listen for text-selection events emitted by ArticleSelectionContainer.
   useEffect(() => {
     const onSelect = (e: Event) => {
       const detail = (e as CustomEvent<SelectionEvent>).detail;
+      // Only pull the page when the composer first appears. Adjusting an iOS
+      // selection handle re-emits with different text, and scrolling on every
+      // one of those would yank the text out from under the finger still
+      // dragging it.
+      const justOpened = !composerOpenRef.current;
+      composerOpenRef.current = true;
       setPendingSelection(detail);
       onActiveChange(null);
-      // Below md this column is stacked underneath the whole document, so a
-      // phone user who highlights text would see nothing happen. Bring the
-      // composer to them.
-      if (window.matchMedia("(max-width: 767px)").matches) {
-        requestAnimationFrame(() => {
-          columnRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        });
-      }
+
+      if (!justOpened) return;
+      requestAnimationFrame(() => {
+        const el = columnRef.current;
+        if (!el) return;
+        // Scroll when the composer would land off-screen — true whenever the
+        // column is stacked below the document (narrow viewports), without
+        // hardcoding a breakpoint that could drift from the grid's `md`.
+        const { top } = el.getBoundingClientRect();
+        if (top > window.innerHeight - 120) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
     };
     window.addEventListener("selection-in-anchor", onSelect);
     return () => window.removeEventListener("selection-in-anchor", onSelect);
   }, [onActiveChange]);
 
+  /** Composer dismissed — let the container accept the same selection again. */
+  function closeComposer() {
+    composerOpenRef.current = false;
+    setPendingSelection(null);
+    window.dispatchEvent(new CustomEvent(COMPOSER_CLOSED_EVENT));
+  }
+
   // Clicking a saved highlight clears any in-progress composer.
   useEffect(() => {
-    if (activeCommentId) setPendingSelection(null);
+    if (activeCommentId) {
+      composerOpenRef.current = false;
+      setPendingSelection(null);
+    }
   }, [activeCommentId]);
 
   const activeComment = activeCommentId
@@ -83,7 +107,7 @@ export function CommentsColumn({
   const totalComments = countComments(threadedComments);
 
   return (
-    <div ref={columnRef} className="space-y-4 pt-5" data-comments-column="true">
+    <div ref={columnRef} className="space-y-4 pt-5">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Comments{totalComments > 0 ? ` · ${totalComments}` : ""}
       </h3>
@@ -97,11 +121,11 @@ export function CommentsColumn({
           isAdmin={isAdmin}
           signersForAdmin={signersForAdmin}
           signersForMention={signersForMention}
-          onCancel={() => setPendingSelection(null)}
+          onCancel={closeComposer}
           onSubmittedNewTopLevel={(newCommentId) => {
             // Dismiss the pending-selection composer, then promote the new
             // comment to active so the user sees it immediately.
-            setPendingSelection(null);
+            closeComposer();
             onPostedTopLevel?.(newCommentId);
           }}
         />

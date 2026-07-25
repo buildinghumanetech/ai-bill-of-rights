@@ -199,10 +199,8 @@ export function TabbedDocument({
       <div className={activeTab === "proposed" ? wrapperClass : "hidden"} ref={proposedTopRef}>
         <FeedbackInvite
           variant="proposed"
-          currentVersion={currentVersion}
           proposedVersion={proposedVersion}
           commentCount={commentCount}
-          onOpenDraft={openDraft}
         />
         <TabBar
           active={activeTab}

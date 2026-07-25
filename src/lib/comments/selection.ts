@@ -8,21 +8,48 @@ export interface AnchoredSelection {
   selectedText: string;
 }
 
+export interface SelectionStep {
+  /** Dispatch a `selection-in-anchor` event for this observation. */
+  emit: boolean;
+  /** The `last` value to carry into the next observation. */
+  last: AnchoredSelection | null;
+}
+
 /**
- * Should a freshly observed selection be emitted?
+ * Advance the container's dedupe state by one observation.
  *
- * The container watches two signals — `mouseup` (instant on desktop) and a
- * debounced `selectionchange` (the only one that fires for a touch long-press
- * on iOS). Both fire for the same gesture, so without a guard the composer
- * would remount and discard whatever the user had already typed. Emitting only
- * when the anchor or the selected text actually changed makes the second
- * signal a no-op.
+ * `observed` is `null` whenever the current selection can't become a comment —
+ * collapsed, whitespace-only, or outside any anchored sentence. That case
+ * *resets* `last`, which is the whole point of routing every path through here:
+ * an early `return` that left a stale `last` behind would make the guard
+ * permanently sticky, so re-selecting the same phrase after cancelling the
+ * composer would silently do nothing.
+ *
+ * A repeat of the same anchor+text is suppressed. That is what keeps the two
+ * signals feeding the container — `mouseup` and a debounced `selectionchange`,
+ * both of which fire for one desktop gesture — from remounting an in-progress
+ * composer and discarding what the user had typed.
+ */
+export function nextSelectionState(
+  last: AnchoredSelection | null,
+  observed: AnchoredSelection | null,
+): SelectionStep {
+  if (!observed || !observed.selectedText.trim()) {
+    return { emit: false, last: null };
+  }
+  if (last && last.anchorId === observed.anchorId && last.selectedText === observed.selectedText) {
+    return { emit: false, last };
+  }
+  return { emit: true, last: observed };
+}
+
+/**
+ * Thin predicate over {@link nextSelectionState}, kept for call sites that only
+ * need the yes/no.
  */
 export function shouldEmitSelection(
   last: AnchoredSelection | null,
   next: AnchoredSelection,
 ): boolean {
-  if (!next.selectedText.trim()) return false;
-  if (!last) return true;
-  return last.anchorId !== next.anchorId || last.selectedText !== next.selectedText;
+  return nextSelectionState(last, next).emit;
 }
