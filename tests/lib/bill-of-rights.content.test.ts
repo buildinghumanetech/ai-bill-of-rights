@@ -144,10 +144,47 @@ describe("current version agents.md", () => {
     expect(raw).toContain(`v${versionsIndex.current}`);
   });
 
+  const bulletRe = /^- \*\*Article (\d+) — (.+?)\.\*\*/gm;
+
+  /**
+   * Which articles the guide is REQUIRED to have a bullet for, derived from the
+   * canonical markdown rather than from agents.md itself: every article the
+   * current version added relative to the previous one.
+   *
+   * Deriving it independently is the point. Checking only the bullets that
+   * happen to match the expected shape means deleting a bullet, or reformatting
+   * one (hyphen for the em dash, dropped trailing period), removes that article
+   * from the check instead of failing it — which is exactly the drift this
+   * guards against.
+   */
+  function articlesRequiringABullet(): string[] {
+    const prev = previousVersion();
+    if (!prev) return [];
+    const previous = parseDocument(readVersionFile(prev, "md"));
+    const priorIds = new Set(previous.articles.map((a) => a.id));
+    return parsed.articles
+      .filter((a) => !priorIds.has(a.id))
+      .map((a) => a.id.replace(/^article-/, ""));
+  }
+
   // The builder guide restates article titles in "**Article N — <title>.**"
   // bullets. A rename has to be applied here too, and nothing else catches it.
+  it("has a conforming bullet for every article this version added", () => {
+    const required = articlesRequiringABullet();
+    expect(required.length, "no new articles to check").toBeGreaterThan(0);
+    const documented = new Set(
+      [...raw.matchAll(bulletRe)].map(([, numberStr]) => numberStr),
+    );
+    for (const numberStr of required) {
+      expect(
+        documented.has(numberStr),
+        `v${versionsIndex.current} added Article ${numberStr}, but v${versionsIndex.current}.agents.md has no "- **Article ${numberStr} — <title>.**" bullet for it (a deleted or reformatted bullet looks the same as a missing one here)`,
+      ).toBe(true);
+    }
+  });
+
   it("uses the canonical title in every article bullet", () => {
-    const bullets = [...raw.matchAll(/^- \*\*Article (\d+) — (.+?)\.\*\*/gm)];
+    const bullets = [...raw.matchAll(bulletRe)];
     expect(bullets.length).toBeGreaterThan(0);
     for (const [, numberStr, title] of bullets) {
       const article = parsed.articles.find(

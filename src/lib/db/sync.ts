@@ -39,8 +39,14 @@ export async function syncVersions(
       // content at /v/<version>/agents.md and /v/<version>/spec.json with
       // nothing to indicate the files on disk had moved on.
       //
-      // If this fires for a version still being drafted, clear the stale row
-      // with `pnpm tsx scripts/unsync-version.ts <version> --yes` — see README.
+      // If this fires for a version still being drafted, clear the stale row:
+      //
+      //   pnpm tsx scripts/unsync-version.ts <version> --allow-current --yes
+      //   pnpm sync-versions
+      //
+      // --allow-current is needed because the draft is normally the version
+      // named by versions.json's `current`, so its row has is_current set.
+      // See README, "Editing a version's text after a deploy has synced it".
       const mismatches: string[] = [];
       if (existingRow.markdownHash !== markdownHash) {
         mismatches.push(

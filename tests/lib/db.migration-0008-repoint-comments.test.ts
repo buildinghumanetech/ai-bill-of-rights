@@ -204,30 +204,55 @@ describe("0008 repoint comments to the new current version", () => {
     expect(statements[1]).not.toMatch(/SELECT/);
   });
 
-  it("survives backup tables left over from the earlier keyless form", async () => {
-    // A previous revision created these with CREATE TABLE ... AS SELECT, which
-    // makes no primary key. CREATE TABLE IF NOT EXISTS then no-ops on them and
-    // the ON CONFLICT ("id") in the move would fail outright.
+  it("survives POPULATED backup tables left over from the earlier keyless form", async () => {
+    // The realistic leftover. A previous revision created these with
+    // CREATE TABLE ... AS SELECT and populated them at creation time, so a real
+    // leftover has ROWS and a NULLABLE "id" (CTAS carries no primary key and no
+    // NOT NULL). Seeding them empty would miss both: ADD PRIMARY KEY against a
+    // populated, nullable column is the statement operators will actually run,
+    // and the ON CONFLICT DO NOTHING interaction that preserves the leftover's
+    // original mapping only has anything to do when rows are present.
     const { db, currentId } = await seedPublishedUpgrade();
+    const oldId = await versionId(db, "0.0.1");
     await db.execute(
       sql.raw(`
         CREATE TABLE "comment_version_backup_0008" AS
-          SELECT "id", "base_version_id" FROM "comments" WHERE false;
+          SELECT "id", "base_version_id" FROM "comments"
+           WHERE "base_version_id" = '${oldId}';
         `),
     );
     await db.execute(
       sql.raw(`
         CREATE TABLE "proposed_edit_version_backup_0008" AS
-          SELECT "id", "base_version_id" FROM "proposed_edits" WHERE false;
+          SELECT "id", "base_version_id" FROM "proposed_edits"
+           WHERE "base_version_id" = '${oldId}';
         `),
     );
+    // Precondition: the leftovers really are populated and really are keyless.
+    expect(await backupCount(db)).toBe(1);
+    expect(await editBackupCount(db)).toBe(1);
 
     await applyMigration(db);
 
     expect(
       (await listCommentsForVersion(db, currentId)).map((c) => c.body),
     ).toEqual(["old-thread"]);
+    // ON CONFLICT DO NOTHING: the pre-existing snapshot is kept, not duplicated
+    // and not overwritten — both tables, since the DO block repairs both.
     expect(await backupCount(db)).toBe(1);
+    expect(await editBackupCount(db)).toBe(1);
+
+    // And the mapping it preserved is the ORIGINAL one, so rollback still works
+    // — a backup that had been overwritten post-move would point at 0.1.0 and
+    // silently make the rollback a no-op.
+    const res = await db.execute(
+      sql.raw(`
+        SELECT count(*)::int AS n
+          FROM "comment_version_backup_0008"
+         WHERE "base_version_id" = '${oldId}'
+      `),
+    );
+    expect((res as unknown as { rows: { n: number }[] }).rows[0].n).toBe(1);
   });
 
   it("hides the existing thread without the migration (the bug it fixes)", async () => {

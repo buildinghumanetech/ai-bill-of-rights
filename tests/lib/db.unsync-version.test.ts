@@ -112,6 +112,67 @@ describe("unsyncVersion", () => {
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
+  it("names the --allow-current override when it refuses a current draft", async () => {
+    // The refusal has to be actionable. The frozen-draft case this function
+    // exists for is ALWAYS a current version — sync-versions marks whatever
+    // versions.json calls `current` as current — so a refusal that does not
+    // name the way forward leaves the operator with no working remedy.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "live", true)]);
+
+    const report = await unsyncVersion(db, "0.1.0", { dryRun: false });
+    expect(report.deleted).toBe(false);
+    expect(report.refusedBecause).toMatch(/--allow-current/);
+    expect(report.refusedBecause).toMatch(/sync-versions/);
+  });
+
+  it("clears a current draft when allowCurrent is set and nothing references it", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "before", true)]);
+
+    const report = await unsyncVersion(db, "0.1.0", {
+      dryRun: false,
+      allowCurrent: true,
+    });
+
+    expect(report.deleted).toBe(true);
+    expect(report.isCurrent).toBe(true);
+    expect(await rowFor(db, "0.1.0")).toBeUndefined();
+
+    // And the edited text now syncs, which is the whole point.
+    await syncVersions(db, [doc("0.1.0", "AFTER", true)]);
+    const row = await rowFor(db, "0.1.0");
+    const parsed = row.parsedJson as {
+      articles: { paragraphs: { sentences: { text: string }[] }[] }[];
+    };
+    expect(parsed.articles[0].paragraphs[0].sentences[0].text).toBe("AFTER");
+    expect(row.isCurrent).toBe(true);
+  });
+
+  it("still refuses a signed current version even with allowCurrent", async () => {
+    // allowCurrent relaxes ONLY the is_current check. A version people have
+    // signed is never a draft and no flag may make it one.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "live", true)]);
+    const target = await rowFor(db, "0.1.0");
+    const who = await seedSignerWithConsent(db, "Signer");
+    await db.insert(signatures).values({
+      signerId: who.signerId,
+      versionId: target.id,
+      versionHashAtSigning: target.markdownHash,
+      consentRecordId: who.recordId,
+    });
+
+    const report = await unsyncVersion(db, "0.1.0", {
+      dryRun: false,
+      allowCurrent: true,
+    });
+
+    expect(report.deleted).toBe(false);
+    expect(report.refusedBecause).toMatch(/signatures=1/);
+    expect(await rowFor(db, "0.1.0")).toBeDefined();
+  });
+
   it("refuses when someone has signed it", async () => {
     const db = await createTestDb();
     await syncVersions(db, [doc("0.0.1", "old", true), doc("0.1.0", "draft")]);

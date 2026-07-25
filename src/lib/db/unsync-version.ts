@@ -48,17 +48,26 @@ export interface UnsyncReport {
  * synced it. Editing the draft after that point breaks every subsequent build
  * with a hash mismatch until the stale row is cleared. This clears it.
  *
- * Refuses when the version is current, or when anything references it —
- * signatures, comments, proposed edits, endorsements, attestations, or another
- * version claiming it as a parent. A version people have actually signed or
- * discussed is not a draft, and its text is not yours to change.
+ * Refuses when anything references it — signatures, comments, proposed edits,
+ * endorsements, attestations, or another version claiming it as a parent. A
+ * version people have actually signed or discussed is not a draft, and its
+ * text is not yours to change. No option overrides that.
+ *
+ * Also refuses when the version is `is_current`, but that one IS overridable
+ * via `allowCurrent`, and has to be: `sync-versions` sets `isCurrent` from
+ * `versions.json`'s `current`, so the version being actively drafted is
+ * normally the current one — meaning the frozen-draft case this function
+ * exists for would otherwise always be refused. "Current but referenced by
+ * nothing" is precisely a frozen draft. Deleting it leaves the database with
+ * no current version until the next `sync-versions` re-inserts it, which is
+ * why the override is explicit rather than automatic.
  */
 export async function unsyncVersion(
   // Same loose db type the rest of src/lib/db uses, so callers can pass either
   // the production client or a pglite test db.
   db: DbLike,
   versionString: string,
-  opts: { dryRun?: boolean } = {},
+  opts: { dryRun?: boolean; allowCurrent?: boolean } = {},
 ): Promise<UnsyncReport> {
   const rows = await db
     .select()
@@ -114,14 +123,9 @@ export async function unsyncVersion(
     dependents,
   };
 
-  if (row.isCurrent) {
-    return {
-      ...base,
-      deleted: false,
-      refusedBecause:
-        "this version is marked current — publish a different version first",
-    };
-  }
+  // Dependents are checked FIRST because that, not is_current, is the real
+  // safety property: a version somebody has signed or discussed is never a
+  // draft, regardless of any override the caller passed.
   if (total > 0) {
     const detail = Object.entries(dependents)
       .filter(([, n]) => n > 0)
@@ -131,6 +135,17 @@ export async function unsyncVersion(
       ...base,
       deleted: false,
       refusedBecause: `version is referenced by other rows (${detail}) — it is in use, not a draft`,
+    };
+  }
+  if (row.isCurrent && !opts.allowCurrent) {
+    return {
+      ...base,
+      deleted: false,
+      refusedBecause:
+        "this version is marked current. Nothing references it, so it is a " +
+        "frozen draft and safe to clear — re-run with allowCurrent (CLI: " +
+        "--allow-current). The database will briefly have NO current version; " +
+        "run `pnpm sync-versions` straight afterwards to re-insert it from disk",
     };
   }
   if (opts.dryRun) {

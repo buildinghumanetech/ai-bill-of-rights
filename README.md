@@ -75,11 +75,18 @@ The canonical document text is meant to be immutable.
 This also fires while a version is still being *drafted*, because **Vercel preview deployments run `sync-versions` too** (against the `dev` Neon branch). So the first preview build of a PR freezes that version's text, and any later edit to it breaks every subsequent build until the stale row is cleared:
 
 ```
-pnpm tsx scripts/unsync-version.ts 0.1.0        # dry run — shows what references it
-pnpm tsx scripts/unsync-version.ts 0.1.0 --yes  # delete, so the next sync re-inserts it
+pnpm tsx scripts/unsync-version.ts 0.1.0 --allow-current        # dry run — shows what references it
+pnpm tsx scripts/unsync-version.ts 0.1.0 --allow-current --yes  # delete the stale row
+pnpm sync-versions                                              # re-insert it from disk
 ```
 
-The script refuses if the version is current or if anything references it (signatures, comments, proposed edits, endorsements, attestations, child versions) — a version people have signed or discussed is not a draft. It connects via `DATABASE_URL` from `.env.local`, which per the section above points at the `dev` branch; check that before running it.
+**You will almost always need `--allow-current`.** `sync-versions` marks the version named by `versions.json`'s `current` as current, and the version you are drafting *is* that version — so the frozen row is the current row, and without the flag the script refuses before it looks at anything else.
+
+The flag is narrow: it only relaxes the `is_current` check. The script still refuses outright if **anything references the version** — signatures, comments, proposed edits, endorsements, attestations, or a child version — because a version people have signed or discussed is not a draft and no flag should make it one. "Current, but referenced by nothing" is precisely a frozen draft.
+
+Between the delete and the re-sync the database has **no current version** and pages that read it will not render, so run `pnpm sync-versions` straight afterwards. The script prints a warning to that effect when the row it deleted was current.
+
+It connects via `DATABASE_URL` from `.env.local`, which per the section above points at the `dev` branch; check that before running it.
 
 Once a version is live in production and signed, its text is genuinely frozen — changing it means publishing a new version.
 

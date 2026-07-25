@@ -7,13 +7,24 @@
  *
  *   Error: Version X.Y.Z hash mismatch: existing … vs new …
  *
- * Refuses to touch a version that is current or that anything references
- * (signatures, comments, proposed edits, endorsements, attestations, child
- * versions). Prints a dry run by default — pass --yes to actually delete.
+ * Refuses outright to touch a version anything references (signatures,
+ * comments, proposed edits, endorsements, attestations, child versions).
+ *
+ * Also refuses a version marked current, unless you pass --allow-current. You
+ * usually WILL need that flag: `sync-versions` marks the version named by
+ * `versions.json`'s `current` as current, so the draft you are trying to clear
+ * is normally the current one. It is safe when nothing references the version
+ * — that combination is exactly a frozen draft — but it leaves the database
+ * with no current version until you re-sync, so run `pnpm sync-versions`
+ * immediately afterwards.
+ *
+ * Prints a dry run by default — pass --yes to actually delete.
  *
  * Usage:
  *   pnpm tsx scripts/unsync-version.ts 0.1.0
- *   pnpm tsx scripts/unsync-version.ts 0.1.0 --yes
+ *   pnpm tsx scripts/unsync-version.ts 0.1.0 --allow-current
+ *   pnpm tsx scripts/unsync-version.ts 0.1.0 --allow-current --yes
+ *   pnpm sync-versions        # re-insert it from disk, restoring `current`
  *
  * Connects via DATABASE_URL from .env.local — which per the README points at
  * the `dev` Neon branch. Check it before running against anything else.
@@ -25,8 +36,11 @@ config({ path: ".env" });
 async function main(): Promise<void> {
   const versionString = process.argv[2];
   const confirmed = process.argv.includes("--yes");
+  const allowCurrent = process.argv.includes("--allow-current");
   if (!versionString) {
-    console.error("Usage: pnpm tsx scripts/unsync-version.ts <version> [--yes]");
+    console.error(
+      "Usage: pnpm tsx scripts/unsync-version.ts <version> [--allow-current] [--yes]",
+    );
     process.exit(2);
   }
 
@@ -35,6 +49,7 @@ async function main(): Promise<void> {
 
   const report = await unsyncVersion(db, versionString, {
     dryRun: !confirmed,
+    allowCurrent,
   });
 
   if (!report.found) {
@@ -53,6 +68,13 @@ async function main(): Promise<void> {
     console.log(
       `\nDeleted. The next \`pnpm sync-versions\` (or deploy) will re-insert ${report.version} from the files on disk.`,
     );
+    if (report.isCurrent) {
+      console.log(
+        "\n⚠️  That was the CURRENT version — the database has no current version\n" +
+          "    right now, and pages that read it will not render. Run this next:\n\n" +
+          "      pnpm sync-versions\n",
+      );
+    }
     return;
   }
 
