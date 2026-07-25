@@ -71,6 +71,22 @@ export interface ScrollDecisionInput {
 const MIN_VISIBLE_FRACTION = 0.5;
 
 /**
+ * Does the whole composer fit on screen?
+ *
+ * Both rules below turn on this one question, and they have to keep agreeing:
+ * the clamp is what makes a tall composer's visible ratio saturate at 1, and
+ * `"start"` alignment is what makes that saturated state a *usable* resting
+ * position instead of a stuck one. Written twice, in two shapes, they could
+ * drift — the obvious way being an `innerHeight` adjustment for the Android
+ * keyboard inset applied at only one site, which would restore exactly the
+ * stuck-at-the-bottom state, with both functions' tests still green because each
+ * pins its own half in isolation.
+ */
+function fitsInViewport({ composerRect, viewportHeight }: ScrollDecisionInput): boolean {
+  return composerRect.bottom - composerRect.top <= viewportHeight;
+}
+
+/**
  * Should the page pull the comments column into view for this selection?
  *
  * One rule: scroll when the user can't actually see the composer. It applies at
@@ -85,10 +101,8 @@ const MIN_VISIBLE_FRACTION = 0.5;
  * (The superseded anchor gate, and why smooth scroll outlasting the selection
  * debounce is benign, are recorded in the branch log rather than here.)
  */
-export function shouldScrollComposerIntoView({
-  composerRect,
-  viewportHeight,
-}: ScrollDecisionInput): boolean {
+export function shouldScrollComposerIntoView(input: ScrollDecisionInput): boolean {
+  const { composerRect, viewportHeight } = input;
   const height = composerRect.bottom - composerRect.top;
   // Degenerate boxes: nothing meaningful is on screen, and the clamped
   // denominator below would be 0, making the comparison NaN. Bail explicitly
@@ -96,8 +110,9 @@ export function shouldScrollComposerIntoView({
   if (height <= 0 || viewportHeight <= 0) return true;
   const visible =
     Math.min(composerRect.bottom, viewportHeight) - Math.max(composerRect.top, 0);
-  // See MIN_VISIBLE_FRACTION for why the denominator is clamped.
-  return visible / Math.min(height, viewportHeight) < MIN_VISIBLE_FRACTION;
+  // See MIN_VISIBLE_FRACTION for why the denominator is clamped to the viewport.
+  const showable = fitsInViewport(input) ? height : viewportHeight;
+  return visible / showable < MIN_VISIBLE_FRACTION;
 }
 
 /**
@@ -112,9 +127,6 @@ export function shouldScrollComposerIntoView({
  *
  * So: align to the top when it can't all fit. The top is where the user types.
  */
-export function composerScrollBlock({
-  composerRect,
-  viewportHeight,
-}: ScrollDecisionInput): "start" | "center" {
-  return composerRect.bottom - composerRect.top > viewportHeight ? "start" : "center";
+export function composerScrollBlock(input: ScrollDecisionInput): "start" | "center" {
+  return fitsInViewport(input) ? "center" : "start";
 }
