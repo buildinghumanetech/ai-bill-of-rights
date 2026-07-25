@@ -112,6 +112,46 @@ describe("unsyncVersion", () => {
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
+  it("defaults to a dry run when no opts are passed at all", async () => {
+    // The natural way to write the new call — { allowCurrent: true } and
+    // nothing else — must not silently delete the row pages render from.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.0.1", "old", true), doc("0.1.0", "draft")]);
+
+    const report = await unsyncVersion(db, "0.1.0");
+
+    expect(report.deleted).toBe(false);
+    expect(report.refusedCode).toBe("dry_run");
+    expect(await rowFor(db, "0.1.0")).toBeDefined();
+
+    // Same for the allowCurrent-only shape, against the current version.
+    const current = await unsyncVersion(db, "0.0.1", { allowCurrent: true });
+    expect(current.deleted).toBe(false);
+    expect(current.refusedCode).toBe("dry_run");
+    expect(await rowFor(db, "0.0.1")).toBeDefined();
+  });
+
+  it("reports a machine-readable code on every refusal path", async () => {
+    // The CLI branches on these. Matching the display text as a sentinel means
+    // any reword silently turns a successful dry run into an error exit.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.0.1", "old", true), doc("0.1.0", "draft")]);
+
+    expect((await unsyncVersion(db, "9.9.9")).refusedCode).toBe("not_found");
+    expect((await unsyncVersion(db, "0.0.1")).refusedCode).toBe("current");
+    expect((await unsyncVersion(db, "0.1.0")).refusedCode).toBe("dry_run");
+
+    const target = await rowFor(db, "0.1.0");
+    const who = await seedSignerWithConsent(db, "Signer");
+    await db.insert(signatures).values({
+      signerId: who.signerId,
+      versionId: target.id,
+      versionHashAtSigning: target.markdownHash,
+      consentRecordId: who.recordId,
+    });
+    expect((await unsyncVersion(db, "0.1.0")).refusedCode).toBe("referenced");
+  });
+
   it("names the --allow-current override when it refuses a current draft", async () => {
     // The refusal has to be actionable. The frozen-draft case this function
     // exists for is ALWAYS a current version — sync-versions marks whatever

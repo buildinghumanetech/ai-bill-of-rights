@@ -44,6 +44,33 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  // Deleting the CURRENT row is only recoverable if `sync-versions` will put it
+  // back, and sync-versions seeds from versions.json's history. A version that
+  // is in the database but not on disk (history entry removed, or a row created
+  // some other way) would be deleted permanently, leaving the site with no
+  // current version — not the temporary state the README describes.
+  if (allowCurrent) {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const indexPath = path.join(
+      process.cwd(),
+      "content",
+      "bill-of-rights",
+      "versions.json",
+    );
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf-8")) as {
+      history: Array<{ version: string }>;
+    };
+    if (!index.history.some((h) => h.version === versionString)) {
+      console.error(
+        `Refused: ${versionString} is not in content/bill-of-rights/versions.json history,\n` +
+          "so nothing on disk would restore it — `pnpm sync-versions` would not re-insert it\n" +
+          "and the database would be left with no current version.",
+      );
+      process.exit(1);
+    }
+  }
+
   const { db } = await import("@/lib/db");
   const { unsyncVersion } = await import("@/lib/db/unsync-version");
 
@@ -78,7 +105,18 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (report.refusedBecause === "dry run") {
+  // Branch on the CODE, never the message. refusedBecause is display text; a
+  // reword of it must not turn a successful dry run into an error exit.
+  if (report.refusedCode === "dry_run") {
+    if (report.isCurrent) {
+      console.log(
+        "\n⚠️  This is the CURRENT version. Deleting it leaves the database with\n" +
+          "    no current version, and pages that read it will not render until you\n" +
+          "    re-sync. Plan to run both commands back to back:\n\n" +
+          `      pnpm tsx scripts/unsync-version.ts ${report.version} --allow-current --yes\n` +
+          "      pnpm sync-versions\n",
+      );
+    }
     console.log("\nDry run — safe to delete. Re-run with --yes to do it.");
     process.exit(0);
   }

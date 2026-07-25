@@ -139,6 +139,32 @@ async function editBackupCount(db: TestDb): Promise<number> {
   return countIn(db, "proposed_edit_version_backup_0008");
 }
 
+/** Whether a table has a primary key — 1 if the DO block's repair has run. */
+async function primaryKeyCount(db: TestDb, table: string): Promise<number> {
+  const res = await db.execute(
+    sql.raw(`
+      SELECT count(*)::int AS n FROM pg_constraint
+       WHERE conrelid = '"${table}"'::regclass AND contype = 'p'
+    `),
+  );
+  return (res as unknown as { rows: { n: number }[] }).rows[0].n;
+}
+
+/** Backup rows whose recorded mapping points at `versionId`. */
+async function backupMappingCount(
+  db: TestDb,
+  table: string,
+  versionId: string,
+): Promise<number> {
+  const res = await db.execute(
+    sql.raw(`
+      SELECT count(*)::int AS n FROM "${table}"
+       WHERE "base_version_id" = '${versionId}'
+    `),
+  );
+  return (res as unknown as { rows: { n: number }[] }).rows[0].n;
+}
+
 async function countIn(db: TestDb, table: string): Promise<number> {
   const res = await db.execute(
     sql.raw(`SELECT count(*)::int AS n FROM "${table}"`),
@@ -214,45 +240,55 @@ describe("0008 repoint comments to the new current version", () => {
     // original mapping only has anything to do when rows are present.
     const { db, currentId } = await seedPublishedUpgrade();
     const oldId = await versionId(db, "0.0.1");
+    // Seed the leftover with a mapping DISTINGUISHABLE from what this run would
+    // record. The migration's snap_ CTEs insert pre-update values, i.e. oldId —
+    // so seeding with oldId would leave the row pointing at oldId whether the
+    // conflict clause is DO NOTHING, DO UPDATE, or absent, and the assertion
+    // could not fail. `currentId` is a value only a pre-existing snapshot could
+    // hold, so DO NOTHING and overwrite now differ observably.
     await db.execute(
       sql.raw(`
         CREATE TABLE "comment_version_backup_0008" AS
-          SELECT "id", "base_version_id" FROM "comments"
+          SELECT "id", '${currentId}'::uuid AS "base_version_id" FROM "comments"
            WHERE "base_version_id" = '${oldId}';
         `),
     );
     await db.execute(
       sql.raw(`
         CREATE TABLE "proposed_edit_version_backup_0008" AS
-          SELECT "id", "base_version_id" FROM "proposed_edits"
+          SELECT "id", '${currentId}'::uuid AS "base_version_id" FROM "proposed_edits"
            WHERE "base_version_id" = '${oldId}';
         `),
     );
-    // Precondition: the leftovers really are populated and really are keyless.
+    // Precondition: populated...
     expect(await backupCount(db)).toBe(1);
     expect(await editBackupCount(db)).toBe(1);
+    // ...and genuinely KEYLESS, so the DO block is actually exercised. Without
+    // this, a future Postgres that carried a key through CTAS would make the
+    // test silently stop testing the repair.
+    expect(await primaryKeyCount(db, "comment_version_backup_0008")).toBe(0);
+    expect(await primaryKeyCount(db, "proposed_edit_version_backup_0008")).toBe(
+      0,
+    );
 
     await applyMigration(db);
 
     expect(
       (await listCommentsForVersion(db, currentId)).map((c) => c.body),
     ).toEqual(["old-thread"]);
+    // The repair ran.
+    expect(await primaryKeyCount(db, "comment_version_backup_0008")).toBe(1);
+    expect(await primaryKeyCount(db, "proposed_edit_version_backup_0008")).toBe(
+      1,
+    );
     // ON CONFLICT DO NOTHING: the pre-existing snapshot is kept, not duplicated
     // and not overwritten — both tables, since the DO block repairs both.
     expect(await backupCount(db)).toBe(1);
     expect(await editBackupCount(db)).toBe(1);
-
-    // And the mapping it preserved is the ORIGINAL one, so rollback still works
-    // — a backup that had been overwritten post-move would point at 0.1.0 and
-    // silently make the rollback a no-op.
-    const res = await db.execute(
-      sql.raw(`
-        SELECT count(*)::int AS n
-          FROM "comment_version_backup_0008"
-         WHERE "base_version_id" = '${oldId}'
-      `),
-    );
-    expect((res as unknown as { rows: { n: number }[] }).rows[0].n).toBe(1);
+    expect(await backupMappingCount(db, "comment_version_backup_0008", currentId)).toBe(1);
+    expect(
+      await backupMappingCount(db, "proposed_edit_version_backup_0008", currentId),
+    ).toBe(1);
   });
 
   it("hides the existing thread without the migration (the bug it fixes)", async () => {

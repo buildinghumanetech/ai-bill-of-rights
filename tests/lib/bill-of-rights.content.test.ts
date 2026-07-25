@@ -171,7 +171,10 @@ describe("current version agents.md", () => {
   // bullets. A rename has to be applied here too, and nothing else catches it.
   it("has a conforming bullet for every article this version added", () => {
     const required = articlesRequiringABullet();
-    expect(required.length, "no new articles to check").toBeGreaterThan(0);
+    // Nothing to compare: a patch release that adds no articles, or a
+    // first-ever version. Both are legitimate and agents.md can be perfectly
+    // consistent — matching how the carried-forward test above handles it.
+    if (required.length === 0) return;
     const documented = new Set(
       [...raw.matchAll(bulletRe)].map(([, numberStr]) => numberStr),
     );

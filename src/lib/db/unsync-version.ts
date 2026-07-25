@@ -26,6 +26,18 @@ type DbLike = PgDatabase<
   TablesRelationalConfig
 >;
 
+/**
+ * Machine-readable reason a delete did not happen. Callers MUST branch on this
+ * rather than on `refusedBecause`: that field is display text, and matching it
+ * as a sentinel means any reword silently changes control flow — a successful
+ * dry run turning into an error exit, for instance.
+ */
+export type UnsyncRefusalCode =
+  | "not_found"
+  | "referenced"
+  | "current"
+  | "dry_run";
+
 export interface UnsyncReport {
   version: string;
   found: boolean;
@@ -33,8 +45,9 @@ export interface UnsyncReport {
   /** Rows pointing at this version, by table. Any non-zero blocks deletion. */
   dependents: Record<string, number>;
   deleted: boolean;
-  /** Why the delete was refused, when it was. */
+  /** Why the delete was refused, when it was. Display only — see the code. */
   refusedBecause?: string;
+  refusedCode?: UnsyncRefusalCode;
 }
 
 /**
@@ -69,6 +82,12 @@ export async function unsyncVersion(
   versionString: string,
   opts: { dryRun?: boolean; allowCurrent?: boolean } = {},
 ): Promise<UnsyncReport> {
+  // Defaults to a DRY RUN. This function deletes a row that pages render from,
+  // and `allowCurrent` makes the current version reachable — so the obvious way
+  // to write the new call, `unsyncVersion(db, v, { allowCurrent: true })`, must
+  // not silently be a destructive one. Callers opt in with `dryRun: false`.
+  const dryRun = opts.dryRun ?? true;
+
   const rows = await db
     .select()
     .from(versions)
@@ -83,6 +102,7 @@ export async function unsyncVersion(
       dependents: {},
       deleted: false,
       refusedBecause: "no such version row",
+      refusedCode: "not_found",
     };
   }
 
@@ -135,6 +155,7 @@ export async function unsyncVersion(
       ...base,
       deleted: false,
       refusedBecause: `version is referenced by other rows (${detail}) — it is in use, not a draft`,
+      refusedCode: "referenced",
     };
   }
   if (row.isCurrent && !opts.allowCurrent) {
@@ -146,10 +167,16 @@ export async function unsyncVersion(
         "frozen draft and safe to clear — re-run with allowCurrent (CLI: " +
         "--allow-current). The database will briefly have NO current version; " +
         "run `pnpm sync-versions` straight afterwards to re-insert it from disk",
+      refusedCode: "current",
     };
   }
-  if (opts.dryRun) {
-    return { ...base, deleted: false, refusedBecause: "dry run" };
+  if (dryRun) {
+    return {
+      ...base,
+      deleted: false,
+      refusedBecause: "dry run",
+      refusedCode: "dry_run",
+    };
   }
 
   await db.delete(versions).where(eq(versions.id, id));
