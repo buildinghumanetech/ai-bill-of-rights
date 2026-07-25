@@ -1,7 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { REF_COOKIE, readRefCookieValue } from "@/lib/referral/cookie";
 import { upsertSignerProfile } from "./profile";
 import { recordSignature } from "./sign";
 import {
@@ -35,6 +36,20 @@ function decodePercentEncoding(s: string): string {
     return decodeURIComponent(s);
   } catch {
     return s;
+  }
+}
+
+// Read the attribution cookie the proxy stamped on arrival. Best effort by
+// design: if the cookie jar is unavailable or holds junk we return null and
+// the signature proceeds unattributed. A signature is never worth losing over
+// a referral credit.
+async function readRefCookie(): Promise<string | null> {
+  try {
+    const jar = await cookies();
+    return readRefCookieValue(jar.get(REF_COOKIE)?.value);
+  } catch (err) {
+    console.warn("[referral] could not read ref cookie:", err);
+    return null;
   }
 }
 
@@ -147,6 +162,7 @@ export async function recordSignatureFromModal(
       locationText,
       verificationMethod,
       notificationPreference: input.notificationPreference ?? "major",
+      referredBySignerId: await readRefCookie(),
     });
 
     const consentText = renderConsentText(CURRENT_CONSENT_VERSION, {
@@ -350,6 +366,7 @@ export async function createSignerFromModal(
       locationText,
       verificationMethod,
       notificationPreference: input.notificationPreference ?? "major",
+      referredBySignerId: await readRefCookie(),
     });
 
     // Confirmation email (best effort).
