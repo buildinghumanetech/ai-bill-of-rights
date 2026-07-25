@@ -13,11 +13,24 @@ import { COMPOSER_CLOSED_EVENT, SELECTION_EVENT } from "@/lib/comments/selection
 
 const SETTLE_MS = 350;
 
+/**
+ * Tracked at module scope and torn down in afterEach: jsdom shares one `window`
+ * across the file, so a listener leaked by a failing assertion would push into
+ * a dead array for every later test and cascade one real failure into several.
+ *
+ * An array rather than a single slot, deliberately — a second renderArticle()
+ * within one test would overwrite a lone reference and reintroduce exactly the
+ * leak this exists to prevent. No test does that today; this makes it so none
+ * ever can by accident.
+ */
+const activeListeners: ((e: Event) => void)[] = [];
+
 function renderArticle() {
   const events: string[] = [];
   const onEvent = (e: Event) =>
     events.push((e as CustomEvent<{ selectedText: string }>).detail.selectedText);
   window.addEventListener(SELECTION_EVENT, onEvent);
+  activeListeners.push(onEvent);
 
   const utils = render(
     <ArticleSelectionContainer>
@@ -27,11 +40,7 @@ function renderArticle() {
     </ArticleSelectionContainer>,
   );
 
-  return {
-    events,
-    cleanupListener: () => window.removeEventListener(SELECTION_EVENT, onEvent),
-    container: utils.container,
-  };
+  return { events, container: utils.container };
 }
 
 /** Select a node's contents and let the debounced selectionchange settle. */
@@ -55,6 +64,9 @@ describe("<ArticleSelectionContainer>", () => {
   });
 
   afterEach(() => {
+    for (const listener of activeListeners.splice(0)) {
+      window.removeEventListener(SELECTION_EVENT, listener);
+    }
     vi.useRealTimers();
     cleanup();
   });
@@ -62,14 +74,13 @@ describe("<ArticleSelectionContainer>", () => {
   it("emits for a touch-style selection that never fires mouseup", () => {
     // The reason the listener exists: press-and-hold on a phone produces no
     // mouseup at all, so before this the whole feature was unusable on mobile.
-    const { events, cleanupListener, container } = renderArticle();
+    const { events, container } = renderArticle();
     selectAndSettle(container.querySelector('[data-anchor-id="a-1"]')!);
     expect(events).toEqual(["Opt-out is not consent."]);
-    cleanupListener();
   });
 
   it("emits once when mouseup and selectionchange both fire for one gesture", () => {
-    const { events, cleanupListener, container } = renderArticle();
+    const { events, container } = renderArticle();
     const p = container.querySelector('[data-anchor-id="a-1"]')!;
 
     act(() => {
@@ -86,29 +97,26 @@ describe("<ArticleSelectionContainer>", () => {
     });
 
     expect(events).toHaveLength(1);
-    cleanupListener();
   });
 
   it("ignores selections outside any anchored sentence", () => {
-    const { events, cleanupListener, container } = renderArticle();
+    const { events, container } = renderArticle();
     selectAndSettle(container.querySelectorAll("p")[2]);
     expect(events).toEqual([]);
-    cleanupListener();
   });
 
   it("emits again for a different sentence", () => {
-    const { events, cleanupListener, container } = renderArticle();
+    const { events, container } = renderArticle();
     selectAndSettle(container.querySelector('[data-anchor-id="a-1"]')!);
     selectAndSettle(container.querySelector('[data-anchor-id="a-2"]')!);
     expect(events).toHaveLength(2);
-    cleanupListener();
   });
 
   describe("resets the dedupe guard so it can't go sticky", () => {
     it("re-emits the same phrase after the composer closes", () => {
       // The keyboard-user bug: dismissing the composer without clearing the
       // guard left the same phrase permanently unselectable.
-      const { events, cleanupListener, container } = renderArticle();
+      const { events, container } = renderArticle();
       const p = container.querySelector('[data-anchor-id="a-1"]')!;
 
       selectAndSettle(p);
@@ -120,11 +128,10 @@ describe("<ArticleSelectionContainer>", () => {
       selectAndSettle(p);
 
       expect(events).toHaveLength(2);
-      cleanupListener();
     });
 
     it("re-emits the same phrase after a new mousedown gesture", () => {
-      const { events, cleanupListener, container } = renderArticle();
+      const { events, container } = renderArticle();
       const p = container.querySelector('[data-anchor-id="a-1"]')!;
 
       selectAndSettle(p);
@@ -134,11 +141,10 @@ describe("<ArticleSelectionContainer>", () => {
       selectAndSettle(p);
 
       expect(events).toHaveLength(2);
-      cleanupListener();
     });
 
     it("re-emits the same phrase after the selection is collapsed", () => {
-      const { events, cleanupListener, container } = renderArticle();
+      const { events, container } = renderArticle();
       const p = container.querySelector('[data-anchor-id="a-1"]')!;
 
       selectAndSettle(p);
@@ -152,7 +158,6 @@ describe("<ArticleSelectionContainer>", () => {
       selectAndSettle(p);
 
       expect(events).toHaveLength(2);
-      cleanupListener();
     });
   });
 });

@@ -115,9 +115,54 @@ describe("shouldScrollComposerIntoView", () => {
     expect(shouldScrollComposerIntoView(at(VH - H / 2 + 1))).toBe(true);
   });
 
+  it("holds still for a composer taller than the viewport that fills it", () => {
+    // Without clamping the denominator to the viewport, a composer taller than
+    // 2x the viewport can never reach the threshold against its own height, so
+    // every emit re-scrolls. Reachable on a landscape phone, or on Android
+    // where the on-screen keyboard shrinks innerHeight.
+    const tall = { composerRect: { top: -400, bottom: 2000 }, viewportHeight: VH };
+    expect(shouldScrollComposerIntoView(tall)).toBe(false);
+  });
+
+  it("still scrolls a viewport-filling composer that is genuinely off-screen", () => {
+    const tall = { composerRect: { top: VH + 100, bottom: VH + 2500 }, viewportHeight: VH };
+    expect(shouldScrollComposerIntoView(tall)).toBe(true);
+  });
+
+  describe("between 1x and 2x the viewport, where the clamp bites gradually", () => {
+    // The 3x-viewport cases above are the easy end: the old code returned true
+    // there unconditionally. This is the band an expanded textarea plus a
+    // mention list most plausibly produces, and where the clamp changes the
+    // requirement rather than merely rescuing it — 1200px tall against an 800px
+    // viewport needs 400 visible pixels, not 600.
+    const TALL = 1200;
+    const band = (visible: number) => ({
+      composerRect: { top: VH - visible, bottom: VH - visible + TALL },
+      viewportHeight: VH,
+    });
+
+    it("holds still just above the clamped threshold", () => {
+      // 420/800 = 0.525. Unclamped this was 420/1200 = 0.35, i.e. a scroll —
+      // so this assertion is what the clamp actually buys.
+      expect(shouldScrollComposerIntoView(band(420))).toBe(false);
+    });
+
+    it("scrolls just below the clamped threshold", () => {
+      expect(shouldScrollComposerIntoView(band(380))).toBe(true); // 0.475
+    });
+  });
+
   it("scrolls for a zero-height rect rather than dividing by zero", () => {
     expect(
       shouldScrollComposerIntoView({ composerRect: { top: 0, bottom: 0 }, viewportHeight: VH }),
+    ).toBe(true);
+  });
+
+  it("scrolls for a zero-height viewport rather than comparing NaN", () => {
+    // Clamping the denominator introduced a second path to 0. `NaN < 0.5` is
+    // false, which would silently mean "visible enough" — the wrong direction.
+    expect(
+      shouldScrollComposerIntoView({ composerRect: { top: 0, bottom: H }, viewportHeight: 0 }),
     ).toBe(true);
   });
 });

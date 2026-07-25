@@ -57,26 +57,43 @@ export interface ScrollDecisionInput {
 }
 
 /**
- * Fraction of the composer that must be on screen for it to count as "the user
- * can see it". Expressed as a ratio of the element's own measured height rather
- * than a pixel constant, so it can't drift as the composer's contents change.
+ * How much of the composer must be on screen for it to count as "the user can
+ * see it" — as a ratio of however much of it *could possibly* be shown, i.e.
+ * `min(its height, the viewport)`.
+ *
+ * A ratio rather than a pixel constant so it can't drift as the composer's
+ * contents change. Clamped to the viewport because a composer taller than 2x
+ * the viewport can never reach this threshold against its own height — `visible`
+ * maxes out at the viewport — so every emit would re-scroll, forever. That is
+ * reachable on a landscape phone, or on Android where the on-screen keyboard
+ * shrinks `innerHeight` under an expanded textarea. Note this does mean that for
+ * a composer taller than the viewport the requirement moves *with* the viewport,
+ * which is the point.
  */
 const MIN_VISIBLE_FRACTION = 0.5;
 
 /**
  * Should the page pull the comments column into view for this selection?
  *
- * One rule: scroll when the user can't actually see the composer.
+ * One rule: scroll when the user can't actually see the composer. This applies
+ * at every width — it started life as a mobile affordance, but "you can't see
+ * the box you're about to type into" is worth fixing on a short desktop window
+ * too, and keying it to visibility rather than a breakpoint is what stops it
+ * drifting out of sync with the grid.
  *
  * An earlier version also gated on the selection's anchor, to stop an iOS
  * selection-handle drag (which re-emits repeatedly) from yanking the sentence
  * out from under the finger adjusting it. That turned out to be both redundant
- * and harmful. Redundant because the first scroll centers the composer, so
- * every subsequent emit in the same gesture already sees it as visible and
- * declines. Harmful because anchors are sentence-level: re-selecting a
- * different phrase within the *same* sentence kept matching the gate, so the
- * composer silently updated off-screen and never recovered — the thing the user
- * would have to dismiss to reset it being the thing they couldn't see.
+ * and harmful. Redundant because a scroll centers the composer, so subsequent
+ * emits in the same gesture generally see it as visible and decline — though
+ * note the scroll is smooth and takes ~300-600ms, longer than the 350ms
+ * selection debounce, so a second emit mid-animation can re-issue it. That's
+ * benign: same element, same `block: "center"`, so the animation restarts
+ * toward the same place rather than jumping. Harmful because anchors are
+ * sentence-level: re-selecting a different phrase within the *same* sentence
+ * kept matching the gate, so the composer silently updated off-screen and never
+ * recovered — the thing the user would have to dismiss to reset it being the
+ * thing they couldn't see.
  *
  * Measuring the composer rather than its column matters for the same reason:
  * the column's top edge can sit just inside the viewport while the composer,
@@ -87,8 +104,12 @@ export function shouldScrollComposerIntoView({
   viewportHeight,
 }: ScrollDecisionInput): boolean {
   const height = composerRect.bottom - composerRect.top;
-  if (height <= 0) return true;
+  // Degenerate boxes: nothing meaningful is on screen, and the clamped
+  // denominator below would be 0, making the comparison NaN. Bail explicitly
+  // rather than letting `NaN < 0.5` decide (it is false — the wrong way round).
+  if (height <= 0 || viewportHeight <= 0) return true;
   const visible =
     Math.min(composerRect.bottom, viewportHeight) - Math.max(composerRect.top, 0);
-  return visible / height < MIN_VISIBLE_FRACTION;
+  // See MIN_VISIBLE_FRACTION for why the denominator is clamped.
+  return visible / Math.min(height, viewportHeight) < MIN_VISIBLE_FRACTION;
 }

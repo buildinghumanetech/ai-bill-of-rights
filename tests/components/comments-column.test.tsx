@@ -1,14 +1,26 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { act } from "react";
 
 // The composer pulls in Clerk, the router and a server action; none of that is
-// relevant to the scroll behaviour under test. Stub it with a fixed-size box so
-// the only interesting variable is where that box sits in the viewport.
+// relevant here. The stub exposes the two dismissal callbacks as buttons so the
+// close paths are actually reachable from a test.
 vi.mock("@/components/NewCommentForm", () => ({
-  NewCommentForm: ({ selectedText }: { selectedText: string }) => (
-    <div data-testid="composer">{selectedText}</div>
+  NewCommentForm: ({
+    selectedText,
+    onCancel,
+    onSubmittedNewTopLevel,
+  }: {
+    selectedText: string;
+    onCancel: () => void;
+    onSubmittedNewTopLevel?: (id: string) => void;
+  }) => (
+    <div data-testid="composer">
+      {selectedText}
+      <button data-testid="cancel" onClick={onCancel} />
+      <button data-testid="submit" onClick={() => onSubmittedNewTopLevel?.("new-1")} />
+    </div>
   ),
 }));
 vi.mock("@/components/CommentView", () => ({
@@ -20,33 +32,56 @@ import { COMPOSER_CLOSED_EVENT, SELECTION_EVENT } from "@/lib/comments/selection
 
 const VIEWPORT_HEIGHT = 800;
 const COMPOSER_HEIGHT = 200;
+/** How far above the composer its column starts (heading + padding). */
+const COLUMN_LEAD = 50;
+
+const realRect = Element.prototype.getBoundingClientRect;
+const realScroll = Element.prototype.scrollIntoView;
 
 /**
- * Place the composer's box at `top`, so the component measures a realistic
- * rect. jsdom reports every rect as all-zero otherwise.
+ * Place the composer's box at `top`, mirroring the real layout's geometry.
+ *
+ * The distinction that matters: the `composerRef` wrapper hugs the composer, so
+ * it gets the *composer's* box. Only the column — identified by the fact that it
+ * also contains the heading — starts COLUMN_LEAD higher. Giving every ancestor
+ * the lead, wrapper included, is what silently made the geometry tests measure
+ * column-shaped rects and left "measure the composer, not the column"
+ * unfalsifiable on geometry alone.
  */
 function placeComposerAt(top: number) {
+  const composerRect = {
+    top,
+    bottom: top + COMPOSER_HEIGHT,
+    height: COMPOSER_HEIGHT,
+  } as DOMRect;
+  const columnRect = {
+    top: top - COLUMN_LEAD,
+    bottom: top + COMPOSER_HEIGHT,
+    height: COMPOSER_HEIGHT + COLUMN_LEAD,
+  } as DOMRect;
+
   Element.prototype.getBoundingClientRect = function (this: Element) {
-    if ((this as HTMLElement).dataset?.testid !== "composer" && !this.querySelector?.("[data-testid='composer']")) {
+    const el = this as HTMLElement;
+    if (el.dataset?.testid === "composer") return composerRect;
+    if (!el.querySelector?.("[data-testid='composer']")) {
       return { top: 0, bottom: 0, height: 0 } as DOMRect;
     }
-    return { top, bottom: top + COMPOSER_HEIGHT, height: COMPOSER_HEIGHT } as DOMRect;
+    // Contains the composer. The heading is what separates column from wrapper.
+    return el.querySelector("h3") ? columnRect : composerRect;
   };
 }
 
-function renderColumn() {
-  return render(
-    <CommentsColumn
-      baseVersionId="v1"
-      threadedComments={[]}
-      activeCommentId={null}
-      viewerSignerId="s1"
-      isAdmin={false}
-      signersForAdmin={[]}
-      signersForMention={[]}
-      onActiveChange={() => {}}
-    />,
-  );
+function columnProps(activeCommentId: string | null = null) {
+  return {
+    baseVersionId: "v1",
+    threadedComments: [],
+    activeCommentId,
+    viewerSignerId: "s1",
+    isAdmin: false,
+    signersForAdmin: [],
+    signersForMention: [],
+    onActiveChange: () => {},
+  };
 }
 
 function selectText(anchorId: string, selectedText: string) {
@@ -58,17 +93,20 @@ function selectText(anchorId: string, selectedText: string) {
 }
 
 describe("<CommentsColumn> composer auto-scroll", () => {
-  let scrollIntoView: ReturnType<typeof vi.fn>;
-  const realRect = Element.prototype.getBoundingClientRect;
+  /** Elements scrollIntoView was called on, so we can assert *which* one. */
+  let scrolled: Element[];
 
   beforeEach(() => {
-    scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+    scrolled = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
     window.innerHeight = VIEWPORT_HEIGHT;
   });
 
   afterEach(() => {
     Element.prototype.getBoundingClientRect = realRect;
+    Element.prototype.scrollIntoView = realScroll;
     cleanup();
   });
 
@@ -76,40 +114,82 @@ describe("<CommentsColumn> composer auto-scroll", () => {
     // The narrow-viewport case the feature exists for: the column is stacked
     // under the whole document, so nothing appears to happen without this.
     placeComposerAt(VIEWPORT_HEIGHT + 400);
-    renderColumn();
+    render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out is not consent.");
-    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it("scrolls the element wrapping the composer, not the whole column", () => {
+    // Regression guard for the central fix: measuring the column let its top
+    // edge sit inside the viewport while the composer was below the fold.
+    placeComposerAt(VIEWPORT_HEIGHT + 400);
+    const { getByTestId } = render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+
+    const composer = getByTestId("composer");
+    expect(scrolled).toHaveLength(1);
+    expect(scrolled[0].contains(composer)).toBe(true);
+    // The column has the heading; the measured element must not.
+    expect(scrolled[0].querySelector("h3")).toBeNull();
+  });
+
+  it("decides on the composer's geometry even where the column's disagrees", () => {
+    // The one case that makes "measure the composer, not the column" fail on
+    // geometry alone rather than on the structural h3 check below. The two
+    // rules only diverge in a narrow band, so the numbers are load-bearing:
+    //   composer  90 of 200 visible = 0.45  -> under the threshold, scroll
+    //   column   140 of 250 visible = 0.56  -> over it, would hold still
+    // Measure the wrong element and this test goes quiet.
+    placeComposerAt(VIEWPORT_HEIGHT - 90);
+    render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+    expect(scrolled).toHaveLength(1);
   });
 
   it("does not scroll when the composer is already fully visible", () => {
     placeComposerAt(100);
-    renderColumn();
+    render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out is not consent.");
-    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(scrolled).toHaveLength(0);
   });
 
   it("scrolls when only a sliver of the composer is on screen", () => {
-    // Regression guard. Measuring the *column's* top edge and treating any
-    // pixel in view as "visible" left the composer itself below the fold.
+    // Regression guard. Measuring the column's top edge and treating any pixel
+    // in view as "visible" left the composer itself below the fold — with
+    // COLUMN_LEAD applied, the column here still reports a visible top edge.
     placeComposerAt(VIEWPORT_HEIGHT - 20);
-    renderColumn();
+    render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out is not consent.");
-    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveLength(1);
   });
 
-  it("does not re-scroll while an open composer's selection is adjusted", () => {
-    // An iOS selection-handle drag re-emits repeatedly; scrolling on each would
-    // yank the sentence out from under the finger adjusting it. Once the first
-    // scroll has happened the composer is visible, which is what suppresses it.
+  it("does not re-scroll once the composer has been brought into view", () => {
+    // An iOS selection-handle drag re-emits repeatedly. Once a scroll has
+    // landed, visibility alone suppresses the rest — which is why the old
+    // anchor gate was redundant.
     placeComposerAt(VIEWPORT_HEIGHT + 400);
-    renderColumn();
+    render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out");
-    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveLength(1);
 
-    placeComposerAt(200); // the scroll brought it into view
+    placeComposerAt(200); // the scroll landed
     selectText("a-1", "Opt-out is");
     selectText("a-1", "Opt-out is not");
-    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it("re-issues the scroll if a second emit lands mid-animation", () => {
+    // Honest about the real timing: `behavior: "smooth"` outlasts the 350ms
+    // selection debounce, so a second emit can still measure the composer
+    // off-screen. Benign — same element, same block, so the animation just
+    // continues toward the same place — but pinned so it stays deliberate.
+    placeComposerAt(VIEWPORT_HEIGHT + 400);
+    render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out");
+    selectText("a-1", "Opt-out is");
+
+    expect(scrolled).toHaveLength(2);
+    expect(scrolled[0]).toBe(scrolled[1]);
   });
 
   it("scrolls again for a new phrase in the SAME sentence once out of view", () => {
@@ -118,79 +198,94 @@ describe("<CommentsColumn> composer auto-scroll", () => {
     // kept matching, and the composer the user would have to dismiss to reset
     // it was the thing they couldn't see.
     placeComposerAt(VIEWPORT_HEIGHT + 400);
-    renderColumn();
+    render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out");
-    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveLength(1);
 
-    // User scrolls back up to the article; the composer is off-screen again.
-    placeComposerAt(VIEWPORT_HEIGHT + 400);
+    placeComposerAt(200); // scroll landed, composer visible
+    selectText("a-1", "Opt-out is");
+    expect(scrolled).toHaveLength(1);
+
+    placeComposerAt(VIEWPORT_HEIGHT + 400); // user scrolled back up to the article
     selectText("a-1", "Buried checkboxes");
-    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(scrolled).toHaveLength(2);
+  });
+
+  it("also scrolls on a desktop-shaped layout when the composer is cut off", () => {
+    // The visibility rule intentionally applies at every width, not just below
+    // md. Pinned because it is a behaviour change from the old breakpoint gate.
+    window.innerHeight = 500;
+    placeComposerAt(430); // column starts at 380, well in view; composer is not
+    render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+    expect(scrolled).toHaveLength(1);
   });
 });
 
 describe("<CommentsColumn> composer dismissal", () => {
-  const realRect = Element.prototype.getBoundingClientRect;
+  let closed: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = function () {};
     window.innerHeight = VIEWPORT_HEIGHT;
-    placeComposerAt(100);
+    placeComposerAt(100); // visible, so no scrolling noise
+    closed = vi.fn();
+    window.addEventListener(COMPOSER_CLOSED_EVENT, closed);
   });
 
   afterEach(() => {
+    window.removeEventListener(COMPOSER_CLOSED_EVENT, closed);
     Element.prototype.getBoundingClientRect = realRect;
+    Element.prototype.scrollIntoView = realScroll;
     cleanup();
   });
 
-  it("announces closure so the container clears its dedupe guard", () => {
-    // Without this the same phrase can never be re-selected — the sticky-guard
-    // bug, reached via the click/Enter-a-highlight path.
-    const closed = vi.fn();
-    window.addEventListener(COMPOSER_CLOSED_EVENT, closed);
-
-    const { rerender, queryByTestId } = renderColumn();
+  it("announces closure when the composer is cancelled", () => {
+    const { getByTestId, queryByTestId } = render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out is not consent.");
-    expect(queryByTestId("composer")).not.toBeNull();
 
     act(() => {
-      rerender(
-        <CommentsColumn
-          baseVersionId="v1"
-          threadedComments={[]}
-          activeCommentId="c-1"
-          viewerSignerId="s1"
-          isAdmin={false}
-          signersForAdmin={[]}
-          signersForMention={[]}
-          onActiveChange={() => {}}
-        />,
-      );
+      fireEvent.click(getByTestId("cancel"));
     });
 
     expect(closed).toHaveBeenCalledTimes(1);
     expect(queryByTestId("composer")).toBeNull();
-    window.removeEventListener(COMPOSER_CLOSED_EVENT, closed);
   });
 
-  it("does not announce closure when no composer was open", () => {
-    const closed = vi.fn();
-    window.addEventListener(COMPOSER_CLOSED_EVENT, closed);
+  it("announces closure exactly once when a comment is submitted", () => {
+    // onSubmittedNewTopLevel closes the composer and then activates the new
+    // comment. Without the pendingSelection guard on the activeCommentId
+    // effect, that second step fires a duplicate close.
+    const { getByTestId, rerender } = render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
 
-    render(
-      <CommentsColumn
-        baseVersionId="v1"
-        threadedComments={[]}
-        activeCommentId="c-1"
-        viewerSignerId="s1"
-        isAdmin={false}
-        signersForAdmin={[]}
-        signersForMention={[]}
-        onActiveChange={() => {}}
-      />,
-    );
+    act(() => {
+      fireEvent.click(getByTestId("submit"));
+    });
+    act(() => {
+      rerender(<CommentsColumn {...columnProps("new-1")} />);
+    });
 
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces closure when a saved highlight is activated", () => {
+    // The click/Enter-a-highlight path. Clearing state without announcing it
+    // left the container's dedupe guard stale for keyboard users.
+    const { rerender, queryByTestId } = render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+    expect(queryByTestId("composer")).not.toBeNull();
+
+    act(() => {
+      rerender(<CommentsColumn {...columnProps("c-1")} />);
+    });
+
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(queryByTestId("composer")).toBeNull();
+  });
+
+  it("stays quiet when no composer was open", () => {
+    render(<CommentsColumn {...columnProps("c-1")} />);
     expect(closed).not.toHaveBeenCalled();
-    window.removeEventListener(COMPOSER_CLOSED_EVENT, closed);
   });
 });

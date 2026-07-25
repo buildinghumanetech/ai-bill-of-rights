@@ -1,5 +1,118 @@
 # Branch Progress: sparkle/agent-3c63cf44-ec48-4ca6-989f-c9b2e569c3fa
 
+## Progress Update as of [2026-07-25 08:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Round 4 of roborev on the mobile selection path came back with **0 Mediums and
+7 Lows** — the first round that found no correctness bug. All seven were taken
+anyway. The substantive one is a division-by-own-height that could never reach
+its threshold on a composer taller than 2x the viewport; the rest sharpen the
+component tests so they pin the behaviour they claim to. No production behaviour
+changes for any viewport that isn't extremely short.
+
+### Detail of changes made:
+
+- **Clamped the denominator in `shouldScrollComposerIntoView`**
+  (`src/lib/comments/selection.ts`). The rule is "scroll unless at least half the
+  composer is on screen", measured as `visible / height`. When the composer is
+  taller than *twice* the viewport, `visible` maxes out at `viewportHeight` and
+  the ratio can never reach 0.5 — so every single emit re-scrolled, forever.
+  Now the denominator is `Math.min(height, viewportHeight)`, i.e. "half of what
+  could possibly be shown". This is reachable in practice: a landscape phone, or
+  Android where the on-screen keyboard shrinks `innerHeight` beneath an expanded
+  textarea. Two tests pin both directions — a viewport-filling composer that
+  fills the screen holds still, one that is genuinely off-screen still scrolls.
+- **Made the doc comment on that function honest about two things** it had been
+  quietly glossing: the rule applies at *every* width (it began as a mobile
+  affordance, but "you can't see the box you're about to type into" is worth
+  fixing on a short desktop window, and keying it to visibility rather than a
+  breakpoint is what stops it drifting out of sync with the grid); and smooth
+  scroll runs ~300-600ms, which **outlasts the 350ms selection debounce**, so a
+  second emit mid-animation can genuinely re-issue the scroll. That is benign —
+  same element, same `block: "center"`, so the animation continues toward the
+  same place rather than jumping — but it was worth stating rather than implying
+  the visibility check makes re-issues impossible.
+- **Rewrote `tests/components/comments-column.test.tsx`** (now 12 tests). Two
+  structural changes make previously-unfalsifiable claims testable:
+  - `COLUMN_LEAD = 50` — `placeComposerAt(top)` now gives *ancestor* elements a
+    rect starting 50px higher than the composer's, mirroring the real layout
+    (heading + padding). Without this the column and composer had identical
+    boxes, so "measure the composer, not the column" was not a claim any test
+    could distinguish.
+  - The `scrollIntoView` mock captures `this` into a `scrolled: Element[]`, so
+    tests assert *which element* was scrolled, not merely that something was.
+  - The `NewCommentForm` stub now exposes `onCancel` / `onSubmittedNewTopLevel`
+    as real buttons, which is what makes the four dismissal tests reachable.
+- **Fixed a listener leak in `tests/components/article-selection-container.test.tsx`.**
+  Listeners registered on `document` outlived their test and fired during later
+  ones, so a single failure could cascade. A module-scope `activeListener` is now
+  torn down in `afterEach`. Still 7 tests.
+- **Added 2 clamp tests to `tests/lib/comments.selection.test.ts`** (now 17).
+
+### Round 5 (roborev job 37, on commit 3948e77): 0 Mediums, 4 Lows, all taken
+
+Round 5 found that the round-4 test work did **not** do what its own commit
+message claimed, and the correction is folded into this same commit:
+
+- **`COLUMN_LEAD` was not actually discriminating anything.** The mock handed the
+  lead-adjusted, column-shaped rect to *every* element containing the composer —
+  including the `composerRef` wrapper, which is the element the layout effect
+  measures. So the geometry assertions were exercising column geometry the whole
+  time, exactly what they existed to rule out. The round-4 claim that mutation C
+  produced 6 failures was true, but those failures came from the structural
+  `querySelector("h3")` check, not from geometry. Fixed properly: only the
+  element that *also contains the heading* gets `columnRect`; the wrapper hugs
+  the composer and gets `composerRect`, which is what the real DOM does.
+- **Added the test that discriminates on geometry alone.** The two rules only
+  disagree in a narrow band, so the numbers are load-bearing: at
+  `placeComposerAt(VH - 90)` the composer is 90/200 = 0.45 visible (scroll) while
+  the column is 140/250 = 0.56 (hold still). Verified in isolation with `-t`
+  against the parentElement mutation — it fails on its own.
+- **`MIN_VISIBLE_FRACTION`'s comment contradicted its own code.** It still said
+  "ratio of the element's own measured height ... so it can't drift", which the
+  clamp had made false. Reworded to "however much of it could possibly be shown",
+  and the clamp rationale moved up next to the constant instead of living 40
+  lines away at the use site.
+- **The clamp introduced a second path to a zero denominator.** `viewportHeight
+  = 0` makes `Math.min(height, viewportHeight)` zero → `NaN < 0.5` → `false`,
+  i.e. "visible enough", the wrong direction. The `height <= 0` guard no longer
+  covered it. Now `if (height <= 0 || viewportHeight <= 0) return true`.
+- **Listener teardown was a single slot**, so the leak it fixed would return the
+  moment any test called `renderArticle()` twice — the second call overwrites the
+  reference and the first listener stays on the shared `window`. Now an array
+  drained with `splice(0)`. Latent, not live, but a trap worth closing.
+
+### Verification actually run (not assumed):
+
+- **Each guard proven red by mutation.** (A) old off-screen rule → 4 failures;
+  (B) unclamped denominator → 2 failures (the 3x case *and* the new mid-band
+  case); (C) measure the column instead of the composer → caught by the new
+  geometry test **alone**, run in isolation; (D) drop the zero-viewport guard →
+  1 failure.
+- `tsc --noEmit` → clean. `eslint src` → 114 problems, the exact pre-existing
+  baseline (unchanged, not improved — none of these files were contributors).
+- Full suite: **40 files, 233 tests, all passing, 42.97s.**
+
+### Potential concerns to address:
+
+- **A full-suite run overlapping another heavy run reports false failures.** One
+  run came back `6 failed | 223 passed` with a 7,204s wall time for a suite that
+  takes ~39s. Re-running alone: 40/40 files, 229/229 tests green. The cause is
+  contention between concurrent `pglite` instances — the DB tests each stand up a
+  real Postgres and individually take 1-3s, so they blow the 15s `testTimeout`
+  under load. Nothing in the suite is order-dependent; it is purely resource
+  starvation. Worth knowing before anyone trusts a red run: **confirm serially
+  before believing a DB-test failure.**
+- **`SELECTION_SETTLE_MS = 350` and `MIN_VISIBLE_FRACTION = 0.5` remain
+  unvalidated on real phone hardware.** Both were tuned against a simulated
+  viewport in jsdom, which cannot reproduce iOS selection-handle timing or the
+  Android keyboard's effect on `innerHeight`. Carried forward from the previous
+  entry and still open — this needs a human with a phone, not another test.
+
+---
+
 ## Progress Update as of [2026-07-24 22:00 Pacific]
 *(Most recent updates at top)*
 
