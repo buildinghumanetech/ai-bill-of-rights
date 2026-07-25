@@ -19,6 +19,12 @@
  * candidate that could mean more than one signer resolves to nobody rather than
  * guessing. Full display names take precedence over first names, so a signer
  * literally named "Erika" still wins "@Erika" over another signer's first name.
+ *
+ * KNOWN LIMITATION: names are compared without Unicode normalization, so a
+ * mention typed in NFD ("Mari" + combining acute + "a") will not match a signer
+ * stored in NFC ("María"). That fails SAFE — it notifies nobody rather than the
+ * wrong person — so it's left alone here; normalizing would shift every match
+ * offset and the renderer slices the original body.
  */
 
 export interface ParsedMention {
@@ -29,11 +35,40 @@ export interface ParsedMention {
   matchEnd: number;
 }
 
-/** Unicode-aware: an ASCII class would treat "ï" as a boundary. */
-const WORD_CHAR = /[\p{L}\p{N}_]/u;
-/** A mention's `@` may only follow whitespace or opening punctuation. */
-const MENTION_OPENER = /[\s([{<"'‘“]/u;
+/**
+ * What may NOT immediately follow a match, or the match is a partial word.
+ *
+ * Unicode-aware, because an ASCII class treats "ï" as a boundary and lets
+ * signer "Ana" match inside "@Anaïs". Includes:
+ *  - `\p{M}` combining marks, so decomposed (NFD) text — where "ä" is stored
+ *    as "a" + U+0308 — doesn't reopen that same hole.
+ *  - `-`, so signer "Jean" does not match inside "@Jean-Pierre". Hyphenated
+ *    given names are common and this is the same wrong-recipient failure.
+ *
+ * Deliberately EXCLUDES the apostrophe, so "@Bob's point" still resolves to Bob.
+ */
+const WORD_CHAR = /[\p{L}\p{N}\p{M}_-]/u;
+/**
+ * What may NOT immediately precede a mention's `@`. The requirement is only
+ * "this @ isn't part of an email address", so we reject the characters an
+ * email local part can contain rather than whitelisting openers — a whitelist
+ * silently dropped ordinary mentions like "Hi,@Alice" and "cc:@Alice".
+ *
+ * Still rejects bob@, josé@, 田中@, bob.smith@ and "sentence.@Alice".
+ */
+const EMAIL_LOCAL = /[\p{L}\p{N}\p{M}_.+%-]/u;
 const HAS_LETTER = /\p{L}/u;
+
+/**
+ * Whether the character at `i` is a word char, tested by code POINT — indexing
+ * a string yields one UTF-16 code unit, so an astral letter would otherwise be
+ * a lone surrogate and never count as a word char.
+ */
+function isWordCharAt(body: string, i: number): boolean {
+  if (i >= body.length) return false;
+  const cp = body.codePointAt(i);
+  return cp !== undefined && WORD_CHAR.test(String.fromCodePoint(cp));
+}
 /**
  * Separates the two halves of a candidate's composite key. NUL genuinely
  * cannot appear in a display name, so the composite can never collide.
@@ -66,9 +101,9 @@ function addCandidate(
 }
 
 /**
- * A first name is only usable if it reads like a name. "Dr. Erika Anderson"
- * would otherwise make a bare "@Dr." a real mention, and "Anderson, Erika"
- * would contribute "anderson,".
+ * A token is usable as a short name only if it reads like one — it must contain
+ * a letter and not trail punctuation. This is what stops a bare "@Dr." from
+ * being a real mention of "Dr. Erika Anderson".
  */
 function isNameLike(token: string): boolean {
   return HAS_LETTER.test(token) && !/[.,;:]$/.test(token);
@@ -98,11 +133,15 @@ export function parseMentions(
     nameBySignerId.set(signer.id, signer.displayName);
     addCandidate(fullNames, name.toLowerCase(), signer.id);
     addScannable(name);
-    // Single-character first names are too collision-prone to be useful.
-    const firstName = name.split(" ")[0];
-    if (firstName.length >= 2 && firstName !== name && isNameLike(firstName)) {
-      addCandidate(firstNames, firstName.toLowerCase(), signer.id);
-      addScannable(firstName);
+    // Scan forward to the first name-like token rather than taking token 0
+    // outright: for "Dr. Erika Anderson" the short name is "Erika". Dropping
+    // the candidate entirely would mean "@Erika" notified nobody, which is the
+    // silent-miss failure this module exists to prevent.
+    // Single-character names are too collision-prone to be useful.
+    const shortName = name.split(" ").find(isNameLike);
+    if (shortName && shortName.length >= 2 && shortName !== name) {
+      addCandidate(firstNames, shortName.toLowerCase(), signer.id);
+      addScannable(shortName);
     }
   }
 
@@ -121,11 +160,10 @@ export function parseMentions(
       i++;
       continue;
     }
-    // Only whitespace or opening punctuation may precede a mention's @. This
-    // is what rejects every email local part regardless of script — bob@,
-    // josé@, 田中@. It also means "end of sentence.@Alice" is not a mention;
-    // that false negative is preferable to mailing the wrong person.
-    if (i > 0 && !MENTION_OPENER.test(body[i - 1])) {
+    // Reject an @ that could be the one in an email address. "sentence.@Alice"
+    // is caught by this too; that false negative is preferable to mailing the
+    // wrong person.
+    if (i > 0 && EMAIL_LOCAL.test(body[i - 1])) {
       i++;
       continue;
     }
@@ -134,8 +172,8 @@ export function parseMentions(
       const end = i + 1 + candidate.len;
       if (body.slice(i + 1, end).toLowerCase() !== candidate.key) continue;
       // Reject a partial word: "@Erika" must not match the signer "Erik",
-      // and "@Anaïs" must not match the signer "Ana".
-      if (end < body.length && WORD_CHAR.test(body[end])) continue;
+      // "@Anaïs" the signer "Ana", or "@Jean-Pierre" the signer "Jean".
+      if (isWordCharAt(body, end)) continue;
       const signerId = index.get(candidate.key) ?? null;
       if (signerId) {
         out.push({
