@@ -1,13 +1,17 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import { auth } from "@clerk/nextjs/server";
+import { consentRecords, signatures, signers } from "@/lib/db/schema";
 import {
-  consentRecords,
-  signatures,
-  signers,
-  versions,
-} from "@/lib/db/schema";
+  resolveSignatureStatus,
+  type SignerSignatureStatus,
+} from "@/lib/db/signature-status";
+import { recordSignature } from "./sign";
+import { extractCapturedFields } from "@/lib/fingerprint/extract";
+import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
+import { sha256Hex } from "@/lib/consent/hash";
 
 let _db: any | null = null;
 function getDb() {
@@ -18,26 +22,20 @@ function getDb() {
   return _db;
 }
 
-export interface SignedStatus {
-  state: "signed";
-  displayName: string;
-  verificationMethod: "email" | "sms";
-  signedAt: string; // ISO so it crosses the server/client boundary cleanly
-  version: string;
-}
-
 export type SignatureStatus =
   | { state: "anonymous" }
   | { state: "no-signer" }
-  | { state: "not-signed" }
-  | SignedStatus;
+  | SignerSignatureStatus;
 
 /**
- * Returns whether the currently signed-in Clerk user has already signed a
- * given version (defaulting to the current published version). Used by
- * SignModal to decide between showing the sign form vs. the "already signed"
- * view. Note this is version-specific: someone who signed v0.0.1 reads as
- * "not-signed" for v0.1.0 and is asked to sign the new version.
+ * Returns the signed-in Clerk user's relationship to a given version
+ * (defaulting to the current published version). Used by SignModal to choose
+ * between the sign form, the "already signed" view, and the re-affirm view.
+ *
+ * Someone who signed an earlier version reads as "signed-earlier", NOT
+ * "not-signed" — see the note on SignedEarlierStatus. Their signature is
+ * intact and still counted everywhere; what they are offered is a chance to
+ * re-affirm the new text, not a blank form.
  */
 export async function getMySignatureStatus(
   versionString = "0.1.0",
@@ -52,35 +50,69 @@ export async function getMySignatureStatus(
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
   if (signerRows.length === 0) return { state: "no-signer" };
+
+  return resolveSignatureStatus(db, signerRows[0], versionString);
+}
+
+/**
+ * Records a signature for the current user against `versionString`, reusing
+ * the profile they already gave us.
+ *
+ * This is the "re-affirm" path for someone who signed an earlier version. It
+ * is a real, freshly consented signature — a new consent record is rendered
+ * and hashed against the text of the version being affirmed, exactly as a
+ * first-time signature is — not a backfilled copy of the old one. Nobody is
+ * ever recorded as having agreed to text they did not act on.
+ *
+ * Their earlier signature is left untouched: the two rows together are the
+ * record of which versions this person has affirmed and when.
+ */
+export async function reaffirmMySignature(
+  versionString: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Not signed in." };
+
+  const db = getDb();
+  const signerRows = await db
+    .select()
+    .from(signers)
+    .where(eq(signers.clerkUserId, userId))
+    .limit(1);
+  if (signerRows.length === 0) {
+    return { success: false, error: "No signature on this account." };
+  }
   const signer = signerRows[0];
 
-  const sigRows = await db
-    .select({
-      signedAt: signatures.signedAt,
-      version: versions.version,
-    })
-    .from(signatures)
-    .innerJoin(versions, eq(versions.id, signatures.versionId))
-    .where(
-      and(
-        eq(signatures.signerId, signer.id),
-        eq(versions.version, versionString),
-      ),
-    )
-    .limit(1);
-
-  if (sigRows.length === 0) return { state: "not-signed" };
-
-  return {
-    state: "signed",
+  const h = await headers();
+  const fields = extractCapturedFields(h, {
+    sessionUtc: new Date().toISOString(),
+    screenResolution: "",
+  });
+  const consentText = renderConsentText(CURRENT_CONSENT_VERSION, {
     displayName: signer.displayName,
-    verificationMethod: signer.verificationMethod,
-    signedAt:
-      sigRows[0].signedAt instanceof Date
-        ? sigRows[0].signedAt.toISOString()
-        : String(sigRows[0].signedAt),
-    version: sigRows[0].version,
-  };
+    location: signer.locationText ?? "",
+    affiliation: signer.affiliation ?? "",
+    verificationMethod: signer.verificationMethod as "email" | "sms",
+    fields,
+  });
+
+  try {
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString,
+      consentTextHash: sha256Hex(consentText),
+      capturedFields: fields,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    // Double-submit, or they signed this version in another tab. Either way
+    // the desired end state already holds, so report success.
+    if (/duplicate key|unique/i.test(msg)) return { success: true };
+    return { success: false, error: "We couldn't record your signature." };
+  }
+
+  return { success: true };
 }
 
 /**

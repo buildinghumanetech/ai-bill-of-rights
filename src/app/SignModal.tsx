@@ -10,6 +10,7 @@ import {
 import { sendInvitationsAction } from "@/server/actions/invite";
 import {
   getMySignatureStatus,
+  reaffirmMySignature,
   removeMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
@@ -149,6 +150,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
     SignatureStatus | { state: "loading" } | null
   >(null);
   const [removing, setRemoving] = useState(false);
+  const [reaffirming, setReaffirming] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [shareLocation, setShareLocation] = useState(true);
   const [nameDisplayFormat, setNameDisplayFormat] = useState<
@@ -203,6 +205,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setInviteResult(null);
       setSignatureStatus(null);
       setRemoving(false);
+      setReaffirming(false);
       setConfirmingRemove(false);
     }
   }, [open, modeProp]);
@@ -226,6 +229,33 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       cancelled = true;
     };
   }, [open, isSignedIn]);
+
+  /**
+   * One-click re-affirm for someone who signed an earlier version. Reuses the
+   * profile they already gave us — re-entering their name to say "yes, this
+   * one too" would be busywork — but records a genuinely new signature and
+   * consent record against the new text. Their earlier signature is untouched.
+   */
+  async function handleReaffirm() {
+    setReaffirming(true);
+    setError(null);
+    try {
+      const res = await reaffirmMySignature(VERSION);
+      if (!res.success) {
+        setError(res.error ?? "We couldn't record your signature.");
+        return;
+      }
+      const status = await getMySignatureStatus(VERSION);
+      setSignatureStatus(status);
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "We couldn't record your signature.",
+      );
+    } finally {
+      setReaffirming(false);
+    }
+  }
 
   async function handleRemoveSignature() {
     setRemoving(true);
@@ -714,6 +744,77 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {step === "form" && signatureStatus?.state === "signed-earlier" && (
+          <div>
+            <h2
+              id="sign-modal-title"
+              className="text-2xl font-semibold tracking-tight text-zinc-950"
+            >
+              You&apos;ve already signed the AI Bill of Rights as:
+            </h2>
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+              <div className="text-xl font-semibold">
+                {signatureStatus.displayName}
+              </div>
+              <div className="mt-1 text-sm">
+                Verified by{" "}
+                {signatureStatus.verificationMethod === "sms"
+                  ? "Phone"
+                  : "Email"}{" "}
+                — signing since{" "}
+                {formatSignedDate(signatureStatus.firstSignedAt)} (v
+                {signatureStatus.version})
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm text-zinc-600">
+              Your signature still counts and still appears in the public list —
+              nothing has changed. Since you signed, v
+              {signatureStatus.requestedVersion} added two new Articles:{" "}
+              <span className="font-medium text-zinc-900">
+                Freedom From Algorithmic Discrimination
+              </span>{" "}
+              and{" "}
+              <span className="font-medium text-zinc-900">
+                the Right to Safe, Tested Systems
+              </span>
+              . If you want your name on the new version too, add it below.
+            </p>
+
+            {error ? (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleReaffirm}
+                disabled={reaffirming}
+                className="w-full rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {reaffirming
+                  ? "Adding your name…"
+                  : `Add my name to v${signatureStatus.requestedVersion}`}
+              </button>
+              <a
+                href={`/v/${signatureStatus.requestedVersion}`}
+                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+              >
+                Read what changed first
+              </a>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+              >
+                Not now
+              </button>
+            </div>
           </div>
         )}
 
