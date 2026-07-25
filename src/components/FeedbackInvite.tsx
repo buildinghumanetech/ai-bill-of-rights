@@ -2,14 +2,24 @@
 
 import { commentCountLabel } from "@/lib/comments/count";
 
-interface Props {
-  variant: "current" | "proposed";
-  currentVersion: string;
-  proposedVersion: string;
-  commentCount: number;
-  /** Switches the document to the Proposed tab (where feedback happens). */
-  onOpenDraft: () => void;
-}
+/**
+ * Discriminated per variant: the Proposed banner is already *in* the draft, so
+ * it has nothing to link to and no current-version number to cite.
+ */
+type Props =
+  | {
+      variant: "current";
+      currentVersion: string;
+      proposedVersion: string;
+      commentCount: number;
+      /** Switches the document to the Proposed tab (where feedback happens). */
+      onOpenDraft: () => void;
+    }
+  | {
+      variant: "proposed";
+      proposedVersion: string;
+      commentCount: number;
+    };
 
 const STEPS = [
   {
@@ -35,14 +45,11 @@ const STEPS = [
  * the mechanism in plain language on both tabs — an invitation with a button on
  * Current, the three concrete steps on Proposed.
  */
-export function FeedbackInvite({
-  variant,
-  currentVersion,
-  proposedVersion,
-  commentCount,
-  onOpenDraft,
-}: Props) {
+export function FeedbackInvite(props: Props) {
+  const { variant, proposedVersion, commentCount } = props;
+
   if (variant === "current") {
+    const { currentVersion, onOpenDraft } = props;
     return (
       <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 px-5 py-5 sm:px-7 sm:py-6">
         <h2 className="text-lg font-semibold tracking-tight text-zinc-950 sm:text-xl">
@@ -56,7 +63,10 @@ export function FeedbackInvite({
           hold up get folded into the next version. Disagreeing with a line is a
           reason to say so here — not a reason to walk away.
         </p>
-        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
+        {/* One control, not two — a second button doing the identical thing
+            reads to a screen reader as a distinct action that isn't. The count
+            is supporting copy beneath it instead. */}
+        <div className="mt-5">
           <button
             type="button"
             onClick={onOpenDraft}
@@ -64,15 +74,11 @@ export function FeedbackInvite({
           >
             Give feedback on the v{proposedVersion} draft →
           </button>
-          <button
-            type="button"
-            onClick={onOpenDraft}
-            className="text-sm text-zinc-600 underline underline-offset-4 hover:text-blue-700"
-          >
+          <p className="mt-2.5 text-sm text-zinc-600">
             {commentCount > 0
-              ? `Read the ${commentCountLabel(commentCount)} already on the draft`
-              : "Be the first to comment on the draft"}
-          </button>
+              ? `${commentCountLabel(commentCount)} already on the draft.`
+              : "No comments yet — yours would be the first."}
+          </p>
         </div>
       </section>
     );

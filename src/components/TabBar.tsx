@@ -11,7 +11,7 @@ interface Props {
    * Proposed tab so the tab reads as an open conversation, not a second
    * static document.
    */
-  commentCount?: number;
+  commentCount: number;
   /**
    * When provided, tabs render as buttons that call this callback (used by
    * `<TabbedDocument>` for instant client-side switching). Without it, tabs
@@ -79,11 +79,9 @@ export function TabBar({
   // advertises what it is — a count once there's a conversation, an invitation
   // before that.
   const proposedSubLabel =
-    commentCount === undefined
-      ? undefined
-      : commentCount > 0
-        ? `${commentCountLabel(commentCount)} — add yours`
-        : "Comment on this draft";
+    commentCount > 0
+      ? `${commentCountLabel(commentCount)} — add yours`
+      : "Comment on this draft";
 
   return (
     <div>
@@ -91,7 +89,7 @@ export function TabBar({
         <FolderTab
           isActive={active === "current"}
           label={`v${currentVersion}: Current`}
-          subLabel={commentCount === undefined ? undefined : "Sign this version"}
+          subLabel="Sign this version"
           href={onTabChange ? undefined : "/"}
           onClick={onTabChange ? () => onTabChange("current") : undefined}
         />

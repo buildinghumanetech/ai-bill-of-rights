@@ -1,7 +1,82 @@
 # Branch Progress: sparkle/agent-3c63cf44-ec48-4ca6-989f-c9b2e569c3fa
 
-## Progress Update as of [2026-07-24 20:45 Pacific]
+## Progress Update as of [2026-07-24 21:30 Pacific]
 *(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Fixes two real defects roborev found in the selection code shipped in PR #32
+(already merged), plus three smaller cleanups it flagged. Both defects were in
+the touch-selection path — i.e. in the mobile experience the previous commit
+claimed to fix — so they were worth a same-day follow-up rather than a backlog
+entry.
+
+### Detail of changes made:
+
+- **Sticky dedupe guard (the important one).** `lastEmitted` was only reset when
+  `emitCurrentSelection` observed a *collapsed* selection. The two early returns
+  for a non-collapsed selection (no anchor found, node outside root) left a
+  stale value behind, and the 350 ms debounce frequently swallows the collapsed
+  intermediate state entirely. Net effect: select a phrase → composer opens →
+  **Cancel** → re-select the same phrase → nothing happens, and the user has to
+  pick different text to recover. Fixed structurally rather than by patching
+  each return: `nextSelectionState(last, observed)` in
+  `src/lib/comments/selection.ts` is now the single place the guard advances,
+  `observed` is `null` for every unusable case, and that case resets `last`.
+  Reading the selection is now a separate `observeSelection()` that returns
+  `AnchoredSelection | null`, so there is no early-return path that can skip the
+  reducer. Belt and braces on top: `mousedown` / `touchstart` clear the guard
+  (a new gesture makes the last emit history), and `<CommentsColumn>` dispatches
+  `selection-composer-closed` (exported as `COMPOSER_CLOSED_EVENT`) on cancel or
+  submit, which handles the cancel case regardless of debounce timing.
+- **Mid-gesture scroll yank.** The mobile `scrollIntoView` ran on *every*
+  emitted selection. On iOS the normal flow is long-press then drag the
+  selection handles; each adjustment settles the debounce with different text,
+  passes the dedupe, and re-emits — so the page scrolled the column to center
+  repeatedly, pulling the text out from under the finger still dragging it (and
+  remounting the composer, discarding typed text). Now gated on a
+  `composerOpenRef` closed→open transition, so it fires once per gesture.
+- **Breakpoint magic number removed.** The scroll was gated on
+  `matchMedia("(max-width: 767px)")`, duplicating Tailwind's `md` from a grid
+  definition that can change independently. Replaced with the condition we
+  actually care about: scroll when the column's `getBoundingClientRect().top`
+  would put the composer off-screen. This is layout-truth, works at any
+  viewport, and cannot drift.
+- **`FeedbackInvite` props are now a discriminated union.** The `proposed`
+  variant required `currentVersion` and `onOpenDraft` and used neither, forcing
+  callers to pass meaningless values. Also collapsed the two side-by-side
+  buttons in the `current` variant — both called the identical `onOpenDraft`, so
+  assistive tech announced two distinct controls that weren't. The count is now
+  supporting copy under a single button.
+- **Dead code removed.** `commentCount` on `<TabBar>` is required (both call
+  sites pass it) so the `undefined` branches are gone, and the unused
+  `data-comments-column` attribute was dropped.
+
+### Testing
+
+- `tests/lib/comments.selection.test.ts` rewritten against the reducer: 9 tests,
+  including an explicit regression guard for the sticky-guard bug and a full
+  select → dedupe → cancel → reselect round trip.
+- Suite **202 passing / 38 files**; `tsc --noEmit` clean; `eslint src`
+  unchanged from baseline (114 pre-existing problems).
+- Re-verified live in Chrome against `next dev`: touch-path emit, duplicate
+  suppression, re-emit after `selection-composer-closed`, and re-emit after
+  `mousedown` all confirmed.
+
+### Potential concerns to address:
+
+- **`SELECTION_SETTLE_MS = 350` still hasn't been measured on a real iOS
+  device** — only desktop Chrome. This is the one remaining item where real
+  hardware could change the answer.
+- The `<Link>` (no-`onTabChange`) branch in `TabBar` is now unreachable, but it
+  predates this branch and is a reasonable SSR fallback API, so it was left
+  alone rather than widening scope.
+- Local preview still requires Clerk + Neon credentials; see the note in the
+  previous entry.
+
+---
+
+## Progress Update as of [2026-07-24 20:45 Pacific]
 
 ### Summary of changes since last update
 
