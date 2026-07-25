@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  composerScrollBlock,
   nextSelectionState,
   shouldScrollComposerIntoView,
   type AnchoredSelection,
@@ -164,5 +165,30 @@ describe("shouldScrollComposerIntoView", () => {
     expect(
       shouldScrollComposerIntoView({ composerRect: { top: 0, bottom: H }, viewportHeight: 0 }),
     ).toBe(true);
+  });
+});
+
+describe("composerScrollBlock", () => {
+  const VH = 800;
+  const box = (height: number) => ({
+    composerRect: { top: 1000, bottom: 1000 + height },
+    viewportHeight: VH,
+  });
+
+  it("centres a composer that fits on screen", () => {
+    expect(composerScrollBlock(box(200))).toBe("center");
+  });
+
+  it("centres a composer that exactly fills the viewport", () => {
+    expect(composerScrollBlock(box(VH))).toBe("center");
+  });
+
+  it("aligns a composer taller than the viewport to its top", () => {
+    // Centering here puts the composer's *middle* on screen, pushing the quote
+    // block and the top of the textarea above the fold — and the visibility
+    // rule then reads a full viewport of composer as visible and never corrects
+    // it. The top is where the user has to type.
+    expect(composerScrollBlock(box(VH + 1))).toBe("start");
+    expect(composerScrollBlock(box(VH * 3))).toBe("start");
   });
 });

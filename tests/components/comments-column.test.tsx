@@ -42,32 +42,34 @@ const realScroll = Element.prototype.scrollIntoView;
  * Place the composer's box at `top`, mirroring the real layout's geometry.
  *
  * The distinction that matters: the `composerRef` wrapper hugs the composer, so
- * it gets the *composer's* box. Only the column — identified by the fact that it
- * also contains the heading — starts COLUMN_LEAD higher. Giving every ancestor
- * the lead, wrapper included, is what silently made the geometry tests measure
- * column-shaped rects and left "measure the composer, not the column"
- * unfalsifiable on geometry alone.
+ * it gets the *composer's* box. Only the column starts COLUMN_LEAD higher.
+ * Giving every ancestor the lead, wrapper included, is what silently made the
+ * geometry tests measure column-shaped rects and left "measure the composer, not
+ * the column" unfalsifiable on geometry alone.
+ *
+ * Column and wrapper are told apart by an explicit testid. Keying it on the
+ * presence of an `<h3>` worked, but coupled both guards to a heading level in
+ * unrelated markup: an `h3` -> `h2` a11y fix would have made the column report
+ * composer geometry and quietly disarmed them.
+ *
+ * `height` is passed through as well as top/bottom because the scroll-alignment
+ * choice reads it.
  */
-function placeComposerAt(top: number) {
-  const composerRect = {
-    top,
-    bottom: top + COMPOSER_HEIGHT,
-    height: COMPOSER_HEIGHT,
-  } as DOMRect;
+function placeComposerAt(top: number, height: number = COMPOSER_HEIGHT) {
+  const composerRect = { top, bottom: top + height, height } as DOMRect;
   const columnRect = {
     top: top - COLUMN_LEAD,
-    bottom: top + COMPOSER_HEIGHT,
-    height: COMPOSER_HEIGHT + COLUMN_LEAD,
+    bottom: top + height,
+    height: height + COLUMN_LEAD,
   } as DOMRect;
 
   Element.prototype.getBoundingClientRect = function (this: Element) {
     const el = this as HTMLElement;
     if (el.dataset?.testid === "composer") return composerRect;
-    if (!el.querySelector?.("[data-testid='composer']")) {
-      return { top: 0, bottom: 0, height: 0 } as DOMRect;
-    }
-    // Contains the composer. The heading is what separates column from wrapper.
-    return el.querySelector("h3") ? columnRect : composerRect;
+    if (el.dataset?.testid === "comments-column") return columnRect;
+    return el.querySelector?.("[data-testid='composer']")
+      ? composerRect // the composerRef wrapper
+      : ({ top: 0, bottom: 0, height: 0 } as DOMRect);
   };
 }
 
@@ -95,11 +97,15 @@ function selectText(anchorId: string, selectedText: string) {
 describe("<CommentsColumn> composer auto-scroll", () => {
   /** Elements scrollIntoView was called on, so we can assert *which* one. */
   let scrolled: Element[];
+  /** The options it was called with, so we can assert the alignment. */
+  let scrollOpts: ScrollIntoViewOptions[];
 
   beforeEach(() => {
     scrolled = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
+    scrollOpts = [];
+    Element.prototype.scrollIntoView = function (this: Element, arg?: unknown) {
       scrolled.push(this);
+      scrollOpts.push((arg ?? {}) as ScrollIntoViewOptions);
     };
     window.innerHeight = VIEWPORT_HEIGHT;
   });
@@ -128,9 +134,11 @@ describe("<CommentsColumn> composer auto-scroll", () => {
 
     const composer = getByTestId("composer");
     expect(scrolled).toHaveLength(1);
-    expect(scrolled[0].contains(composer)).toBe(true);
-    // The column has the heading; the measured element must not.
-    expect(scrolled[0].querySelector("h3")).toBeNull();
+    // The wrapper that hugs the composer — not the column above it. Asserted as
+    // an identity rather than "has no <h3> inside", which a heading-level change
+    // could have satisfied trivially.
+    expect(scrolled[0]).toBe(composer.parentElement);
+    expect(scrolled[0]).not.toBe(getByTestId("comments-column"));
   });
 
   it("decides on the composer's geometry even where the column's disagrees", () => {
@@ -144,6 +152,26 @@ describe("<CommentsColumn> composer auto-scroll", () => {
     render(<CommentsColumn {...columnProps()} />);
     selectText("a-1", "Opt-out is not consent.");
     expect(scrolled).toHaveLength(1);
+  });
+
+  it("aligns a composer that fits to the centre", () => {
+    placeComposerAt(VIEWPORT_HEIGHT + 400);
+    render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+    expect(scrollOpts[0].block).toBe("center");
+  });
+
+  it("aligns a composer taller than the viewport to its top", () => {
+    // Centering something taller than the screen puts its middle on screen —
+    // which means the quote block and the top of the textarea sit above the
+    // fold. Worse, the visibility rule then measures a full viewport of
+    // composer, calls it visible, and never corrects it, parking the user at
+    // the bottom of a box they need to type into the top of.
+    placeComposerAt(VIEWPORT_HEIGHT + 400, VIEWPORT_HEIGHT + 400);
+    render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+    expect(scrolled).toHaveLength(1);
+    expect(scrollOpts[0].block).toBe("start");
   });
 
   it("does not scroll when the composer is already fully visible", () => {

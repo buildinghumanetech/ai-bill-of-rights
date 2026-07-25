@@ -57,47 +57,33 @@ export interface ScrollDecisionInput {
 }
 
 /**
- * How much of the composer must be on screen for it to count as "the user can
- * see it" — as a ratio of however much of it *could possibly* be shown, i.e.
+ * How much of the composer must be on screen to count as "the user can see it",
+ * as a ratio of however much of it *could possibly* be shown —
  * `min(its height, the viewport)`.
  *
  * A ratio rather than a pixel constant so it can't drift as the composer's
  * contents change. Clamped to the viewport because a composer taller than 2x
- * the viewport can never reach this threshold against its own height — `visible`
- * maxes out at the viewport — so every emit would re-scroll, forever. That is
- * reachable on a landscape phone, or on Android where the on-screen keyboard
- * shrinks `innerHeight` under an expanded textarea. Note this does mean that for
- * a composer taller than the viewport the requirement moves *with* the viewport,
- * which is the point.
+ * the viewport can never reach this threshold against its own height (`visible`
+ * maxes out at the viewport), so every emit would re-scroll forever — reachable
+ * on a landscape phone, or on Android where the keyboard shrinks `innerHeight`
+ * under an expanded textarea.
  */
 const MIN_VISIBLE_FRACTION = 0.5;
 
 /**
  * Should the page pull the comments column into view for this selection?
  *
- * One rule: scroll when the user can't actually see the composer. This applies
- * at every width — it started life as a mobile affordance, but "you can't see
- * the box you're about to type into" is worth fixing on a short desktop window
- * too, and keying it to visibility rather than a breakpoint is what stops it
- * drifting out of sync with the grid.
+ * One rule: scroll when the user can't actually see the composer. It applies at
+ * every width — "you can't see the box you're about to type into" is worth
+ * fixing on a short desktop window too, and keying it to visibility rather than
+ * a breakpoint is what stops it drifting out of sync with the grid.
  *
- * An earlier version also gated on the selection's anchor, to stop an iOS
- * selection-handle drag (which re-emits repeatedly) from yanking the sentence
- * out from under the finger adjusting it. That turned out to be both redundant
- * and harmful. Redundant because a scroll centers the composer, so subsequent
- * emits in the same gesture generally see it as visible and decline — though
- * note the scroll is smooth and takes ~300-600ms, longer than the 350ms
- * selection debounce, so a second emit mid-animation can re-issue it. That's
- * benign: same element, same `block: "center"`, so the animation restarts
- * toward the same place rather than jumping. Harmful because anchors are
- * sentence-level: re-selecting a different phrase within the *same* sentence
- * kept matching the gate, so the composer silently updated off-screen and never
- * recovered — the thing the user would have to dismiss to reset it being the
- * thing they couldn't see.
+ * Measure the composer, not its column: the column's top edge can sit just
+ * inside the viewport while the composer, which starts ~50px lower, is entirely
+ * below the fold.
  *
- * Measuring the composer rather than its column matters for the same reason:
- * the column's top edge can sit just inside the viewport while the composer,
- * which starts ~50px lower, is entirely below the fold.
+ * (The superseded anchor gate, and why smooth scroll outlasting the selection
+ * debounce is benign, are recorded in the branch log rather than here.)
  */
 export function shouldScrollComposerIntoView({
   composerRect,
@@ -112,4 +98,23 @@ export function shouldScrollComposerIntoView({
     Math.min(composerRect.bottom, viewportHeight) - Math.max(composerRect.top, 0);
   // See MIN_VISIBLE_FRACTION for why the denominator is clamped.
   return visible / Math.min(height, viewportHeight) < MIN_VISIBLE_FRACTION;
+}
+
+/**
+ * Where to align the composer once we've decided to scroll.
+ *
+ * `"center"` is right for anything that fits, but on a composer taller than the
+ * viewport it centers the *middle* — pushing the quote block and the top of the
+ * textarea above the fold. The visibility rule above then measures a full
+ * viewport of composer, calls it visible, and declines to correct it, so the
+ * user is parked at the bottom of a box they need to type into the top of. That
+ * resting state only became reachable once the denominator was clamped.
+ *
+ * So: align to the top when it can't all fit. The top is where the user types.
+ */
+export function composerScrollBlock({
+  composerRect,
+  viewportHeight,
+}: ScrollDecisionInput): "start" | "center" {
+  return composerRect.bottom - composerRect.top > viewportHeight ? "start" : "center";
 }
