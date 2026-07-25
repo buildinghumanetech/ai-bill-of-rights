@@ -1,5 +1,39 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-25 08:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged the last three growth workers (signer landing page, "why I signed", attribution + analytics), cleared the apparent test-suite hang as machine contention rather than a defect, and wrote the attribution tests the third worker never produced. Then read all three roborev reviews and **empirically confirmed a HIGH-severity data bug**: the new self-referencing foreign key has no `ON DELETE` action, so deleting a signer who successfully referred anyone now fails with SQLSTATE 23503 — account deletion / GDPR erasure breaks for exactly the most successful sharers.
+
+### Detail of changes made:
+- Merged `708649ab` (signer page -> stranger-facing landing page), `26be1b86` ("why I signed" statement, sanitiser, share copy, OG card), and `22a30a50` (ref/via cookies in `src/proxy.ts`, `resolveReferrerId`, referral queries, analytics wrapper). All three had stalled after writing code, so their work was staged and committed in their own worktrees before merging.
+- **The "hanging test suite" was not a defect.** A full `vitest run` had timed out at 10 minutes right after the merges. Re-run serially it passes in 186s (47 files / 313 tests) and in default parallel mode in 53s. The timeout happened while `corepack pnpm install` and eight worker agents were competing for the same cores. No code change was needed; recording it here so a future session doesn't go hunting for a phantom deadlock.
+- **Wrote the missing attribution tests** (worker `22a30a50` shipped none, which roborev job 33 also flagged). Added `tests/lib/referral.cookie.test.ts` (14 pure tests over `referralCookiesToSet`) and `tests/server/profile.attribution.test.ts` (9 pglite tests through `upsertSignerProfile`). They pin: first-ref-wins, an already-attributed visitor being off-limits entirely, malformed refs and unknown channels being dropped rather than stored, a corrupted existing cookie not permanently locking someone out of attribution, cookie flags (`httpOnly`/`lax`/`/`/30d), attribution written on INSERT and never rewritten by a later profile edit, and — the important ones — a stale or malformed ref still producing a *successful* signature rather than a foreign-key explosion.
+- **Verified those tests actually fail on the behaviour they guard**, rather than trusting a green run. Mutating `referralCookiesToSet` to drop the `!alreadyAttributed` condition reds the first-ref-wins test; bypassing `resolveReferrerId` in `upsertSignerProfile` and passing the raw cookie straight to the INSERT reds both "still signs the person" tests with a real FK violation. That proves the resolver is load-bearing rather than decorative. Source was restored afterwards (`git diff src/` empty).
+
+### Roborev triage (jobs 31, 32, 33)
+Three reviews, one per merged worker. The consequential findings, and what I did with them:
+- **HIGH (job 33) — `referred_by_signer_id` has no `ON DELETE` action: CONFIRMED, real, not yet fixed.** I proved it directly against pglite: insert inviter, insert invitee referencing them, `DELETE FROM signers WHERE id = inviter` returns **SQLSTATE 23503**. None of the three deletion paths (`me.ts:110` self-service delete, `revoke.ts:120`, `admin.ts:83`) clear the referring column first. This commit is what starts populating that column, so the breakage begins now. Dispatched as the first fix.
+- **MEDIUM (job 33) — the analytics layer measures nothing: CONFIRMED.** `grep` shows `<Analytics />` is never mounted in `src/app/layout.tsx` and `src/lib/analytics/*` has **zero call sites** anywhere in `src/`. `@vercel/analytics`'s `track()` is a no-op without the script injected, so the dependency and its 165 lines currently produce no data at all. This defeats the entire point of the "unlocks measurement" item.
+- **MEDIUM (jobs 31 + 32) — most share surfaces still untagged: CONFIRMED.** `signConfirmation` gained `signerId`/`whyISigned` params but neither call site passes them, so confirmation-email share links carry `?via=` with no `?ref=`. The post-signature share step in `SignModal` still hand-builds X/LinkedIn/mailto URLs with no attribution at all. Since that modal and that email are the two highest-volume surfaces, current channel numbers would read as "email and X barely convert" purely as an artifact of which links got tagged.
+- **MEDIUM (job 32) — the OG clamp test cannot fail.** Satori always emits a 1200x630 canvas, so asserting those dimensions is content-independent and would hold identically with the sanitiser removed.
+- **MEDIUM (job 33) — no referral tests: ALREADY FIXED** by the two files above, which is the exact split the finding asked for.
+- **LOW (job 33) — the self-referral guard is structurally unreachable.** Correct: `resolveReferrerId` runs only on the INSERT branch, which by definition means no row exists for that `clerkUserId`, so the fetched referrer can never match. My test has to call the resolver directly to exercise it. Keeping the guard as cheap defence-in-depth, but the docstring needs to stop advertising protection that cannot fire on the current call path.
+
+### Verification
+- `./node_modules/.bin/vitest run` — **49 files / 336 tests, all passing**.
+- `./node_modules/.bin/tsc --noEmit` — clean.
+- FK bug reproduced in an isolated pglite test printing `DELETE RESULT CODE: 23503`.
+
+### Potential concerns to address:
+- **The FK bug is live until the fix lands.** Any signer who has referred someone cannot currently delete their account.
+- `eslint .` reports 167 `no-explicit-any` errors across ~44 files, but this is a long-standing project-wide convention (`db: any` appears 85 times in `src`/`scripts` on `main` alone), not something these merges introduced. Worth a dedicated cleanup, not a blocker here.
+- The `via` channel cookie is written but never read — `readChannelCookieValue` has no callers — so "which surface converts" stays unanswerable until the analytics wiring lands.
+- "Why I signed" is write-once with no edit or removal path, no rate limit, and no admin takedown, while rendering publicly on a page and an OG card.
+
+---
+
 ## Progress Update as of 2026-07-24 21:25 Pacific
 *(Most recent updates at top)*
 
