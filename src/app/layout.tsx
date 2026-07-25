@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { MyAccountButton } from "@/components/MyAccountButton";
 import { getSignatureCount } from "@/lib/db/queries";
+import { buildRootMetadata } from "@/lib/site-metadata";
 import { LiveSignersProvider } from "./LiveSignersProvider";
 import LiveSignerBanner from "./LiveSignerBanner";
 import "./globals.css";
@@ -17,10 +18,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "AI Bill of Rights",
-  description: "A People's Demand for Human-Centered AI",
-};
+export const metadata: Metadata = buildRootMetadata();
 
 export default async function RootLayout({
   children,
