@@ -1,3 +1,6 @@
+import { buildShareText } from "@/lib/share/share-text";
+import { withShareParams, type ShareChannel } from "@/lib/share/urls";
+
 export function commentAccountCreated(opts: {
   displayName: string;
   siteUrl: string;
@@ -31,21 +34,39 @@ export function signConfirmation(opts: {
   revokeUrl: string;
   signatureNumber?: number;
   totalSignatures?: number;
+  /**
+   * The signer's own "why I signed" sentence, when they wrote one. It leads
+   * every share line below instead of the boilerplate — their words travel
+   * further than a form letter.
+   */
+  whyISigned?: string | null;
+  /** Signer id, so the share links can carry ?ref= attribution. */
+  signerId?: string | null;
 }): { subject: string; text: string; html: string } {
   const sigNum = opts.signatureNumber ?? 1;
   const total = opts.totalSignatures ?? sigNum;
   const milestone = getNextMilestone(total);
   const firstName = opts.displayName.split(/\s+/)[0];
 
-  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
-  const shareUrl = opts.signerPageUrl;
-  const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-  const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
-  const emailShareHref = `mailto:?subject=${encodeURIComponent("Sign the AI Bill of Rights")}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;
+  const ref = opts.signerId ?? null;
+  const shareUrlFor = (channel: ShareChannel) =>
+    withShareParams(opts.signerPageUrl, { ref, channel });
+  const shareTextFor = (channel: ShareChannel) =>
+    buildShareText({ whyISigned: opts.whyISigned, channel });
+
+  const shareUrl = withShareParams(opts.signerPageUrl, {
+    ref,
+    channel: "confirmation-email",
+  });
+  const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareTextFor("x"))}&url=${encodeURIComponent(shareUrlFor("x"))}`;
+  const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrlFor("linkedin"))}`;
+  const emailShareHref = `mailto:?subject=${encodeURIComponent("Sign the AI Bill of Rights")}&body=${encodeURIComponent(`${shareTextFor("email")}\n\n${shareUrlFor("email")}`)}`;
 
   const subject = `You signed the AI Bill of Rights v${opts.version}`;
 
-  const suggestedMessage = `${shareText} ${shareUrl}`;
+  // LinkedIn's share dialog carries no text, so this is the block people
+  // actually paste. It gets their sentence too.
+  const suggestedMessage = `${shareTextFor("linkedin")} ${shareUrlFor("linkedin")}`;
 
   const text = `Hi ${opts.displayName},
 

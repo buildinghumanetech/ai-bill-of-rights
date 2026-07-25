@@ -1,8 +1,26 @@
 import { ImageResponse } from "next/og";
 import { getSignerById, getSignatureNumber } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
+import { normalizeWhyISigned } from "@/lib/why-i-signed";
 
 export const runtime = "nodejs";
+
+/**
+ * Pick a quote size that fills the panel without overflowing it.
+ *
+ * ImageResponse/satori has no text-overflow safety net — text that doesn't fit
+ * simply spills past the canvas — so the size is chosen from the character
+ * count rather than measured. The panel is QUOTE_WIDTH wide and roughly 250px
+ * tall; these pairings were checked by rendering at 1, ~60, ~120 and 200 chars.
+ */
+function quoteStyle(length: number): { fontSize: number; lineHeight: number } {
+  if (length <= 60) return { fontSize: 32, lineHeight: 1.32 };
+  if (length <= 110) return { fontSize: 27, lineHeight: 1.34 };
+  if (length <= 160) return { fontSize: 23, lineHeight: 1.36 };
+  return { fontSize: 20, lineHeight: 1.38 };
+}
+
+const QUOTE_WIDTH = 456;
 
 export async function GET(
   _req: Request,
@@ -23,6 +41,18 @@ export async function GET(
     signer.affiliation || signer.locationText
       ? [signer.affiliation, signer.locationText].filter(Boolean).join(" · ")
       : null;
+
+  // Re-clamp on the way out: rows written before the cap existed (or by any
+  // future writer that skips the action) must not be able to blow the layout.
+  const quote = normalizeWhyISigned(signer.whyISigned);
+  // With a quote the card is a two-column body, so the avatar and name give up
+  // some room. Without one, the original single-row layout is kept intact —
+  // shrinking it would just leave a differently-shaped hole.
+  const avatarSize = quote ? 176 : 200;
+  const nameSize = quote ? 40 : 48;
+  const { fontSize: quoteFontSize, lineHeight: quoteLineHeight } = quoteStyle(
+    quote?.length ?? 0,
+  );
 
   return new ImageResponse(
     (
@@ -92,16 +122,16 @@ export async function GET(
             display: "flex",
             flex: 1,
             background: "#fff",
-            padding: "0 60px 36px",
+            padding: quote ? "0 56px 30px" : "0 60px 36px",
             alignItems: "center",
-            gap: 40,
+            gap: quote ? 32 : 40,
           }}
         >
           {/* Avatar — positioned to overlap the banner/white boundary */}
           <div
             style={{
               display: "flex",
-              marginTop: -60,
+              marginTop: quote ? -52 : -60,
               flexShrink: 0,
             }}
           >
@@ -110,12 +140,12 @@ export async function GET(
               <img
                 src={selfie.displayBlobUrl}
                 alt=""
-                width={200}
-                height={200}
+                width={avatarSize}
+                height={avatarSize}
                 style={{
-                  width: 200,
-                  height: 200,
-                  borderRadius: 100,
+                  width: avatarSize,
+                  height: avatarSize,
+                  borderRadius: avatarSize / 2,
                   objectFit: "cover",
                   border: "4px solid #fff",
                 }}
@@ -123,14 +153,14 @@ export async function GET(
             ) : (
               <div
                 style={{
-                  width: 200,
-                  height: 200,
-                  borderRadius: 100,
+                  width: avatarSize,
+                  height: avatarSize,
+                  borderRadius: avatarSize / 2,
                   background: "#d1fae5",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 80,
+                  fontSize: Math.round(avatarSize * 0.4),
                   fontWeight: 700,
                   color: "#059669",
                   border: "4px solid #fff",
@@ -147,14 +177,16 @@ export async function GET(
               display: "flex",
               flexDirection: "column",
               flex: 1,
-              marginTop: -20,
+              minWidth: 0,
+              marginTop: quote ? -14 : -20,
             }}
           >
             <div
               style={{
-                fontSize: 48,
+                fontSize: nameSize,
                 fontWeight: 700,
                 color: "#111827",
+                lineHeight: 1.15,
               }}
             >
               {signer.displayName}
@@ -162,7 +194,7 @@ export async function GET(
             {subtitle ? (
               <div
                 style={{
-                  fontSize: 22,
+                  fontSize: quote ? 20 : 22,
                   color: "#6b7280",
                   marginTop: 6,
                 }}
@@ -171,6 +203,44 @@ export async function GET(
               </div>
             ) : null}
           </div>
+
+          {/* Their own words — the reason this card is worth sharing. */}
+          {quote ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                width: QUOTE_WIDTH,
+                flexShrink: 0,
+                borderLeft: "5px solid #059669",
+                padding: "6px 0 6px 24px",
+                marginTop: -14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  textTransform: "uppercase",
+                  color: "#059669",
+                  marginBottom: 10,
+                }}
+              >
+                Why I signed
+              </div>
+              <div
+                style={{
+                  fontSize: quoteFontSize,
+                  lineHeight: quoteLineHeight,
+                  color: "#1f2937",
+                }}
+              >
+                {`“${quote}”`}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Amber accent bar at the bottom */}
