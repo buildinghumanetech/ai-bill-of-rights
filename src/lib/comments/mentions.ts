@@ -56,8 +56,10 @@ const WORD_CHAR = /[\p{L}\p{N}\p{M}_]/u;
  * deliberately out so a quoted "'@Alice'" resolves) while silently dropping
  * "Great!@Alice" and "Really?@Alice".
  *
- * `/` is NOT here — a bare character class cannot tell "medium.com/@alice" (a
- * URL) from "@Alice/@Bob" (two mentions). See `isUrlSlashBefore`.
+ * This is only the LAST resort in `isBlockedOpener`: `isInUrlToken` and
+ * `isEmailAt` decide from the surrounding token first, because no character
+ * class can tell "medium.com/@alice" from "@Alice/@Bob", or "bob!@alice.com"
+ * from "Great!@Alice". `/` is deliberately absent for that reason.
  */
 const MENTION_BLOCKER = /[\p{L}\p{N}\p{M}_.+%-]/u;
 const HAS_LETTER = /\p{L}/u;
@@ -65,14 +67,32 @@ const HAS_LETTER = /\p{L}/u;
  * arrive via paste or autocorrect. */
 const NAME_HYPHENS = ["-", "‐", "‑"];
 /**
- * A dotted host, e.g. the "medium.com" in "medium.com/@alice". Digits are
- * allowed on both sides so dotted-quad hosts ("192.168.1.5/@alice") count.
- *
- * Anchored at the END of the segment so a trailing prose abbreviation isn't
- * read as a host: "e.g./@Alice" and "etc./@Alice" must still resolve. A host is
- * always the last thing before the path separator.
+ * A host ending in an alphabetic TLD of 2+ characters — "example.com", not the
+ * "e.g" of a prose abbreviation and not the "v1.2" of a version number, both of
+ * which a looser dotted pattern silently read as hosts and dropped mentions for.
  */
-const DOTTED_HOST = /[\p{L}\p{N}]\.[\p{L}\p{N}]+$/u;
+const TLD_HOST = /\.[\p{L}]{2,}$/u;
+/** A dotted quad, whose all-numeric labels TLD_HOST deliberately won't match. */
+const IPV4_HOST = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+/**
+ * Whether `segment` looks like a hostname. Strips a port and a trailing FQDN
+ * dot first, so "example.com:8080" and "example.com." both count.
+ *
+ * Known gap: a scheme-less, dot-less host ("localhost/@alice") isn't recognized.
+ */
+function isHostLike(segment: string): boolean {
+  const host = segment.split(":")[0].replace(/\.$/, "");
+  return TLD_HOST.test(host) || IPV4_HOST.test(host);
+}
+
+/**
+ * Characters that can continue a URL immediately before an `@`. Excludes `,`,
+ * `)` and `]`, which in prose and markdown end a URL rather than continue it —
+ * otherwise "see https://example.com,@Alice" and "[d](https://x.com/d)@Alice"
+ * lose their mention to the URL that happens to precede it.
+ */
+const URL_CHAR = /[\p{L}\p{N}\-._~:/?#&=%+@]/u;
 
 /**
  * The code point ending at `i`, stepping back over a surrogate pair. Indexing
@@ -113,14 +133,35 @@ function codePointBefore(body: string, i: number): string | undefined {
  * neither, so they still resolve.
  */
 function isInUrlToken(body: string, i: number): boolean {
+  // Scan back over URL characters only, so a URL that has already ended (at a
+  // comma or a closing bracket) doesn't swallow a following mention.
   let start = i;
-  while (start > 0 && !/\s/u.test(body[start - 1])) start--;
+  while (start > 0 && URL_CHAR.test(body[start - 1])) start--;
   const before = body.slice(start, i);
+  if (!before) return false;
   if (before.includes("://")) return true;
   // Take everything up to the first path/query/fragment separator, so what
-  // DOTTED_HOST inspects ends at the host: "example.com/p?ref=" -> "example.com".
-  const host = before.split(/[/?#]/u)[0];
-  return DOTTED_HOST.test(host);
+  // isHostLike inspects ends at the host: "example.com/p?ref=" -> "example.com".
+  return isHostLike(before.split(/[/?#]/u)[0]);
+}
+
+/**
+ * Whether the `@` at `i` is the `@` of an email address.
+ *
+ * Decided from the token, not the preceding character: what actually marks an
+ * address is a HOST after the `@`. That distinction is why "bob!@alice.com" is
+ * an address while "Great!@Alice" is a mention — a character-based rule reads
+ * both the same way, and every previous round of this file leaked one
+ * wrong-recipient case per character left out of the class.
+ */
+function isEmailAt(body: string, i: number): boolean {
+  let start = i;
+  while (start > 0 && !/\s/u.test(body[start - 1])) start--;
+  // No local part means no address, so a leading "@Alice" is safe.
+  if (start === i) return false;
+  let end = i + 1;
+  while (end < body.length && !/[\s@]/u.test(body[end])) end++;
+  return isHostLike(body.slice(i + 1, end));
 }
 
 /** Whether the `@` at `i` belongs to a URL or an email address. */
@@ -128,6 +169,7 @@ function isBlockedOpener(body: string, i: number): boolean {
   const prev = codePointBefore(body, i);
   if (prev === undefined) return false;
   if (isInUrlToken(body, i)) return true;
+  if (isEmailAt(body, i)) return true;
   // A bare `/` outside a URL is an ordinary separator, as in "@Alice/@Bob".
   if (prev === "/") return false;
   return MENTION_BLOCKER.test(prev);
