@@ -13,7 +13,11 @@ import {
   removeMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
+import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { SelfieCapture } from "@/components/SelfieCapture";
+import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
+import { buildShareText } from "@/lib/share/share-text";
+import { signerShareUrl, type ShareChannel } from "@/lib/share/urls";
 
 interface Props {
   open: boolean;
@@ -164,6 +168,15 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   const [signerId, setSignerId] = useState<string | null>(null);
   const [signerName, setSignerName] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  // "Why I signed" lives on the post-signature step only — the pre-signature
+  // form is already long, and anything added ahead of the conversion event is
+  // friction. Here the user has already signed and is in a moment of
+  // commitment, so the ask is free.
+  const [whyInput, setWhyInput] = useState("");
+  /** What's actually saved on the server — drives the share copy. */
+  const [whySaved, setWhySaved] = useState<string | null>(null);
+  const [whyPending, setWhyPending] = useState(false);
+  const [whyError, setWhyError] = useState<string | null>(null);
   const [inviteEmails, setInviteEmails] = useState<string[]>([]);
   const [inviteInput, setInviteInput] = useState("");
   const [invitePending, setInvitePending] = useState(false);
@@ -197,6 +210,10 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setSignerId(null);
       setSignerName("");
       setCopied(false);
+      setWhyInput("");
+      setWhySaved(null);
+      setWhyPending(false);
+      setWhyError(null);
       setInviteEmails([]);
       setInviteInput("");
       setInvitePending(false);
@@ -490,12 +507,38 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       ? email.trim().length > 0
       : phoneDigits.replace(/\D/g, "").length >= 7);
 
-  const shareUrl =
-    signerId && typeof window !== "undefined"
-      ? `${window.location.origin}/signatories/${signerId}`
-      : "";
+  // Every outbound link goes through the canonical builder so the ?ref=/?via=
+  // attribution can never silently fall off one of these buttons.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const shareUrlFor = (channel: ShareChannel) =>
+    signerId && origin ? signerShareUrl(origin, signerId, channel) : "";
+  /** The plain link shown in the copy box. */
+  const shareUrl = shareUrlFor("copy");
 
-  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
+  // Lead with the signer's own sentence once they've written one; fall back to
+  // the boilerplate until then.
+  const shareTextFor = (channel: ShareChannel) =>
+    buildShareText({ whyISigned: whySaved, channel });
+
+  async function handleSaveWhy() {
+    setWhyPending(true);
+    setWhyError(null);
+    try {
+      const res = await saveWhyISigned(whyInput);
+      if (!res.success) {
+        setWhyError(res.error ?? "Couldn't save that.");
+        return;
+      }
+      setWhySaved(res.whyISigned ?? null);
+      // Reflect the sanitised/truncated text back so what they see is what
+      // the world will see.
+      setWhyInput(res.whyISigned ?? "");
+    } catch (err) {
+      setWhyError(err instanceof Error ? err.message : "Couldn't save that.");
+    } finally {
+      setWhyPending(false);
+    }
+  }
 
   async function copyShareUrl() {
     if (!shareUrl) return;
@@ -583,20 +626,24 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
     }
   }
 
-  const twitterHref = shareUrl
+  const twitterHref = signerId
     ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-        shareText,
-      )}&url=${encodeURIComponent(shareUrl)}`
+        shareTextFor("x"),
+      )}&url=${encodeURIComponent(shareUrlFor("x"))}`
     : "#";
-  const linkedinHref = shareUrl
+  // LinkedIn's share-offsite endpoint takes no text — the copy travels with
+  // the OG card, which is why the quote also renders into the image.
+  const linkedinHref = signerId
     ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-        shareUrl,
+        shareUrlFor("linkedin"),
       )}`
     : "#";
-  const emailHref = shareUrl
+  const emailHref = signerId
     ? `mailto:?subject=${encodeURIComponent(
         "Sign the AI Bill of Rights",
-      )}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`
+      )}&body=${encodeURIComponent(
+        `${shareTextFor("email")}\n\n${shareUrlFor("email")}`,
+      )}`
     : "#";
 
   return (
@@ -1118,6 +1165,65 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
             {signerId && mode === "sign" ? (
               <>
+                {/* Why did you sign? — optional, never blocking. Placed after
+                    the signature (not before) so it adds zero friction ahead
+                    of the conversion event. Their sentence becomes the default
+                    share copy and the pull-quote on their share card. */}
+                <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <label
+                    htmlFor="why-i-signed-input"
+                    className="block text-xs font-medium uppercase tracking-[0.18em] text-emerald-700"
+                  >
+                    Why did you sign?
+                  </label>
+                  <p className="mt-1 text-xs text-emerald-800">
+                    One sentence, in your own words. We&apos;ll put it on your
+                    signature card so people see a person, not a petition.
+                  </p>
+                  <textarea
+                    id="why-i-signed-input"
+                    rows={3}
+                    maxLength={MAX_WHY_I_SIGNED_LENGTH}
+                    value={whyInput}
+                    onChange={(e) => setWhyInput(e.target.value)}
+                    placeholder="Because my kids will grow up with this technology and I want it on their side."
+                    className="mt-3 w-full resize-none rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <span
+                      className={`text-xs ${
+                        whyInput.length >= MAX_WHY_I_SIGNED_LENGTH
+                          ? "font-medium text-amber-700"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      {whyInput.length}/{MAX_WHY_I_SIGNED_LENGTH}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveWhy}
+                      disabled={whyPending || whyInput.trim().length === 0}
+                      className="rounded-full bg-emerald-600 px-5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {whyPending
+                        ? "Saving…"
+                        : whySaved
+                          ? "Update"
+                          : "Add to my card"}
+                    </button>
+                  </div>
+                  {whyError ? (
+                    <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {whyError}
+                    </p>
+                  ) : null}
+                  {whySaved && !whyError ? (
+                    <p className="mt-2 text-xs font-medium text-emerald-800">
+                      Saved — your words now lead every share below.
+                    </p>
+                  ) : null}
+                </div>
+
                 {/* Add a selfie photo to your signature */}
                 <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
@@ -1153,6 +1259,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                       {copied ? "Copied!" : "Copy"}
                     </button>
                   </div>
+                  {/* LinkedIn's share dialog carries no text of its own, so
+                      give the signer their own line to paste. */}
+                  <p className="mt-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs leading-relaxed text-zinc-700">
+                    <span className="mb-1 block font-semibold uppercase tracking-[0.14em] text-[#0a66c2]">
+                      Suggested message
+                    </span>
+                    {shareTextFor("linkedin")}
+                  </p>
                   <div className="mt-3 flex items-center gap-2">
                     <a
                       href={twitterHref}
