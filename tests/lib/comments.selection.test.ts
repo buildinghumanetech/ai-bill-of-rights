@@ -83,89 +83,41 @@ describe("nextSelectionState", () => {
 
 describe("shouldScrollComposerIntoView", () => {
   const VH = 800;
-  /** Column stacked below the fold — the narrow-viewport case. */
-  const offScreen = { top: 1400, bottom: 2000 };
-  /** Column beside the article and visible — the desktop case. */
-  const onScreen = { top: 120, bottom: 700 };
+  const H = 200;
+  const at = (top: number) => ({ composerRect: { top, bottom: top + H }, viewportHeight: VH });
 
-  it("scrolls for a new anchor when the column is off-screen", () => {
+  it("scrolls when the composer is entirely below the fold", () => {
+    expect(shouldScrollComposerIntoView(at(VH + 400))).toBe(true);
+  });
+
+  it("scrolls when the composer has scrolled off the top", () => {
+    expect(shouldScrollComposerIntoView(at(-(H + 100)))).toBe(true);
+  });
+
+  it("does not scroll when the composer is fully visible", () => {
+    expect(shouldScrollComposerIntoView(at(100))).toBe(false);
+  });
+
+  it("scrolls when only a sliver is showing", () => {
+    // Regression guard: treating any pixel in view as "visible" left the
+    // composer effectively below the fold on exactly the case this exists for.
+    expect(shouldScrollComposerIntoView(at(VH - 20))).toBe(true);
+  });
+
+  it("holds still once more than half the composer is on screen", () => {
+    expect(shouldScrollComposerIntoView(at(VH - H * 0.75))).toBe(false);
+  });
+
+  it("holds still at exactly the half-visible boundary", () => {
+    // The threshold is strict (`< 0.5`), so exactly half counts as visible.
+    expect(shouldScrollComposerIntoView(at(VH - H / 2))).toBe(false);
+    // One pixel less, and it scrolls.
+    expect(shouldScrollComposerIntoView(at(VH - H / 2 + 1))).toBe(true);
+  });
+
+  it("scrolls for a zero-height rect rather than dividing by zero", () => {
     expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: null,
-        anchorId: "a-1",
-        rect: offScreen,
-        viewportHeight: VH,
-      }),
+      shouldScrollComposerIntoView({ composerRect: { top: 0, bottom: 0 }, viewportHeight: VH }),
     ).toBe(true);
-  });
-
-  it("does not scroll while the same anchor's selection is being adjusted", () => {
-    // Dragging an iOS selection handle re-emits with the same anchor; scrolling
-    // on each would yank the sentence out from under the finger.
-    expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: "a-1",
-        anchorId: "a-1",
-        rect: offScreen,
-        viewportHeight: VH,
-      }),
-    ).toBe(false);
-  });
-
-  it("scrolls again when the user picks a different sentence", () => {
-    // Regression guard: gating on "composer already open" instead of on the
-    // anchor left a second selection updating the composer off-screen.
-    expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: "a-1",
-        anchorId: "a-2",
-        rect: offScreen,
-        viewportHeight: VH,
-      }),
-    ).toBe(true);
-  });
-
-  it("does not scroll when the column is already visible", () => {
-    expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: null,
-        anchorId: "a-1",
-        rect: onScreen,
-        viewportHeight: VH,
-      }),
-    ).toBe(false);
-  });
-
-  it("treats a column scrolled off the top as off-screen", () => {
-    expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: null,
-        anchorId: "a-1",
-        rect: { top: -900, bottom: -100 },
-        viewportHeight: VH,
-      }),
-    ).toBe(true);
-  });
-
-  it("counts a column resting exactly at the bottom edge as off-screen", () => {
-    expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: null,
-        anchorId: "a-1",
-        rect: { top: VH, bottom: VH + 400 },
-        viewportHeight: VH,
-      }),
-    ).toBe(true);
-  });
-
-  it("keeps a partially visible column put", () => {
-    expect(
-      shouldScrollComposerIntoView({
-        lastScrolledAnchorId: null,
-        anchorId: "a-1",
-        rect: { top: VH - 40, bottom: VH + 400 },
-        viewportHeight: VH,
-      }),
-    ).toBe(false);
   });
 });

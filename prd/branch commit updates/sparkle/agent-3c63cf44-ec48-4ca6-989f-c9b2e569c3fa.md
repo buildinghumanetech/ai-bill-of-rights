@@ -1,5 +1,90 @@
 # Branch Progress: sparkle/agent-3c63cf44-ec48-4ca6-989f-c9b2e569c3fa
 
+## Progress Update as of [2026-07-24 22:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Closes the last two Medium findings on the mobile scroll path and — more
+importantly — **adds the component-test layer whose absence caused this loop**.
+Three consecutive roborev rounds each found a real regression in the same few
+lines, every one of them in wiring that no test could reach. That is now fixed
+at the root: `jsdom` + `@testing-library/react` are in, with 14 component tests,
+and each regression guard was verified to actually fail against the specific bug
+it describes before being kept.
+
+### Detail of changes made:
+
+- **The off-screen check under-triggered.** `rect.top >= vh || rect.bottom <= 0`
+  treats a single visible pixel as "visible", and it measured the *column*,
+  whose top sits ~50px above the composer. So selecting a sentence near the
+  bottom of the article routinely left the column top at, say, `vh - 40` → no
+  scroll → composer entirely below the fold. Worse, the previous commit's
+  "keeps a partially visible column put" test had locked that behaviour in.
+  Now: a `composerRef` wrapper means the **composer itself** is measured, and
+  the rule is "scroll unless at least half of it is on screen", expressed as a
+  fraction of the element's own measured height (`MIN_VISIBLE_FRACTION`) rather
+  than a pixel constant that can drift.
+- **The anchor gate was sticky, and redundant.** `lastScrolledAnchorRef` was
+  cleared only in `closeComposer`. Anchors are sentence-level, so re-selecting a
+  *different phrase in the same sentence* kept matching the gate: no scroll, the
+  composer silently updated off-screen, and it never recovered — the composer
+  the user would have to dismiss to reset it being the thing they couldn't see.
+  Roborev's sharper observation is that the gate was never needed: the first
+  scroll centres the composer, so every later emit in that gesture already sees
+  it as visible and declines. **Deleted the gate entirely**; visibility alone
+  handles both the iOS handle-drag and the re-selection case correctly.
+- **Scroll decision moved into `useLayoutEffect` keyed on `pendingSelection`.**
+  It was a `requestAnimationFrame` fired from the event handler, but React
+  commits through the scheduler (MessageChannel), so the rAF could run *before*
+  the composer was in the DOM — measuring the short idle placeholder instead.
+  A layout effect runs against the committed DOM by construction, which is what
+  makes measuring the composer meaningful at all.
+- **`closeComposer` is now `useCallback`-stable** and listed in its effect's dep
+  array (previously a fresh identity each render called from an effect with
+  `[activeCommentId]` — safe today, a stale-closure trap on the next edit), and
+  the effect is guarded on `pendingSelection` so it no longer dispatches
+  `COMPOSER_CLOSED_EVENT` on mount or twice on the submit path.
+
+### Testing — the actual fix for this loop
+
+- **New: `tests/components/`** with `jsdom` + `@testing-library/react`
+  (devDependencies; `vitest.config.ts` keeps `environment: "node"` as the
+  default and component files opt in with a `// @vitest-environment jsdom`
+  docblock, so the existing suite is untouched and stays fast).
+  `tests/_helpers/setup-dom.ts` sets `IS_REACT_ACT_ENVIRONMENT`.
+- `article-selection-container.test.tsx` (7): touch-style emit with no mouseup,
+  single emit when both signals fire, non-anchored selections ignored, and all
+  three guard-reset paths (`COMPOSER_CLOSED_EVENT`, `mousedown`, collapse).
+- `comments-column.test.tsx` (7): scrolls below the fold, holds when visible,
+  scrolls on a sliver, no re-scroll during an open composer's adjustment,
+  re-scrolls for a new phrase in the same sentence, announces closure, and
+  stays quiet when nothing was open.
+- **Each guard was proven red against its own bug** by temporarily reinstating
+  the old code: the sliver test fails under the old off-screen rule, the
+  same-sentence test fails under the old anchor gate, and the closure test fails
+  under the old silent dismissal. A guard that has never failed proves nothing.
+- Suite **222 passing / 40 files**; `tsc --noEmit` clean; `eslint src` at the
+  exact baseline (114 pre-existing). Live in Chrome: emits fire, re-emit after
+  close works, a new sentence emits, no JS errors.
+
+### Potential concerns to address:
+
+- `MIN_VISIBLE_FRACTION = 0.5` is a judgement call, not a measurement — half a
+  composer visible is enough to notice, but a real phone check would confirm.
+  Together with `SELECTION_SETTLE_MS = 350`, these are the two remaining values
+  worth validating on actual hardware; both are now at least covered by tests
+  that pin their behaviour so a change is deliberate.
+- The component tests stub `NewCommentForm` and `CommentView`, so they cover the
+  column's *own* behaviour and not the composer's internals. Submitting a
+  comment end-to-end is still only covered at the server-action layer.
+- `pnpm install` prints an `ERR_PNPM_IGNORED_BUILDS` warning and wants to write
+  an `allowBuilds:` block into `pnpm-workspace.yaml`; that write was reverted
+  deliberately since it's placeholder text, not config. Unrelated to this work
+  but it will keep appearing.
+
+---
+
 ## Progress Update as of [2026-07-24 21:45 Pacific]
 *(Most recent updates at top)*
 

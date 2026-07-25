@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { findCommentInTree } from "@/lib/db/queries";
 import { countComments, commentCountLabel } from "@/lib/comments/count";
@@ -50,58 +50,55 @@ export function CommentsColumn({
   onPostedTopLevel,
 }: Props) {
   const [pendingSelection, setPendingSelection] = useState<AnchoredSelection | null>(null);
-  const columnRef = useRef<HTMLDivElement | null>(null);
-  /** Anchor the column was last scrolled to; see shouldScrollComposerIntoView. */
-  const lastScrolledAnchorRef = useRef<string | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
 
   // Listen for text-selection events emitted by ArticleSelectionContainer.
   useEffect(() => {
     const onSelect = (e: Event) => {
-      const detail = (e as CustomEvent<AnchoredSelection>).detail;
-      setPendingSelection(detail);
+      setPendingSelection((e as CustomEvent<AnchoredSelection>).detail);
       onActiveChange(null);
-
-      requestAnimationFrame(() => {
-        const el = columnRef.current;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        if (
-          !shouldScrollComposerIntoView({
-            lastScrolledAnchorId: lastScrolledAnchorRef.current,
-            anchorId: detail.anchorId,
-            rect,
-            viewportHeight: window.innerHeight,
-          })
-        ) {
-          return;
-        }
-        lastScrolledAnchorRef.current = detail.anchorId;
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
     };
     window.addEventListener(SELECTION_EVENT, onSelect);
     return () => window.removeEventListener(SELECTION_EVENT, onSelect);
   }, [onActiveChange]);
 
   /**
+   * Bring the composer to the user when they can't see it — on narrow
+   * viewports this column is stacked far below the article, so without this a
+   * phone user who highlights text sees nothing happen at all.
+   *
+   * Deliberately a layout effect rather than a rAF inside the event handler:
+   * React commits through the scheduler, so a rAF can run *before* the composer
+   * is in the DOM, leaving us measuring the short idle placeholder instead.
+   */
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (shouldScrollComposerIntoView({ composerRect: rect, viewportHeight: window.innerHeight })) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [pendingSelection]);
+
+  /**
    * Every path that dismisses the composer must come through here. Clearing
    * `pendingSelection` without also clearing the container's dedupe guard is
    * what made the guard go sticky in the first place.
    */
-  function closeComposer() {
-    lastScrolledAnchorRef.current = null;
+  const closeComposer = useCallback(() => {
     setPendingSelection(null);
     window.dispatchEvent(new CustomEvent(COMPOSER_CLOSED_EVENT));
-  }
+  }, []);
 
   // Activating a saved highlight (click, or Enter/Space — they're focusable
-  // buttons) clears any in-progress composer. This has to go through
+  // buttons) dismisses any in-progress composer. This has to go through
   // closeComposer too: mouse users happen to be rescued by the container's
   // mousedown reset, but a keyboard user would otherwise leave the dedupe
-  // guard stale and be unable to re-select the same phrase.
+  // guard stale and be unable to re-select the same phrase. Guarded on
+  // pendingSelection so it doesn't fire when nothing was open.
   useEffect(() => {
-    if (activeCommentId) closeComposer();
-  }, [activeCommentId]);
+    if (activeCommentId && pendingSelection) closeComposer();
+  }, [activeCommentId, pendingSelection, closeComposer]);
 
   const activeComment = activeCommentId
     ? findCommentInTree(threadedComments, activeCommentId)
@@ -110,28 +107,33 @@ export function CommentsColumn({
   const totalComments = countComments(threadedComments);
 
   return (
-    <div ref={columnRef} className="space-y-4 pt-5">
+    <div className="space-y-4 pt-5">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Comments{totalComments > 0 ? ` · ${totalComments}` : ""}
       </h3>
 
       {pendingSelection && baseVersionId ? (
-        <NewCommentForm
-          baseVersionId={baseVersionId}
-          anchorId={pendingSelection.anchorId}
-          selectedText={pendingSelection.selectedText}
-          viewerSignerId={viewerSignerId}
-          isAdmin={isAdmin}
-          signersForAdmin={signersForAdmin}
-          signersForMention={signersForMention}
-          onCancel={closeComposer}
-          onSubmittedNewTopLevel={(newCommentId) => {
-            // Dismiss the pending-selection composer, then promote the new
-            // comment to active so the user sees it immediately.
-            closeComposer();
-            onPostedTopLevel?.(newCommentId);
-          }}
-        />
+        // Wrapper exists so the scroll effect measures the composer itself.
+        // Measuring the column instead let its top edge sit just inside the
+        // viewport while the composer, ~50px lower, was below the fold.
+        <div ref={composerRef}>
+          <NewCommentForm
+            baseVersionId={baseVersionId}
+            anchorId={pendingSelection.anchorId}
+            selectedText={pendingSelection.selectedText}
+            viewerSignerId={viewerSignerId}
+            isAdmin={isAdmin}
+            signersForAdmin={signersForAdmin}
+            signersForMention={signersForMention}
+            onCancel={closeComposer}
+            onSubmittedNewTopLevel={(newCommentId) => {
+              // Dismiss the pending-selection composer, then promote the new
+              // comment to active so the user sees it immediately.
+              closeComposer();
+              onPostedTopLevel?.(newCommentId);
+            }}
+          />
+        </div>
       ) : activeComment ? (
         <CommentView
           comment={activeComment}
