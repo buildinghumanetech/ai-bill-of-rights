@@ -1,13 +1,39 @@
 import Link from "next/link";
 import HeroSection from "./HeroSection";
-import SignatureCount from "./SignatureCount";
+import {
+  LiveSignatureHeadline,
+  LiveSignatureMomentumPanel,
+} from "./SignatureCount";
 import { TabbedDocument } from "@/components/TabbedDocument";
+import type { MomentumSigner } from "@/components/SignatureMomentum";
 import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
+import { listSignatures } from "@/lib/db/queries";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * A handful of the most recent signers, shown as proof-of-quality while the
+ * raw count is still small (see `@/components/SignatureMomentum`). Best-effort:
+ * a DB hiccup just drops the chips, it never breaks the homepage.
+ */
+async function loadSignerSample(): Promise<MomentumSigner[]> {
+  try {
+    const rows = await listSignatures(null, { limit: 6, offset: 0 });
+    return rows.map((row) => ({
+      displayName: row.displayName,
+      affiliation: row.affiliation,
+      locationText: row.locationText,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export default async function Home() {
-  const data = await loadHomepageTabData();
+  const [data, signerSample] = await Promise.all([
+    loadHomepageTabData(),
+    loadSignerSample(),
+  ]);
 
   return (
     <div className="flex-1">
@@ -20,31 +46,15 @@ export default async function Home() {
             Nine commitments we&apos;re demanding from every AI company
           </strong>
           <br />
-          with{" "}
-          <Link
-            href="/signers"
-            className="font-bold text-blue-600 hover:underline"
-          >
-            <SignatureCount /> signatures
-          </Link>{" "}
-          to back them up.
+          <LiveSignatureHeadline />
         </p>
       </section>
 
       <HeroSection />
 
       <section className="bg-white px-6 pb-32 pt-10 sm:pt-14">
-        <p className="mx-auto max-w-5xl text-center text-pretty text-2xl font-semibold leading-snug text-zinc-900 sm:text-3xl">
-          Join{" "}
-          <Link
-            href="/signers"
-            className="font-bold text-blue-600 hover:underline"
-          >
-            <SignatureCount /> other real people
-          </Link>{" "}
-          who have signed this AI Bill of Rights
-        </p>
-        <p className="mx-auto mb-10 mt-3 max-w-5xl text-center text-base leading-relaxed text-zinc-600 sm:mb-14">
+        <LiveSignatureMomentumPanel sample={signerSample} />
+        <p className="mx-auto mb-10 mt-6 max-w-5xl text-center text-base leading-relaxed text-zinc-600 sm:mb-14">
           <Link
             href="/about"
             className="text-zinc-700 underline underline-offset-4 hover:text-blue-600"

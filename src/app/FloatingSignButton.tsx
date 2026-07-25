@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import SignModal from "./SignModal";
-import SignatureCount from "./SignatureCount";
+import { LiveSignatureMomentumChip } from "./SignatureCount";
 
 const buttonClasses =
   "glass-button pointer-events-auto rounded-full bg-gradient-to-b from-blue-500/85 to-blue-700/85 px-8 py-3.5 text-sm font-semibold text-white backdrop-blur-md backdrop-saturate-150 transition-transform hover:scale-[1.03] sm:px-10 sm:py-4 sm:text-base";
@@ -24,14 +23,7 @@ export default function FloatingSignButton() {
         </button>
 
         <p className="pointer-events-auto rounded-full bg-white/70 px-4 py-1 text-center text-xs text-zinc-700 backdrop-blur-md backdrop-saturate-150">
-          Join{" "}
-          <Link
-            href="/signers"
-            className="font-bold text-blue-600 hover:underline"
-          >
-            <SignatureCount /> others
-          </Link>{" "}
-          who have already signed
+          <LiveSignatureMomentumChip />
         </p>
       </div>
 
