@@ -36,27 +36,28 @@ export interface ParsedMention {
 }
 
 /**
- * What may NOT immediately follow a match, or the match is a partial word.
+ * Characters that continue a word. Unicode-aware, because an ASCII class treats
+ * "ï" as a boundary and lets signer "Ana" match inside "@Anaïs". `\p{M}` is
+ * included so decomposed (NFD) text — where "ä" is "a" + U+0308 — doesn't
+ * reopen that same hole.
  *
- * Unicode-aware, because an ASCII class treats "ï" as a boundary and lets
- * signer "Ana" match inside "@Anaïs". Includes:
- *  - `\p{M}` combining marks, so decomposed (NFD) text — where "ä" is stored
- *    as "a" + U+0308 — doesn't reopen that same hole.
- *  - `-`, so signer "Jean" does not match inside "@Jean-Pierre". Hyphenated
- *    given names are common and this is the same wrong-recipient failure.
- *
- * Deliberately EXCLUDES the apostrophe, so "@Bob's point" still resolves to Bob.
+ * Deliberately EXCLUDES the apostrophe, so "@Bob's point" resolves to Bob, and
+ * excludes the hyphen, which `endsMidWord` handles with more nuance.
  */
-const WORD_CHAR = /[\p{L}\p{N}\p{M}_-]/u;
+const WORD_CHAR = /[\p{L}\p{N}\p{M}_]/u;
 /**
- * What may NOT immediately precede a mention's `@`. The requirement is only
- * "this @ isn't part of an email address", so we reject the characters an
- * email local part can contain rather than whitelisting openers — a whitelist
- * silently dropped ordinary mentions like "Hi,@Alice" and "cc:@Alice".
+ * Characters that may NOT immediately precede a mention's `@`, because they
+ * mean the `@` belongs to something else — an email address or a URL path.
  *
- * Still rejects bob@, josé@, 田中@, bob.smith@ and "sentence.@Alice".
+ * Rejecting a set is better than whitelisting openers: a whitelist silently
+ * dropped ordinary mentions like "Hi,@Alice" and "cc:@Alice". `/` is essential
+ * here — without it "https://medium.com/@alice" would notify signer Alice.
+ *
+ * Rejects bob@, josé@, 田中@, bob.smith@, medium.com/@alice, and
+ * "sentence.@Alice". Known gap: the apostrophe is left OUT so that a quoted
+ * "'@Alice'" still resolves, which means "bob'smith@alice.com" is not caught.
  */
-const EMAIL_LOCAL = /[\p{L}\p{N}\p{M}_.+%-]/u;
+const MENTION_BLOCKER = /[\p{L}\p{N}\p{M}_.+%\-/&!#=?~]/u;
 const HAS_LETTER = /\p{L}/u;
 
 /**
@@ -68,6 +69,25 @@ function isWordCharAt(body: string, i: number): boolean {
   if (i >= body.length) return false;
   const cp = body.codePointAt(i);
   return cp !== undefined && WORD_CHAR.test(String.fromCodePoint(cp));
+}
+
+/**
+ * Whether a match ending at `end` cuts a word in half, which would make it a
+ * partial-word false positive.
+ *
+ * A hyphen counts as continuing the word ONLY when a word char follows it. That
+ * keeps signer "Jean" from matching inside "@Jean-Pierre", while still letting
+ * "@Alice--" and a trailing "@Alice-" resolve — treating every hyphen as
+ * intra-name would silently drop those, the same over-rejection this module
+ * removed on the opener side.
+ */
+function endsMidWord(body: string, end: number): boolean {
+  if (end >= body.length) return false;
+  const cp = body.codePointAt(end);
+  if (cp === undefined) return false;
+  const ch = String.fromCodePoint(cp);
+  if (ch === "-") return isWordCharAt(body, end + 1);
+  return WORD_CHAR.test(ch);
 }
 /**
  * Separates the two halves of a candidate's composite key. NUL genuinely
@@ -133,13 +153,17 @@ export function parseMentions(
     nameBySignerId.set(signer.id, signer.displayName);
     addCandidate(fullNames, name.toLowerCase(), signer.id);
     addScannable(name);
-    // Scan forward to the first name-like token rather than taking token 0
+    // Scan forward to the first USABLE token rather than taking token 0
     // outright: for "Dr. Erika Anderson" the short name is "Erika". Dropping
     // the candidate entirely would mean "@Erika" notified nobody, which is the
-    // silent-miss failure this module exists to prevent.
+    // silent-miss failure this module exists to prevent. The length rule is
+    // inside the predicate for the same reason — applying it after `find` would
+    // let a bare initial ("J Erika Anderson") kill the candidate outright.
     // Single-character names are too collision-prone to be useful.
-    const shortName = name.split(" ").find(isNameLike);
-    if (shortName && shortName.length >= 2 && shortName !== name) {
+    const shortName = name
+      .split(" ")
+      .find((token) => token.length >= 2 && isNameLike(token));
+    if (shortName && shortName !== name) {
       addCandidate(firstNames, shortName.toLowerCase(), signer.id);
       addScannable(shortName);
     }
@@ -160,10 +184,10 @@ export function parseMentions(
       i++;
       continue;
     }
-    // Reject an @ that could be the one in an email address. "sentence.@Alice"
-    // is caught by this too; that false negative is preferable to mailing the
-    // wrong person.
-    if (i > 0 && EMAIL_LOCAL.test(body[i - 1])) {
+    // Reject an @ that belongs to an email address or a URL path.
+    // "sentence.@Alice" is caught by this too; that false negative is
+    // preferable to mailing the wrong person.
+    if (i > 0 && MENTION_BLOCKER.test(body[i - 1])) {
       i++;
       continue;
     }
@@ -173,7 +197,7 @@ export function parseMentions(
       if (body.slice(i + 1, end).toLowerCase() !== candidate.key) continue;
       // Reject a partial word: "@Erika" must not match the signer "Erik",
       // "@Anaïs" the signer "Ana", or "@Jean-Pierre" the signer "Jean".
-      if (isWordCharAt(body, end)) continue;
+      if (endsMidWord(body, end)) continue;
       const signerId = index.get(candidate.key) ?? null;
       if (signerId) {
         out.push({
