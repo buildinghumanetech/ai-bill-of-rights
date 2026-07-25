@@ -62,6 +62,57 @@ describe("withShareParams", () => {
       withShareParams("https://example.org/page#section", { ref: ID }),
     ).toBe(`https://example.org/page?ref=${ID}#section`);
   });
+
+  // Regression: params must REPLACE, not stack. Someone who lands on a shared
+  // link, copies the address bar and re-shares would otherwise emit
+  // `?ref=A&ref=B`; parseRef reads the first value, so the new sharer's
+  // attribution would be silently discarded and the original credited twice.
+  it("replaces an existing ref rather than appending a second one", () => {
+    const out = withShareParams(`https://example.org/?ref=${OTHER_ID}`, {
+      ref: ID,
+    });
+    expect(out).toBe(`https://example.org/?ref=${ID}`);
+    expect(parseRef(new URL(out).searchParams)).toBe(ID);
+  });
+
+  it("replaces an existing channel rather than appending", () => {
+    const out = withShareParams("https://example.org/?via=x", {
+      channel: "copy",
+    });
+    expect(out).toBe("https://example.org/?via=copy");
+    expect(parseChannel(new URL(out).searchParams)).toBe("copy");
+  });
+
+  it("re-attributes a fully-attributed url without stacking", () => {
+    const shared = `https://example.org/?ref=${OTHER_ID}&via=x`;
+    const out = withShareParams(shared, { ref: ID, channel: "linkedin" });
+    const sp = new URL(out).searchParams;
+    expect(sp.getAll("ref")).toEqual([ID]);
+    expect(sp.getAll("via")).toEqual(["linkedin"]);
+  });
+
+  it("preserves unrelated query params while replacing attribution", () => {
+    const out = withShareParams(
+      `https://example.org/?v=1&ref=${OTHER_ID}&keep=yes`,
+      { ref: ID },
+    );
+    const sp = new URL(out).searchParams;
+    expect(sp.get("v")).toBe("1");
+    expect(sp.get("keep")).toBe("yes");
+    expect(sp.getAll("ref")).toEqual([ID]);
+  });
+
+  it("leaves an existing ref alone when the new one is invalid", () => {
+    // An invalid ref is dropped, so the URL keeps whatever it already had
+    // rather than being silently stripped of working attribution.
+    const out = withShareParams(`https://example.org/?ref=${OTHER_ID}`, {
+      ref: "not-a-uuid",
+      channel: "x",
+    });
+    const sp = new URL(out).searchParams;
+    expect(sp.get("ref")).toBe(OTHER_ID);
+    expect(sp.get("via")).toBe("x");
+  });
 });
 
 describe("signerShareUrl", () => {

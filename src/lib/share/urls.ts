@@ -48,8 +48,14 @@ export interface ShareParams {
 }
 
 /**
- * Append attribution params to an absolute URL. Invalid refs are dropped
- * rather than propagated, so a malformed id can never poison a share link.
+ * Set attribution params on an absolute URL. Invalid refs are dropped rather
+ * than propagated, so a malformed id can never poison a share link.
+ *
+ * These params REPLACE any already on the URL, they don't stack. That matters:
+ * a signer who lands on `/?ref=A&via=x`, copies the address bar, and shares it
+ * would otherwise produce `?ref=A&...&ref=B`. Since `parseRef` reads the FIRST
+ * value, B's attribution would be silently dropped and A credited twice — the
+ * exact failure this module exists to prevent.
  */
 export function withShareParams(url: string, params: ShareParams = {}): string {
   const { ref, channel } = params;
@@ -58,12 +64,16 @@ export function withShareParams(url: string, params: ShareParams = {}): string {
   if (!hasRef && !hasChannel) return url;
 
   const [base, hash = ""] = splitHash(url);
-  const sep = base.includes("?") ? "&" : "?";
-  const parts: string[] = [];
-  if (hasRef) parts.push(`${REF_PARAM}=${encodeURIComponent(ref)}`);
-  if (hasChannel) parts.push(`${CHANNEL_PARAM}=${encodeURIComponent(channel)}`);
+  const qIndex = base.indexOf("?");
+  const path = qIndex === -1 ? base : base.slice(0, qIndex);
+  const query = new URLSearchParams(qIndex === -1 ? "" : base.slice(qIndex + 1));
 
-  return `${base}${sep}${parts.join("&")}${hash ? `#${hash}` : ""}`;
+  // `set` overwrites every existing occurrence rather than appending.
+  if (hasRef) query.set(REF_PARAM, ref);
+  if (hasChannel) query.set(CHANNEL_PARAM, channel);
+
+  const qs = query.toString();
+  return `${path}${qs ? `?${qs}` : ""}${hash ? `#${hash}` : ""}`;
 }
 
 function splitHash(url: string): [string, string] {

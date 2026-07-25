@@ -37,39 +37,48 @@ export const versions = pgTable(
   (t) => [uniqueIndex("versions_version_unique").on(t.version)],
 );
 
-export const signers = pgTable("signers", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  clerkUserId: text("clerk_user_id").notNull().unique(),
-  displayName: text("display_name").notNull(),
-  affiliation: text("affiliation"),
-  locationText: text("location_text"),
-  verificationMethod: text("verification_method", {
-    enum: ["email", "sms"],
-  }).notNull(),
-  verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
-  isAdmin: boolean("is_admin").notNull().default(false),
-  softBannedAt: timestamp("soft_banned_at", { withTimezone: true }),
-  // Notification preference for document updates: 'major' (default) = only
-  // major revisions, 'minor' = major + minor, 'none' = no notifications.
-  notificationPreference: text("notification_preference", {
-    enum: ["major", "minor", "none"],
-  })
-    .notNull()
-    .default("major"),
-  // Optional short statement the signer writes at signing time ("why I signed").
-  // Rendered on their public page, in their OG share card, and used as the
-  // default share text — a signer's own words travel further than boilerplate.
-  whyISigned: text("why_i_signed"),
-  // Attribution: which existing signer's share link brought this person in.
-  // Self-referencing FK, so it needs the AnyPgColumn escape hatch for the
-  // circular type reference. Null = arrived without a ref param.
-  referredBySignerId: uuid("referred_by_signer_id").references(
-    (): AnyPgColumn => signers.id,
-  ),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const signers = pgTable(
+  "signers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clerkUserId: text("clerk_user_id").notNull().unique(),
+    displayName: text("display_name").notNull(),
+    affiliation: text("affiliation"),
+    locationText: text("location_text"),
+    verificationMethod: text("verification_method", {
+      enum: ["email", "sms"],
+    }).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+    isAdmin: boolean("is_admin").notNull().default(false),
+    softBannedAt: timestamp("soft_banned_at", { withTimezone: true }),
+    // Notification preference for document updates: 'major' (default) = only
+    // major revisions, 'minor' = major + minor, 'none' = no notifications.
+    notificationPreference: text("notification_preference", {
+      enum: ["major", "minor", "none"],
+    })
+      .notNull()
+      .default("major"),
+    // Optional short statement the signer writes at signing time ("why I signed").
+    // Rendered on their public page, in their OG share card, and used as the
+    // default share text — a signer's own words travel further than boilerplate.
+    whyISigned: text("why_i_signed"),
+    // Attribution: which existing signer's share link brought this person in.
+    // Self-referencing FK, so it needs the AnyPgColumn escape hatch for the
+    // circular type reference. Null = arrived without a ref param.
+    referredBySignerId: uuid("referred_by_signer_id").references(
+      (): AnyPgColumn => signers.id,
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  // This index MUST be declared here, not only in the SQL migration: the
+  // deploy path is `drizzle-kit push`, which reconciles the database against
+  // this file and drops indexes it doesn't know about. Declared only in
+  // drizzle/0007, it would vanish on the next push — precisely when the
+  // "who did signer X bring in?" query starts being run.
+  (t) => [index("signers_referred_by_idx").on(t.referredBySignerId)],
+);
 
 export const consentRecords = pgTable("consent_records", {
   id: uuid("id").defaultRandom().primaryKey(),

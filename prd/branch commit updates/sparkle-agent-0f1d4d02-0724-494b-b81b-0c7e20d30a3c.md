@@ -1,5 +1,36 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-24 20:50 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Triaged the roborev review of the groundwork commit (`8ce06b6`) and fixed the two Medium findings, both of which were real bugs in my own code that would have silently broken referral attribution in production. Also closed the Low finding about missing DB-level test coverage for the new columns.
+
+### Detail of changes made:
+- **Fixed (Medium): `signers_referred_by_idx` would have been silently dropped.** The index was declared only in `drizzle/0007_...sql`, not in `schema.ts`. Per the README the deploy path is `drizzle-kit push`, which reconciles the database against `schema.ts` and drops indexes it doesn't know about — so the index would have vanished on the next push, exactly when the referral queries start running. Converted `signers` from the object-only `pgTable` form to the array-extras form (matching the existing precedent on `versions`, `signatures`, `selfies`) and declared `index("signers_referred_by_idx").on(t.referredBySignerId)` there, with a comment explaining why it must live in this file.
+- **Fixed (Medium): `withShareParams` stacked attribution params instead of replacing them.** The old implementation appended by string concatenation without checking for existing params. A signer who landed on `/?ref=A&via=x`, copied the address bar and re-shared it would produce `?ref=A&via=x&ref=B&via=copy`. Because `parseRef`/`parseChannel` read the **first** value, B's attribution was silently discarded and A credited twice — the precise failure the module exists to prevent. Rewrote it to parse into `URLSearchParams` and use `.set()`, which overwrites every existing occurrence. Unrelated query params and the fragment are preserved.
+- `tests/lib/share-urls.test.ts`: +5 regression tests for the stacking bug — replacing an existing ref, replacing an existing channel, re-attributing a fully-attributed URL, preserving unrelated params while replacing attribution, and (deliberately) leaving existing attribution intact when the *new* ref is invalid, so a malformed id strips nothing.
+- `tests/lib/db.signers-referral-columns.test.ts` (new, 7 tests): closes the Low finding that no test exercised either new column. Round-trips `why_i_signed` (including unicode/emoji), asserts both columns default to null, and — most importantly — **pins the self-FK by asserting a nonexistent referrer id is rejected**. That rejection is the behaviour the attribution write path has to tolerate without failing the signature itself.
+
+### Roborev triage (job 5, commit 8ce06b6)
+- Medium — index dropped by `db:push`: **fixed**, see above.
+- Medium — `withShareParams` stacking: **fixed**, see above.
+- Low — nothing imports the share helpers yet: **accepted as staged groundwork**, not a defect. Call-site migration is in flight in the parallel workers (`SignModal.tsx`, `ShareSignature.tsx`, `invite.ts`, `sign.ts`). Worth re-checking at integration that no hand-rolled share URL survives.
+- Low — no DB-level test for the new columns: **fixed**, see above.
+- Low — `why_i_signed` unbounded at the DB level: **deferred by design**. The ~200-char cap is being enforced server-side by the "why I signed" worker; that is the right layer since the text also needs trimming/sanitising. To verify at integration.
+- Note: roborev job 6 (the merged worker's commit `c3766c5`) came back with status `failed` after 3s and produced no review output, so that commit has **no automated review coverage**. Its content was reviewed by hand instead (see the 20:45 entry).
+
+### Verification
+- `./node_modules/.bin/vitest run` — **41 files / 224 tests, all passing** (was 40/212 before this change; +12 from the new regression and DB tests).
+- `./node_modules/.bin/tsc --noEmit` — clean.
+- `./node_modules/.bin/eslint` on the changed files — clean.
+
+### Potential concerns to address:
+- `drizzle/meta/` snapshots still stop at `0001`, so the generated-migration history and the actual schema have long since diverged; `db:push` is the real deploy path. The index fix above is a direct consequence of that divergence, and the same class of bug will recur for any future index declared only in SQL.
+- The self-FK on `referred_by_signer_id` is enforced at the DB level (now tested). Any code writing attribution must catch the rejection rather than letting it propagate — a stale cookie must never be able to fail a signature.
+
+---
+
 ## Progress Update as of 2026-07-24 20:45 Pacific
 *(Most recent updates at top)*
 
