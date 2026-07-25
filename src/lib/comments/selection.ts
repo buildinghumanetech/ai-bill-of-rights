@@ -58,32 +58,40 @@ export interface ScrollDecisionInput {
 
 /**
  * How much of the composer must be on screen to count as "the user can see it",
- * as a ratio of however much of it *could possibly* be shown —
- * `min(its height, the viewport)`.
- *
- * A ratio rather than a pixel constant so it can't drift as the composer's
- * contents change. Clamped to the viewport because a composer taller than 2x
- * the viewport can never reach this threshold against its own height (`visible`
- * maxes out at the viewport), so every emit would re-scroll forever — reachable
- * on a landscape phone, or on Android where the keyboard shrinks `innerHeight`
- * under an expanded textarea.
+ * as a ratio of whatever could possibly be shown. A ratio rather than a pixel
+ * constant so it can't drift as the composer's contents change.
+ * See {@link isShorterThanViewport} for why that denominator is clamped.
  */
 const MIN_VISIBLE_FRACTION = 0.5;
 
+/** Height of the composer's box. The one place this subtraction is written. */
+function composerHeight({ composerRect }: ScrollDecisionInput): number {
+  return composerRect.bottom - composerRect.top;
+}
+
 /**
- * Does the whole composer fit on screen?
+ * Is the composer shorter than the viewport?
  *
- * Both rules below turn on this one question, and they have to keep agreeing:
- * the clamp is what makes a tall composer's visible ratio saturate at 1, and
- * `"start"` alignment is what makes that saturated state a *usable* resting
- * position instead of a stuck one. Written twice, in two shapes, they could
- * drift — the obvious way being an `innerHeight` adjustment for the Android
- * keyboard inset applied at only one site, which would restore exactly the
- * stuck-at-the-bottom state, with both functions' tests still green because each
- * pins its own half in isolation.
+ * A question about *size*, not position — it says nothing about whether the
+ * composer is currently on screen. (A composer parked 400px below the fold is
+ * still "shorter than the viewport".) Both callers want the size question, so
+ * don't read this at the visibility rule's call site as "already showing" and
+ * invert the clamp.
+ *
+ * This is the canonical explanation of the tall-composer case; the other doc
+ * comments in this file defer to it rather than restating it.
+ *
+ * Both rules turn on this single question and have to keep agreeing. The clamp
+ * is what makes a tall composer's visible ratio saturate at 1, and `"start"`
+ * alignment is what makes that saturated state a *usable* resting position
+ * rather than a stuck one — the user parked at the bottom of a box they need to
+ * type into the top of. Written out separately they could drift; the likely way
+ * is an Android keyboard inset applied at one site only, which restores exactly
+ * that stuck state while both functions' tests stay green, because each pins its
+ * own half in isolation.
  */
-function fitsInViewport({ composerRect, viewportHeight }: ScrollDecisionInput): boolean {
-  return composerRect.bottom - composerRect.top <= viewportHeight;
+function isShorterThanViewport(input: ScrollDecisionInput): boolean {
+  return composerHeight(input) <= input.viewportHeight;
 }
 
 /**
@@ -103,30 +111,24 @@ function fitsInViewport({ composerRect, viewportHeight }: ScrollDecisionInput): 
  */
 export function shouldScrollComposerIntoView(input: ScrollDecisionInput): boolean {
   const { composerRect, viewportHeight } = input;
-  const height = composerRect.bottom - composerRect.top;
-  // Degenerate boxes: nothing meaningful is on screen, and the clamped
-  // denominator below would be 0, making the comparison NaN. Bail explicitly
-  // rather than letting `NaN < 0.5` decide (it is false — the wrong way round).
+  const height = composerHeight(input);
+  // Degenerate boxes: nothing meaningful is on screen, and the denominator
+  // below would be 0, making the comparison NaN. Bail explicitly rather than
+  // letting `NaN < 0.5` decide (it is false — the wrong way round).
   if (height <= 0 || viewportHeight <= 0) return true;
   const visible =
     Math.min(composerRect.bottom, viewportHeight) - Math.max(composerRect.top, 0);
-  // See MIN_VISIBLE_FRACTION for why the denominator is clamped to the viewport.
-  const showable = fitsInViewport(input) ? height : viewportHeight;
+  // "Whatever could possibly be shown" — see isShorterThanViewport.
+  const showable = isShorterThanViewport(input) ? height : viewportHeight;
   return visible / showable < MIN_VISIBLE_FRACTION;
 }
 
 /**
  * Where to align the composer once we've decided to scroll.
  *
- * `"center"` is right for anything that fits, but on a composer taller than the
- * viewport it centers the *middle* — pushing the quote block and the top of the
- * textarea above the fold. The visibility rule above then measures a full
- * viewport of composer, calls it visible, and declines to correct it, so the
- * user is parked at the bottom of a box they need to type into the top of. That
- * resting state only became reachable once the denominator was clamped.
- *
- * So: align to the top when it can't all fit. The top is where the user types.
+ * Align to the top when it can't all fit — the top is where the user types.
+ * See {@link isShorterThanViewport} for what goes wrong otherwise.
  */
 export function composerScrollBlock(input: ScrollDecisionInput): "start" | "center" {
-  return fitsInViewport(input) ? "center" : "start";
+  return isShorterThanViewport(input) ? "center" : "start";
 }

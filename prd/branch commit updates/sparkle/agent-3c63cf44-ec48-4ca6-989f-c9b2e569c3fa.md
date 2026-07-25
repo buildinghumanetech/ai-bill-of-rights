@@ -1,5 +1,68 @@
 # Branch Progress: sparkle/agent-3c63cf44-ec48-4ca6-989f-c9b2e569c3fa
 
+## Progress Update as of [2026-07-25 09:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Round 8 (roborev job 50, on merged commit 167884d): **0 Mediums, 3 Lows**, all
+taken. Behaviour-preserving throughout — a misleading name, a duplicated
+expression, and three copies of one explanation. **This is the last change on
+this branch;** see the stop rationale below.
+
+### Detail of changes made:
+
+- **`fitsInViewport` → `isShorterThanViewport`.** The old name asked a question
+  about *position* while the function only compared *size*. A composer parked
+  400px below the fold "fits in the viewport" by that predicate — which is
+  exactly the geometry of the discriminating alignment test added last round. No
+  caller was wrong (both want the size question), but a reader debugging the
+  visibility rule could plausibly read `fitsInViewport(input)` at the clamp site
+  as "already showing" and invert it. The doc now opens by saying it is a size
+  question and says nothing about being on screen.
+- **Extracted `composerHeight`.** Last round's whole point was that
+  `bottom - top` compared against `viewportHeight` must not be written twice. It
+  extracted the *comparison* and left the *subtraction* duplicated one expression
+  down — and the subtraction is the likelier edit, because a keyboard inset gets
+  applied to the rect, not to `viewportHeight`. If the two derivations diverged,
+  `showable` could pick `viewportHeight` for a composer that fits (or `height`
+  for one that doesn't) while the degenerate guard checked only the first.
+  `bottom - top` now appears exactly once in the file (verified by grep).
+- **Consolidated the tall-composer explanation.** It was told three times in
+  three adjacent doc comments from three angles, and `MIN_VISIBLE_FRACTION` still
+  described a `min(...)` shape the code no longer literally uses.
+  `isShorterThanViewport` is now the canonical account; the other two defer to it
+  with `{@link}`. Rounds 6, 7 and 8 each flagged comment drift in this one block —
+  the fix for that is fewer copies, not a fourth simultaneous rewrite.
+
+### Verification actually run (not assumed):
+
+- `tsc --noEmit` clean. `eslint src` → 114 problems, unchanged baseline.
+- Full suite: **327 tests, all passing** — unchanged count, which is what a
+  behaviour-preserving refactor should look like.
+
+### Stop rationale — read this before starting a ninth round:
+
+Eight rounds ran on this feature. Rounds 1-3 each found a real correctness bug in
+untested wiring; round 4 added the component-test layer whose absence caused
+them. **Rounds 5-8 found zero correctness bugs in the feature** — every finding
+was in the scaffolding, and rounds 5, 6 and 7 each found a defect created by the
+previous round's fix. Round 8's findings are the first that strictly *reduce*
+surface (one fewer duplicated expression, two fewer copies of a comment, a name
+that stops lying), which is why they were taken after the decision to stop.
+
+Continuing past this point generates more surface than it removes. The
+outstanding risk is not reviewable in this repo:
+
+- **`SELECTION_SETTLE_MS = 350` and `MIN_VISIBLE_FRACTION = 0.5` have never run
+  on real phone hardware** — fifth entry running. jsdom cannot reproduce iOS
+  selection-handle timing or the Android keyboard's effect on `innerHeight`.
+- Note the keyboard inset is precisely the drift the last two rounds were spent
+  guarding against. The guard is real; the threat model behind it is inference.
+  A single long-press on a phone would validate more than a ninth round.
+
+---
+
 ## Progress Update as of [2026-07-25 09:15 Pacific]
 *(Most recent updates at top)*
 
