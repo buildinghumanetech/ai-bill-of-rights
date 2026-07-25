@@ -217,6 +217,43 @@ describe("listRecentSignersSince", () => {
     expect(rows.map((r) => r.displayName)).toEqual(["Newcomer"]);
   });
 
+  // The case where BOTH of a person's signatures land inside the window. An
+  // "exclude anyone whose earliest signature predates the cutoff" style
+  // implementation would announce them twice here.
+  it("announces once when first signature and re-signature are both in the window", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
+    const now = Date.now();
+
+    const who = await seedSigner(db, "Prompt");
+    await seedSignature(db, who, v1, new Date(now - 20 * 60 * 1000));
+    await seedSignature(db, who, v2, new Date(now - 5 * 60 * 1000));
+
+    const rows = await listRecentSignersSince(null, db);
+    expect(rows.map((r) => r.displayName)).toEqual(["Prompt"]);
+    // Announced at their FIRST signature's time, not the re-sign.
+    expect(rows[0].signedAt.getTime()).toBeCloseTo(now - 20 * 60 * 1000, -3);
+  });
+
+  // Equal signed_at is not hypothetical: admin/bulk-created signatures and any
+  // backfill that copies rows forward stamp a fixed time. Without a total
+  // ordering in the "is this their first?" probe, two such rows each see the
+  // other as not-earlier and both get announced.
+  it("announces once when a person has two signatures with the same timestamp", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
+    const sameInstant = new Date(Date.now() - 10 * 60 * 1000);
+
+    const who = await seedSigner(db, "Simultaneous");
+    await seedSignature(db, who, v1, sameInstant);
+    await seedSignature(db, who, v2, sameInstant);
+
+    const rows = await listRecentSignersSince(null, db);
+    expect(rows.map((r) => r.displayName)).toEqual(["Simultaneous"]);
+  });
+
   it("still announces a first-time signer of a later version", async () => {
     const db = await createTestDb();
     await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
@@ -290,6 +327,28 @@ describe("signer list queries", () => {
     expect(rows[0].signedAt).toBeInstanceOf(Date);
     expect(rows[0].signedAt.toISOString()).toBe("2026-01-04T00:00:00.000Z");
     expect(rows[1].signedAt.toISOString()).toBe("2026-01-03T00:00:00.000Z");
+  });
+
+  // Which of two same-timestamp signatures survives DISTINCT ON decides the
+  // `version` shown next to the person's name. Without an id tiebreaker in the
+  // DISTINCT ON sort that choice is arbitrary and can differ between loads.
+  it("picks the same row deterministically when timestamps tie", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
+    const sameInstant = new Date("2026-01-05T00:00:00Z");
+
+    const who = await seedSigner(db, "Tied");
+    await seedSignature(db, who, v1, sameInstant);
+    await seedSignature(db, who, v2, sameInstant);
+
+    const first = await listSignatures(db, { limit: 10, offset: 0 });
+    expect(first).toHaveLength(1);
+    // Repeated reads agree with each other.
+    for (let i = 0; i < 5; i++) {
+      const again = await listSignatures(db, { limit: 10, offset: 0 });
+      expect(again[0].version).toBe(first[0].version);
+    }
   });
 
   // getSignatureNumber must anchor on the signer's EARLIEST signature, or a

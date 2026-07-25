@@ -103,6 +103,9 @@ export const signatures = pgTable(
       t.signerId,
       t.signedAt.desc(),
     ),
+    // The ticker's driving predicate is `signed_at > cutoff` with no signer_id
+    // restriction, so the index above (leading with signer_id) cannot serve it.
+    index("signatures_signed_at_idx").on(t.signedAt.desc()),
   ],
 );
 

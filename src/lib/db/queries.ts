@@ -1,4 +1,4 @@
-import { eq, count, countDistinct, desc, gt, and, isNull, isNotNull, asc, sum, sql, notExists, aliasedTable } from "drizzle-orm";
+import { eq, count, countDistinct, desc, gt, lt, or, and, isNull, isNotNull, asc, sum, sql, notExists, aliasedTable } from "drizzle-orm";
 import { versions, signatures, signers, comments, attestations, commentVotes, commentReports } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
@@ -121,7 +121,14 @@ export async function listSignatures(
     .from(signatures)
     .innerJoin(signers, eq(signers.id, signatures.signerId))
     .innerJoin(versions, eq(versions.id, signatures.versionId))
-    .orderBy(signatures.signerId, desc(signatures.signedAt))
+    .orderBy(
+      signatures.signerId,
+      desc(signatures.signedAt),
+      // id breaks ties so WHICH row survives DISTINCT ON is deterministic —
+      // otherwise the `version` shown next to a name with two same-timestamp
+      // signatures is arbitrary and can change between page loads.
+      desc(signatures.id),
+    )
     .as("latest_per_signer");
 
   const rows = await client
@@ -203,6 +210,14 @@ export async function listRecentSignersSince(
         gt(signatures.signedAt, cutoff),
         isNull(signers.softBannedAt),
         // No earlier signature by this person — i.e. this is their first.
+        //
+        // "Earlier" is a TOTAL order: ties on signed_at fall back to id.
+        // A strict `<` alone would let two rows with identical timestamps
+        // each see the other as not-earlier, so both would qualify as a
+        // first signature and the ticker would announce the same person
+        // twice — the exact failure this exclusion exists to prevent.
+        // Equal timestamps are not hypothetical: admin/bulk-created
+        // signatures and backfills stamp a fixed time.
         notExists(
           client
             .select({ one: sql`1` })
@@ -210,7 +225,13 @@ export async function listRecentSignersSince(
             .where(
               and(
                 eq(earlier.signerId, signatures.signerId),
-                sql`${earlier.signedAt} < ${signatures.signedAt}`,
+                or(
+                  lt(earlier.signedAt, signatures.signedAt),
+                  and(
+                    eq(earlier.signedAt, signatures.signedAt),
+                    lt(earlier.id, signatures.id),
+                  ),
+                ),
               ),
             ),
         ),
