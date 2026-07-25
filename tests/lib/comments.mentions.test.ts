@@ -241,5 +241,84 @@ describe("parseMentions", () => {
       expect(result).toHaveLength(1);
       expect(result[0].signerId).toBe("3");
     });
+
+    // A whitelist of "allowed openers" silently dropped these; the rule is
+    // "the @ isn't part of an email address", so punctuation must be fine.
+    it.each([
+      ["comma", "Hi,@Alice"],
+      ["colon", "cc:@Alice"],
+      ["em dash", "—@Alice"],
+      ["closing quote", "”@Alice"],
+      ["inverted question mark", "¿@Alice"],
+      ["guillemet", "»@Alice"],
+    ])("matches a mention directly after a %s", (_label, body) => {
+      const result = parseMentions(body, signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+  });
+
+  // Hyphenated given names are common, and "Jean" matching inside
+  // "@Jean-Pierre" is the same wrong-recipient failure as "Ana"/"@Anaïs".
+  describe("hyphenated and composed names", () => {
+    it("does not match a name before a hyphen", () => {
+      const jean = [{ id: "1", displayName: "Jean Dupont" }];
+      expect(parseMentions("@Jean-Pierre can you look?", jean)).toEqual([]);
+    });
+
+    it("does not match a first name inside another hyphenated name", () => {
+      const anne = [{ id: "1", displayName: "Anne Blanc" }];
+      expect(parseMentions("@Anne-Marie thanks", anne)).toEqual([]);
+    });
+
+    it("still matches a signer whose own name is hyphenated", () => {
+      const hyphenated = [{ id: "1", displayName: "Anne-Marie Blanc" }];
+      const result = parseMentions("@Anne-Marie thanks", hyphenated);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("1");
+    });
+
+    it("does not match an ASCII prefix of a decomposed (NFD) name", () => {
+      // "Anä" with the umlaut as a combining mark: renders like NFC but the
+      // char after "Ana" is U+0308, which must count as a word char.
+      const nfd = "@Anäs thanks";
+      expect(nfd.normalize("NFC")).not.toBe(nfd); // guard: really decomposed
+      expect(parseMentions(nfd, [{ id: "1", displayName: "Ana" }])).toEqual([]);
+    });
+
+    it("does not match a name before an astral letter", () => {
+      // U+10450 (Shavian) is a surrogate pair; indexing would see half of it.
+      const body = "@Ana\u{10450} hello";
+      expect(parseMentions(body, [{ id: "1", displayName: "Ana" }])).toEqual([]);
+    });
+
+    it("matches a name followed by an apostrophe, which is not a word char", () => {
+      const result = parseMentions("@Bob's point stands", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("4");
+    });
+  });
+
+  describe("honorifics", () => {
+    it("reaches a signer whose display name is honorific-prefixed", () => {
+      // Regression: skipping non-name-like tokens must not drop the candidate
+      // entirely, or "@Erika" notifies nobody.
+      const titled = [{ id: "1", displayName: "Dr. Erika Anderson" }];
+      const result = parseMentions("@Erika what do you think?", titled);
+      expect(result).toHaveLength(1);
+      expect(result[0].displayName).toBe("Dr. Erika Anderson");
+    });
+
+    it("still refuses a bare honorific", () => {
+      const titled = [{ id: "1", displayName: "Dr. Erika Anderson" }];
+      expect(parseMentions("ask @Dr. about it", titled)).toEqual([]);
+    });
+
+    it("skips the comma-terminated token and uses the given name", () => {
+      const inverted = [{ id: "1", displayName: "Anderson, Erika" }];
+      const result = parseMentions("@Erika hello", inverted);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("1");
+    });
   });
 });
