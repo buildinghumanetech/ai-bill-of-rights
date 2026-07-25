@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getSignatureCount } from "@/lib/db/queries";
+import { ARTICLES } from "./articles";
 
 export const runtime = "nodejs";
 
@@ -13,30 +14,6 @@ export const runtime = "nodejs";
  * they are the whole pitch, readable at a glance in a feed.
  */
 
-/**
- * Short forms of the nine articles — the full headings are far too long to fit
- * a 3x3 grid on a 1200x630 card ("You Have the Right to Know You're Talking to
- * a Machine" is one cell).
- *
- * These are hand-written paraphrases, NOT derived from the markdown, because
- * the real headings can't be mechanically shortened. That makes them a drift
- * risk: the Bill of Rights is a living, versioned document, so an edit to
- * `content/bill-of-rights/` would leave this card silently stale. The guard
- * against that is `tests/app/og-articles-drift.test.ts`, which parses the
- * current version's markdown and fails if the article count or their order no
- * longer lines up with this list. If that test fails, update these strings.
- */
-export const ARTICLES = [
-  "Your data belongs to you",
-  "Your memory is portable",
-  "Know when it's a machine",
-  "No manipulation against you",
-  "A right to an explanation",
-  "A right to human contact",
-  "Children are not a market",
-  "Builders are accountable",
-  "Your attention is yours",
-] as const;
 
 /**
  * At ~90 signatures a bare count reads as counter-proof, so we never print the

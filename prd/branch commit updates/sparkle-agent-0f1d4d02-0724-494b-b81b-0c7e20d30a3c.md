@@ -1,5 +1,33 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-24 21:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged the signature-count reframing worker, then triaged roborev's review of the drift-guard commit. **The review's single High finding turned out to be wrong** — I verified it empirically with a real `next build` rather than taking it at face value. Kept the suggested refactor anyway on its own merits, and fixed the three Low findings, which were correct.
+
+### Detail of changes made:
+- Merged `sparkle/agent-4fa714f9-a0c1-4a89-ac89-98f02c46f78c` (count reframing; recursive merge, no conflicts). It adds `src/components/SignatureMomentum.tsx` with a pure `getSignatureFraming(count)` decision function and a `RAW_COUNT_THRESHOLD` (default **5000**, overridable via `NEXT_PUBLIC_SIGNATURE_COUNT_THRESHOLD`). Below the threshold the homepage/floating-CTA copy becomes cohort framing ("Be signer #91 of the first 1,000", progress bar, recently-signed chips); at or above it, the copy flips automatically back to the plain large-number form. 16 new tests cover both sides of the threshold including the boundary.
+- **Roborev High finding — INVESTIGATED AND REJECTED.** Job 9 claimed that `export const ARTICLES` in `src/app/api/og/route.tsx` would fail `next build`, because Next's route-type generator emits `checkFields<Diff<...>>` requiring every non-handler export to be `never`. The mechanism it described is real (confirmed in `node_modules/next/dist/build/webpack/plugins/next-types-plugin/index.js`), but the conclusion is not: I re-added the offending export and ran a full `next build` under Next 16.2.6/Turbopack. TypeScript ran (`Running TypeScript ... Finished TypeScript in 8.9s`) and the build **succeeded**. The finding is a false positive for this version/config. Recording it here so nobody re-derives it from the review later.
+- **Kept the refactor regardless**, for a different and real reason: `src/app/api/og/articles.ts` (new) now holds `ARTICLES`, so the drift test imports nine plain strings instead of transitively loading `next/og`'s `ImageResponse` runtime and `@/lib/db/queries` just to read them. `route.tsx` imports from it. This is a test-isolation win, not a build fix — it should not be described as one.
+- **Fixed (Low): the drift test threw a `TypeError` on the exact drift it exists to catch.** The word-overlap test indexed `headings[i]` positionally; when an article is *removed*, `headings[i]` is `undefined` and `stems(undefined)` threw `Cannot read properties of undefined` instead of the carefully-worded failure. Added a length gate inside that test (the sibling `it` doesn't gate it). Verified by deleting Article 9 from the markdown: now fails with `Article count changed; update ARTICLES in src/app/api/og/articles.ts` and no TypeError.
+- **Fixed (Low): silent empty parse.** `articleHeadings()` returned `[]` for any markdown deviating from `## Article N:` form, which would let the comparison test pass vacuously over zero iterations. It now throws, naming the file and the regex as the likely culprit.
+- **Fixed (Low): nothing pinned article ordering.** Added a test asserting the parsed article numbers are exactly `1..N` in document order — a cheap exact check that catches renumbering/reordering without depending on the fuzzy word-overlap heuristic.
+- Deduplicated the long rationale that was written twice (once by `ARTICLES`, once in the test docstring); the full version now lives only in `articles.ts` with a one-line pointer from the test.
+
+### Verification
+- `./node_modules/.bin/vitest run` — **42 files / 241 tests, all passing**.
+- `./node_modules/.bin/tsc --noEmit` — clean.
+- `./node_modules/.bin/next build` — compiles, TypeScript passes. (Static generation logs Neon connection errors because there is no reachable DB in this worktree; that is environmental, and the pages degrade as designed rather than failing the build.)
+- Drift guard re-verified in both directions: green on the real document, red with an actionable message when an article is rewritten AND when one is removed.
+
+### Potential concerns to address:
+- Roborev job 6 (commit `c3766c5`, the merged homepage-OG work) still shows status `failed` with no review output, so that commit has no automated review coverage — it was reviewed by hand instead.
+- The count reframing reads `NEXT_PUBLIC_SIGNATURE_COUNT_THRESHOLD` at module load. Being `NEXT_PUBLIC_`, it is inlined at build time, so changing the threshold requires a redeploy, not just an env edit. That is documented in the file but worth knowing operationally.
+- Two independent notions of "when is the count big enough" now exist: `RAW_COUNT_THRESHOLD` (5000) in `SignatureMomentum.tsx` and a hard-coded `1000` in `ctaLine()` in the OG route. They are deliberately different numbers for different surfaces, but they are not linked — a future change to one will not move the other.
+
+---
+
 ## Progress Update as of 2026-07-24 20:50 Pacific
 *(Most recent updates at top)*
 
