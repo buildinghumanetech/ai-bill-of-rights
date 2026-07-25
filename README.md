@@ -63,6 +63,26 @@ A new version is a PR that adds:
 
 Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database.
 
+### Editing a version's text after a deploy has synced it
+
+`syncVersions` hashes each version's markdown and **throws if an already-synced version's text changes** — published documents are immutable. The build fails with:
+
+```
+Error: Version 0.1.0 hash mismatch: existing <hash> vs new <hash>.
+The canonical document text is meant to be immutable.
+```
+
+This also fires while a version is still being *drafted*, because **Vercel preview deployments run `sync-versions` too** (against the `dev` Neon branch). So the first preview build of a PR freezes that version's text, and any later edit to it breaks every subsequent build until the stale row is cleared:
+
+```
+pnpm tsx scripts/unsync-version.ts 0.1.0        # dry run — shows what references it
+pnpm tsx scripts/unsync-version.ts 0.1.0 --yes  # delete, so the next sync re-inserts it
+```
+
+The script refuses if the version is current or if anything references it (signatures, comments, proposed edits, endorsements, attestations, child versions) — a version people have signed or discussed is not a draft. It connects via `DATABASE_URL` from `.env.local`, which per the section above points at the `dev` branch; check that before running it.
+
+Once a version is live in production and signed, its text is genuinely frozen — changing it means publishing a new version.
+
 ### What does and doesn't carry forward
 
 Several things are scoped to a specific version row, so bumping `current` changes what the site shows. Published documents are immutable — `syncVersions()` hashes the markdown and throws if an already-synced version's text changes — so the only lever is what you migrate.
