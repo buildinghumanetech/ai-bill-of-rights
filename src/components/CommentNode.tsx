@@ -8,6 +8,11 @@ import { toggleReportCommentAction } from "@/server/actions/comment-reports";
 import { deleteCommentAction, editCommentAction, submitCommentAction } from "@/server/actions/comments";
 import Link from "next/link";
 import { MentionTextarea } from "@/components/MentionTextarea";
+import {
+  appendResolvedMentions,
+  pruneResolvedMentions,
+  type ResolvedMention,
+} from "@/lib/comments/resolved-mentions";
 import { renderBodyWithMentions } from "@/lib/comments/render-mentions";
 
 interface Props {
@@ -61,6 +66,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyActAsSignerId, setReplyActAsSignerId] = useState<string>("");
+  const [replyMentions, setReplyMentions] = useState<ResolvedMention[]>([]);
   // flagged: local state, initialized from server-fetched myReport
   const [flagged, setFlagged] = useState<boolean>(comment.myReport);
   const [flagError, setFlagError] = useState(false);
@@ -195,6 +201,8 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
       fd.set("anchorId", rootAnchorId ?? comment.anchorId ?? "");
       fd.set("parentCommentId", comment.id);
       fd.set("body", trimmed);
+      // Re-prune against the trimmed body actually being submitted.
+      appendResolvedMentions(fd, pruneResolvedMentions(trimmed, replyMentions));
       if (isAdmin && replyActAsSignerId) fd.set("actAsSignerId", replyActAsSignerId);
       const res = await submitCommentAction(fd);
       if (!res.ok) {
@@ -202,6 +210,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
         return;
       }
       setReplyBody("");
+      setReplyMentions([]);
       setReplyActAsSignerId("");
       setShowReply(false);
       router.refresh();
@@ -457,6 +466,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                 placeholder="Write a reply…"
                 autoFocus
                 textareaRef={textareaRef}
+                onResolvedMentionsChange={setReplyMentions}
               />
               {replyError && (
                 <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{replyError}</p>
