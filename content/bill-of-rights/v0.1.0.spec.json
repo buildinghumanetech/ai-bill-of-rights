@@ -1,0 +1,154 @@
+{
+  "version": "0.1.0",
+  "status": "stub",
+  "principles": [
+    {
+      "id": 1,
+      "slug": "data-ownership",
+      "human_text": "Your Data Belongs to You",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Dignity",
+        "GDPR Article 7",
+        "Emerging state-level AI legislation (California, Colorado)"
+      ]
+    },
+    {
+      "id": 2,
+      "slug": "memory-portability",
+      "human_text": "Your Memory Is Portable",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "GDPR Article 20 (data portability)",
+        "Interoperability advocacy",
+        "Competitive AI market concerns"
+      ]
+    },
+    {
+      "id": 3,
+      "slug": "machine-disclosure",
+      "human_text": "You Have the Right to Know You're Talking to a Machine",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Honesty",
+        "California BOT Disclosure Act (SB 1001)",
+        "FTC guidance on deceptive AI"
+      ]
+    },
+    {
+      "id": 4,
+      "slug": "non-manipulation",
+      "human_text": "You Cannot Be Manipulated Against Your Interests",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Non-Manipulation",
+        "EU AI Act prohibited practices",
+        "FTC Act Section 5"
+      ]
+    },
+    {
+      "id": 5,
+      "slug": "explanation",
+      "human_text": "You Have the Right to an Explanation",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Transparency",
+        "White House AI Bill of Rights (2022)",
+        "GDPR Article 22 (automated decision-making)"
+      ]
+    },
+    {
+      "id": 6,
+      "slug": "human-contact",
+      "human_text": "You Have the Right to Human Contact",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Empowerment",
+        "Consumer protection law",
+        "Healthcare AI ethics literature"
+      ]
+    },
+    {
+      "id": 7,
+      "slug": "children",
+      "human_text": "Children Are Not a Market",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "COPPA",
+        "UK Age Appropriate Design Code",
+        "IEEE AI & Children working group",
+        "Children's rights frameworks"
+      ]
+    },
+    {
+      "id": 8,
+      "slug": "builder-accountability",
+      "human_text": "The People Who Build AI Are Accountable",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench as measurement infrastructure",
+        "EU AI Act conformity assessments",
+        "UK AI Safety Institute",
+        "Algorithmic audit proposals"
+      ]
+    },
+    {
+      "id": 9,
+      "slug": "attention-and-intention",
+      "human_text": "Your Attention and Intention Belong to You",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "Center for Humane Technology attention rights framework",
+        "HumaneBench: Respect User Attention",
+        "EU AI Act prohibited practices (subliminal manipulation)"
+      ]
+    },
+    {
+      "id": 10,
+      "slug": "algorithmic-discrimination",
+      "human_text": "Freedom From Algorithmic Discrimination",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Dignity",
+        "EU AI Act high-risk AI systems (Annex III)",
+        "US civil rights and anti-discrimination law",
+        "White House AI Bill of Rights (2022)"
+      ]
+    },
+    {
+      "id": 11,
+      "slug": "safe-tested-honest-systems",
+      "human_text": "You Have the Right to Safe, Tested, Honest Systems",
+      "prohibited_behaviors": [],
+      "required_behaviors": [],
+      "test_conditions": [],
+      "references": [
+        "HumaneBench Principle: Honesty",
+        "NIST AI Risk Management Framework",
+        "EU AI Act conformity assessments",
+        "Model cards and system documentation"
+      ]
+    }
+  ],
+  "_note": "Stub — prohibited_behaviors, required_behaviors, and test_conditions are still to be authored by the editorial council. References mirror the \"Connects to\" pills shown on the site."
+}

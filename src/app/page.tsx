@@ -17,7 +17,7 @@ export default async function Home() {
         </h1>
         <p className="mx-auto mt-6 max-w-none text-pretty text-xl leading-8 text-zinc-700 sm:text-2xl">
           <strong className="font-semibold text-zinc-950 sm:whitespace-nowrap">
-            Nine commitments we&apos;re demanding from every AI company
+            Eleven commitments we&apos;re demanding from every AI company
           </strong>
           <br />
           with{" "}
@@ -62,7 +62,7 @@ export default async function Home() {
             Version {data.currentVersion} — a living document
           </p>
           <p className="mt-6 text-pretty text-xl leading-relaxed text-zinc-900 sm:text-2xl">
-            These nine commitments aren&apos;t a wishlist. They&apos;re the
+            These eleven commitments aren&apos;t a wishlist. They&apos;re the
             baseline. Companies that won&apos;t agree to them are telling
             you who they are.
           </p>

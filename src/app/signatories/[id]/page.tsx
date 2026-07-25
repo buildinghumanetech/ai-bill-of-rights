@@ -140,7 +140,7 @@ export default async function SignerProfile({
           </Link>
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700">
-          Nine commitments we&apos;re demanding from every AI company.
+          Eleven commitments we&apos;re demanding from every AI company.
           <br />
           Join {signer.displayName} as a signer.
         </p>

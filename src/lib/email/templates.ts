@@ -37,7 +37,7 @@ export function signConfirmation(opts: {
   const milestone = getNextMilestone(total);
   const firstName = opts.displayName.split(/\s+/)[0];
 
-  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
+  const shareText = `I just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company. Add your name too:`;
   const shareUrl = opts.signerPageUrl;
   const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
@@ -154,7 +154,7 @@ export function signInvitation(opts: {
 }): { subject: string; text: string } {
   return {
     subject: `${opts.inviterName} invited you to sign the AI Bill of Rights`,
-    text: `${opts.inviterName} just signed the AI Bill of Rights — nine commitments we're demanding from every AI company — and thought you'd want to add your name too.
+    text: `${opts.inviterName} just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company — and thought you'd want to add your name too.
 
 Read it and decide for yourself: ${opts.siteUrl}
 

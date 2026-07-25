@@ -26,7 +26,7 @@ type Step = "form" | "otp" | "done";
 type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
 
-const VERSION = "0.0.1";
+const VERSION = "0.1.0";
 
 interface Country {
   id: string;
@@ -208,7 +208,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   }, [open, modeProp]);
 
   // When the modal opens with a signed-in user, fetch whether they've
-  // already signed v0.0.1 so we can show the "already signed" view instead
+  // already signed the current version so we can show the "already signed" view instead
   // of asking them to sign again.
   useEffect(() => {
     if (!open) return;
@@ -495,7 +495,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       ? `${window.location.origin}/signatories/${signerId}`
       : "";
 
-  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
+  const shareText = `I just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company. Add your name too:`;
 
   async function copyShareUrl() {
     if (!shareUrl) return;
@@ -954,7 +954,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     {
                       value: "minor",
                       label: "Minor revisions",
-                      hint: "v0.0.1 → v0.1.0",
+                      hint: "v0.1.0 → v0.2.0",
                     },
                     { value: "none", label: "None", hint: "" },
                   ] as const

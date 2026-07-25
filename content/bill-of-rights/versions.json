@@ -1,11 +1,17 @@
 {
-  "current": "0.0.1",
+  "current": "0.1.0",
   "history": [
     {
       "version": "0.0.1",
       "published_at": "2026-05-18",
       "release_notes_pr": null,
       "changelog": "Initial MVP, transcribed from the working Google Doc."
+    },
+    {
+      "version": "0.1.0",
+      "published_at": "2026-07-24",
+      "release_notes_pr": null,
+      "changelog": "Adds Article 10 (Freedom From Algorithmic Discrimination) and Article 11 (You Have the Right to Safe, Tested, Honest Systems). Articles 1-9 carry over from v0.0.1 unchanged."
     }
   ]
 }

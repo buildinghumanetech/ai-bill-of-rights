@@ -209,6 +209,54 @@ export const articles: Article[] = [
       },
     ],
   },
+  {
+    number: "10",
+    title: "Freedom From Algorithmic Discrimination",
+    body: "No AI system may produce different outcomes for you because of your race, ethnicity, gender, disability, age, religion, sexual orientation, or any other protected characteristic — in hiring, lending, housing, healthcare, policing, insurance, or education. Disparate impact counts even when no one intended it. Companies must test for it before deployment, publish what they find, and fix what they break.",
+    pullQuote: "No AI may treat you differently for who you are.",
+    connects: [
+      {
+        title: "HumaneBench Principle — Dignity",
+        slug: "humanebench-principle-dignity",
+      },
+      {
+        title: "EU AI Act high-risk AI systems (Annex III)",
+        slug: "eu-ai-act-high-risk-systems",
+      },
+      {
+        title: "US civil rights and anti-discrimination law",
+        slug: "us-civil-rights-anti-discrimination-law",
+      },
+      {
+        title: "White House AI Bill of Rights (2022)",
+        slug: "white-house-ai-bill-of-rights-2022",
+      },
+    ],
+  },
+  {
+    number: "11",
+    title: "You Have the Right to Safe, Tested, Honest Systems",
+    body: "An AI system released into the world must be tested for the things people will actually use it for, and must say plainly what it cannot do. No shipping capabilities that were never evaluated. No confident answers in domains the system was never validated in. Known limitations, failure modes, and error rates belong in public before deployment — not discovered afterward by the people harmed.",
+    pullQuote: "It has to work, and admit what it can't do.",
+    connects: [
+      {
+        title: "HumaneBench Principle — Honesty",
+        slug: "humanebench-principle-honesty",
+      },
+      {
+        title: "NIST AI Risk Management Framework",
+        slug: "nist-ai-risk-management-framework",
+      },
+      {
+        title: "EU AI Act conformity assessments",
+        slug: "eu-ai-act-conformity-assessments",
+      },
+      {
+        title: "Model cards and system documentation",
+        slug: "model-cards-and-system-documentation",
+      },
+    ],
+  },
 ];
 
 /**

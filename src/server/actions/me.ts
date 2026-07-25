@@ -34,11 +34,13 @@ export type SignatureStatus =
 
 /**
  * Returns whether the currently signed-in Clerk user has already signed a
- * given version (defaulting to v0.0.1). Used by SignModal to decide between
- * showing the sign form vs. the "already signed" view.
+ * given version (defaulting to the current published version). Used by
+ * SignModal to decide between showing the sign form vs. the "already signed"
+ * view. Note this is version-specific: someone who signed v0.0.1 reads as
+ * "not-signed" for v0.1.0 and is asked to sign the new version.
  */
 export async function getMySignatureStatus(
-  versionString = "0.0.1",
+  versionString = "0.1.0",
 ): Promise<SignatureStatus> {
   const { userId } = await auth();
   if (!userId) return { state: "anonymous" };
