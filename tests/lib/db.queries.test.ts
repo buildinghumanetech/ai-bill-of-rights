@@ -203,4 +203,119 @@ describe("signer list queries", () => {
     expect(rows[0].displayName).toBe("Test");
     expect(rows[0].locationText).toBe("Madrid");
   });
+
+  // One row per PERSON, not per signature row. /signatories renders this list
+  // directly under a "N signatures" header fed by getSignatureCount(), which
+  // counts distinct signers — so a re-signer appearing twice here would make
+  // the list contradict the number printed above it. Pagination depends on it
+  // too: /signers used to dedupe within the fetched page, which meant a
+  // 100-row page could render fewer than 100 people while the offset still
+  // advanced by 100, silently skipping signers.
+  it("listSignatures returns one row per signer, newest signature first", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
+
+    const seed = async (name: string) => {
+      const [signer] = await db
+        .insert(signers)
+        .values({
+          clerkUserId: `u-${name}`,
+          displayName: name,
+          affiliation: null,
+          locationText: null,
+          verificationMethod: "email" as const,
+          verifiedAt: new Date("2026-01-01T00:00:00Z"),
+        })
+        .returning({ id: signers.id });
+      const [record] = await db
+        .insert(consentRecords)
+        .values({
+          signerId: signer.id,
+          consentTextHash: "a".repeat(64),
+          capturedFields: {},
+        })
+        .returning({ id: consentRecords.id });
+      return { signerId: signer.id, recordId: record.id };
+    };
+    const sign = async (
+      who: { signerId: string; recordId: string },
+      v: { id: string; markdownHash: string },
+      at: string,
+    ) =>
+      db.insert(signatures).values({
+        signerId: who.signerId,
+        versionId: v.id,
+        versionHashAtSigning: v.markdownHash,
+        consentRecordId: who.recordId,
+        signedAt: new Date(at),
+      });
+
+    const alice = await seed("Alice");
+    const bob = await seed("Bob");
+    await sign(alice, v1, "2026-01-02T00:00:00Z");
+    await sign(bob, v1, "2026-01-03T00:00:00Z");
+    // Alice re-signs the new version — this must not add a second row for her,
+    // but it should move her to the top as the newest signature.
+    await sign(alice, v2, "2026-01-04T00:00:00Z");
+
+    expect(await db.select().from(signatures)).toHaveLength(3);
+
+    const rows = await listSignatures(db, { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.displayName)).toEqual(["Alice", "Bob"]);
+    // Alice's row reports the version she most recently signed.
+    expect(rows[0].version).toBe("1.1.0");
+  });
+
+  // getSignatureNumber must anchor on the signer's EARLIEST signature, or a
+  // re-signer's public "You're Signer #N" jumps to a much larger number.
+  it("getSignatureNumber uses the signer's first signature, not their latest", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
+
+    const seed = async (name: string) => {
+      const [signer] = await db
+        .insert(signers)
+        .values({
+          clerkUserId: `n-${name}`,
+          displayName: name,
+          affiliation: null,
+          locationText: null,
+          verificationMethod: "email" as const,
+          verifiedAt: new Date("2026-01-01T00:00:00Z"),
+        })
+        .returning({ id: signers.id });
+      const [record] = await db
+        .insert(consentRecords)
+        .values({
+          signerId: signer.id,
+          consentTextHash: "a".repeat(64),
+          capturedFields: {},
+        })
+        .returning({ id: consentRecords.id });
+      return { signerId: signer.id, recordId: record.id };
+    };
+    const sign = async (
+      who: { signerId: string; recordId: string },
+      v: { id: string; markdownHash: string },
+      at: string,
+    ) =>
+      db.insert(signatures).values({
+        signerId: who.signerId,
+        versionId: v.id,
+        versionHashAtSigning: v.markdownHash,
+        consentRecordId: who.recordId,
+        signedAt: new Date(at),
+      });
+
+    const alice = await seed("Alice");
+    const bob = await seed("Bob");
+    await sign(alice, v1, "2026-01-02T00:00:00Z"); // Alice is first
+    await sign(bob, v1, "2026-01-03T00:00:00Z"); // Bob is second
+    await sign(alice, v2, "2026-01-04T00:00:00Z"); // Alice re-signs, still #1
+
+    expect(await getSignatureNumber(alice.signerId, db)).toBe(1);
+    expect(await getSignatureNumber(bob.signerId, db)).toBe(2);
+  });
 });

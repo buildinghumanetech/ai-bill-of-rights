@@ -29,11 +29,15 @@ function readVersionFile(version: string, ext: string): string {
   return fs.readFileSync(path.join(CONTENT_ROOT, `v${version}.${ext}`), "utf-8");
 }
 
-/** The version published immediately before `current`, per versions.json order. */
-function previousVersion(): string {
+/**
+ * The version published immediately before `current`, per versions.json order,
+ * or null when `current` is the very first entry (nothing to carry over from).
+ */
+function previousVersion(): string | null {
   const idx = versionsIndex.history.findIndex(
     (h) => h.version === versionsIndex.current,
   );
+  if (idx <= 0) return null;
   return versionsIndex.history[idx - 1].version;
 }
 
@@ -95,7 +99,9 @@ describe("current version document", () => {
   it("carries every article from the previous version over verbatim", () => {
     // A published version's markdown hash is locked once synced, so a new
     // version may only ADD articles — never silently reword an existing one.
-    const previous = parseDocument(readVersionFile(previousVersion(), "md"));
+    const prev = previousVersion();
+    if (prev === null) return; // first-ever version: nothing to carry over
+    const previous = parseDocument(readVersionFile(prev, "md"));
     const textOf = (doc: typeof previous, id: string) =>
       doc.articles
         .find((a) => a.id === id)!
@@ -202,6 +208,10 @@ describe("homepage articles array", () => {
     // the list, so the exemption can never outlive the problem.
     for (const number of KNOWN_PULLQUOTE_DIVERGENCES) {
       const idx = homepageArticles.findIndex((a) => a.number === number);
+      expect(
+        idx,
+        `article ${number} is not in homepageArticles — update KNOWN_PULLQUOTE_DIVERGENCES`,
+      ).toBeGreaterThanOrEqual(0);
       const article = homepageArticles[idx];
       const canonical = documentArticles[idx].paragraphs
         .flatMap((p) => p.sentences.map((s) => s.text))
@@ -216,8 +226,12 @@ describe("homepage articles array", () => {
     }
   });
 
-  it("keeps each article body a prefix of the canonical text", () => {
+  it("keeps the exempted articles' bodies a prefix of the canonical text", () => {
+    // Weaker than the exact check above, and deliberately so: this is the only
+    // coverage the four exempted articles get. Their pull quotes diverge, but
+    // their bodies must still be canonical text.
     homepageArticles.forEach((article, idx) => {
+      if (!KNOWN_PULLQUOTE_DIVERGENCES.has(article.number)) return;
       const canonical = documentArticles[idx].paragraphs
         .flatMap((p) => p.sentences.map((s) => s.text))
         .join(" ");
@@ -226,6 +240,38 @@ describe("homepage articles array", () => {
         `article ${article.number} body is not a prefix of the canonical text`,
       ).toBe(true);
     });
+  });
+});
+
+describe("resource pages", () => {
+  // /resources/[slug] splits the body on blank lines and renders each chunk as
+  // a plain React text node — there is no markdown renderer. Any markdown
+  // syntax in these files reaches the reader as literal characters.
+  const files = fs
+    .readdirSync(RESOURCES_ROOT)
+    .filter((f) => f.endsWith(".md"))
+    .sort();
+
+  it("finds resource files to check", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  it("contains no markdown syntax the renderer cannot handle", () => {
+    for (const file of files) {
+      const raw = fs.readFileSync(path.join(RESOURCES_ROOT, file), "utf-8");
+      // Body only — frontmatter is parsed out by getResource().
+      const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+      const offenders: string[] = [];
+      if (/\*/.test(body)) offenders.push("emphasis (*)");
+      if (/^#{1,6}\s/m.test(body)) offenders.push("heading (#)");
+      if (/\[[^\]]*\]\([^)]*\)/.test(body)) offenders.push("link ([](…))");
+      if (/^\s*[-+]\s+/m.test(body)) offenders.push("list item");
+      if (/`/.test(body)) offenders.push("code (`)");
+      expect(
+        offenders,
+        `${file} uses ${offenders.join(", ")}, which renders as literal characters`,
+      ).toEqual([]);
+    }
   });
 
   it("points every 'Connects to' pill at a resource file that exists", () => {

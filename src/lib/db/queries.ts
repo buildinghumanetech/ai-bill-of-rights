@@ -81,13 +81,27 @@ export interface SignerListItem {
   version: string;
 }
 
+/**
+ * One row per PERSON — their most recent signature — newest first.
+ *
+ * Deduplicated at the query level rather than by the callers. `signatures` is
+ * unique on (signer_id, version_id), so once more than one version exists a
+ * re-signer produces multiple rows. This list is rendered directly beneath
+ * counts from getSignatureCount(), which counts distinct signers, so per-row
+ * results would make the list contradict the number above it. Paging over
+ * duplicates is worse: filtering them out after the fact shrinks a page below
+ * `limit` while the offset still advances by `limit`, silently skipping people.
+ *
+ * DISTINCT ON (signer_id) needs its own ORDER BY starting with signer_id, so
+ * the newest-first ordering and the page window are applied in an outer query.
+ */
 export async function listSignatures(
   db: any = null,
   opts: { limit: number; offset: number },
 ): Promise<SignerListItem[]> {
   const client = db ?? getDefaultDb();
-  const rows = await client
-    .select({
+  const latestPerSigner = client
+    .selectDistinctOn([signatures.signerId], {
       signerId: signers.id,
       displayName: signers.displayName,
       locationText: signers.locationText,
@@ -99,7 +113,13 @@ export async function listSignatures(
     .from(signatures)
     .innerJoin(signers, eq(signers.id, signatures.signerId))
     .innerJoin(versions, eq(versions.id, signatures.versionId))
-    .orderBy(desc(signatures.signedAt))
+    .orderBy(signatures.signerId, desc(signatures.signedAt))
+    .as("latest_per_signer");
+
+  const rows = await client
+    .select()
+    .from(latestPerSigner)
+    .orderBy(desc(latestPerSigner.signedAt))
     .limit(opts.limit)
     .offset(opts.offset);
   return rows as SignerListItem[];
