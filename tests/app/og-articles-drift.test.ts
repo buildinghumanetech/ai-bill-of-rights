@@ -57,11 +57,14 @@ describe("homepage OG card article list", () => {
     expect(ARTICLES).toHaveLength(9);
   });
 
-  it("keeps the articles numbered 1..N in document order", () => {
-    // A cheap exact check on ordering that doesn't depend on word overlap:
-    // renumbering or reordering the document trips this immediately.
-    expect(articleHeadings().map((h) => h.number)).toEqual(
-      Array.from({ length: articleHeadings().length }, (_, i) => i + 1),
+  it("keeps the article numbers sequential with none skipped", () => {
+    // Note the limit of this check: it validates the document's internal
+    // consistency, not card-vs-document drift. Reordering articles and
+    // renumbering them to stay sequential still passes here — the fuzzy
+    // word-overlap test below is what actually catches a reorder.
+    const numbers = articleHeadings().map((h) => h.number);
+    expect(numbers).toEqual(
+      Array.from({ length: numbers.length }, (_, i) => i + 1),
     );
   });
 

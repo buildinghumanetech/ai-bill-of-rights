@@ -1,10 +1,15 @@
 /**
  * Short forms of the nine articles, used by the homepage OG card.
  *
- * These live here rather than in `route.tsx` because an App Router route file
- * may only export handlers and a fixed set of config keys — Next's generated
- * route types reject any other export, which fails `next build` (and does NOT
- * show up in a bare `tsc --noEmit`, since `.next/types` isn't generated yet).
+ * These live here rather than in `route.tsx` so the drift test can import nine
+ * plain strings without transitively loading `next/og`'s `ImageResponse`
+ * runtime and `@/lib/db/queries` just to read them.
+ *
+ * (A code review claimed a non-handler export from a `route` file fails
+ * `next build`, because Next's generated route types require every extra
+ * export to be `never`. That was investigated and NOT reproduced: a real
+ * `next build` under Next 16.2.6 with the export in place ran TypeScript and
+ * succeeded. Don't re-derive that constraint from this file's existence.)
  *
  * The strings are hand-written paraphrases, NOT derived from the markdown: the
  * real headings are far too long for a 3x3 grid on a 1200x630 card ("You Have

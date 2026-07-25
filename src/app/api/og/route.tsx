@@ -14,7 +14,6 @@ export const runtime = "nodejs";
  * they are the whole pitch, readable at a glance in a feed.
  */
 
-
 /**
  * At ~90 signatures a bare count reads as counter-proof, so we never print the
  * raw number below 1,000 — we frame the smallness as the reason to act. Past
