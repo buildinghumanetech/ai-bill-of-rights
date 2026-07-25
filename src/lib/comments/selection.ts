@@ -51,38 +51,44 @@ export function nextSelectionState(
 }
 
 export interface ScrollDecisionInput {
-  /** Anchor the composer was last scrolled to, or null if it hasn't been. */
-  lastScrolledAnchorId: string | null;
-  /** Anchor of the selection that just arrived. */
-  anchorId: string;
-  /** Viewport rect of the comments column. */
-  rect: { top: number; bottom: number };
+  /** Viewport rect of the *composer itself*, not its container. */
+  composerRect: { top: number; bottom: number };
   viewportHeight: number;
 }
 
 /**
+ * Fraction of the composer that must be on screen for it to count as "the user
+ * can see it". Expressed as a ratio of the element's own measured height rather
+ * than a pixel constant, so it can't drift as the composer's contents change.
+ */
+const MIN_VISIBLE_FRACTION = 0.5;
+
+/**
  * Should the page pull the comments column into view for this selection?
  *
- * Two independent conditions, and both matter:
+ * One rule: scroll when the user can't actually see the composer.
  *
- * - **Same anchor as last time → no.** Dragging an iOS selection handle
- *   re-emits with different text but the *same* anchor, and scrolling on each
- *   of those yanks the sentence out from under the finger still adjusting it.
- *   Keying on the anchor rather than on "is the composer already open" means a
- *   genuinely new sentence still scrolls — a user who scrolls back up to the
- *   article and highlights something else must not be left with the composer
- *   silently updating hundreds of pixels off-screen.
- * - **Already visible → no.** Asking whether the column is actually outside the
- *   viewport is the real question, and it holds at any width, so there is no
- *   breakpoint to drift out of sync with the grid.
+ * An earlier version also gated on the selection's anchor, to stop an iOS
+ * selection-handle drag (which re-emits repeatedly) from yanking the sentence
+ * out from under the finger adjusting it. That turned out to be both redundant
+ * and harmful. Redundant because the first scroll centers the composer, so
+ * every subsequent emit in the same gesture already sees it as visible and
+ * declines. Harmful because anchors are sentence-level: re-selecting a
+ * different phrase within the *same* sentence kept matching the gate, so the
+ * composer silently updated off-screen and never recovered — the thing the user
+ * would have to dismiss to reset it being the thing they couldn't see.
+ *
+ * Measuring the composer rather than its column matters for the same reason:
+ * the column's top edge can sit just inside the viewport while the composer,
+ * which starts ~50px lower, is entirely below the fold.
  */
 export function shouldScrollComposerIntoView({
-  lastScrolledAnchorId,
-  anchorId,
-  rect,
+  composerRect,
   viewportHeight,
 }: ScrollDecisionInput): boolean {
-  if (lastScrolledAnchorId === anchorId) return false;
-  const offScreen = rect.top >= viewportHeight || rect.bottom <= 0;
-  return offScreen;
+  const height = composerRect.bottom - composerRect.top;
+  if (height <= 0) return true;
+  const visible =
+    Math.min(composerRect.bottom, viewportHeight) - Math.max(composerRect.top, 0);
+  return visible / height < MIN_VISIBLE_FRACTION;
 }
