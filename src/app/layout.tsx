@@ -17,9 +17,42 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+
+const OG_TITLE =
+  "The AI Bill of Rights — Nine Commitments Every AI Company Must Make";
+const OG_DESCRIPTION =
+  "A People's Demand for Human-Centered AI. Nine commitments on your data, your memory, your attention, and your right to reach a human. Read it and add your name.";
+
 export const metadata: Metadata = {
+  // Without metadataBase, Next resolves the relative OG image URL against
+  // VERCEL_URL — a per-deployment *.vercel.app host — and warns at build time.
+  metadataBase: new URL(SITE_URL),
   title: "AI Bill of Rights",
-  description: "A People's Demand for Human-Centered AI",
+  description: OG_DESCRIPTION,
+  openGraph: {
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
+    url: "/",
+    siteName: "AI Bill of Rights",
+    type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: "/api/og",
+        width: 1200,
+        height: 630,
+        alt: "The AI Bill of Rights — nine commitments demanded of every AI company",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
+    images: ["/api/og"],
+  },
 };
 
 export default async function RootLayout({
