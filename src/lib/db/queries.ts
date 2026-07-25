@@ -124,9 +124,15 @@ export async function listSignatures(
     .orderBy(
       signatures.signerId,
       desc(signatures.signedAt),
-      // id breaks ties so WHICH row survives DISTINCT ON is deterministic —
-      // otherwise the `version` shown next to a name with two same-timestamp
-      // signatures is arbitrary and can change between page loads.
+      // Ties on signed_at are real: admin/bulk-created signatures and backfills
+      // stamp a fixed time. Break them on the VERSION's publish date, so the row
+      // that survives is the newer version — which is what this function
+      // promises ("their most recent signature") and what gets rendered next to
+      // the person's name. Ordering by signatures.id alone would be
+      // deterministic but arbitrary: id is a random uuid, so roughly half the
+      // time the OLDER version would win. id remains as a final tiebreaker to
+      // keep the result stable if two rows somehow share both timestamps.
+      desc(versions.publishedAt),
       desc(signatures.id),
     )
     .as("latest_per_signer");

@@ -233,7 +233,7 @@ describe("listRecentSignersSince", () => {
     const rows = await listRecentSignersSince(null, db);
     expect(rows.map((r) => r.displayName)).toEqual(["Prompt"]);
     // Announced at their FIRST signature's time, not the re-sign.
-    expect(rows[0].signedAt.getTime()).toBeCloseTo(now - 20 * 60 * 1000, -3);
+    expect(rows[0].signedAt.getTime()).toBe(now - 20 * 60 * 1000);
   });
 
   // Equal signed_at is not hypothetical: admin/bulk-created signatures and any
@@ -330,25 +330,28 @@ describe("signer list queries", () => {
   });
 
   // Which of two same-timestamp signatures survives DISTINCT ON decides the
-  // `version` shown next to the person's name. Without an id tiebreaker in the
-  // DISTINCT ON sort that choice is arbitrary and can differ between loads.
-  it("picks the same row deterministically when timestamps tie", async () => {
+  // `version` rendered next to the person's name. Asserting the SPECIFIC
+  // expected winner, not just self-consistency: repeated reads of unchanged
+  // data agree under any tiebreaker (or none), so a self-consistency check
+  // would pass on the unfixed code.
+  it("shows the newer version when a person's two signatures tie on time", async () => {
     const db = await createTestDb();
-    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    await syncVersions(db, [
+      { ...sample("1.0.0", false), publishedAt: new Date("2026-01-01T00:00:00Z") },
+      { ...sample("1.1.0", true), publishedAt: new Date("2026-06-01T00:00:00Z") },
+    ]);
     const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
-    const sameInstant = new Date("2026-01-05T00:00:00Z");
+    const sameInstant = new Date("2026-06-05T00:00:00Z");
 
     const who = await seedSigner(db, "Tied");
     await seedSignature(db, who, v1, sameInstant);
     await seedSignature(db, who, v2, sameInstant);
 
-    const first = await listSignatures(db, { limit: 10, offset: 0 });
-    expect(first).toHaveLength(1);
-    // Repeated reads agree with each other.
-    for (let i = 0; i < 5; i++) {
-      const again = await listSignatures(db, { limit: 10, offset: 0 });
-      expect(again[0].version).toBe(first[0].version);
-    }
+    const rows = await listSignatures(db, { limit: 10, offset: 0 });
+    expect(rows).toHaveLength(1);
+    // The later-published version wins, not whichever row's random uuid sorts
+    // higher — the function promises "their most recent signature".
+    expect(rows[0].version).toBe("1.1.0");
   });
 
   // getSignatureNumber must anchor on the signer's EARLIEST signature, or a

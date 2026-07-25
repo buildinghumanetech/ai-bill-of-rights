@@ -14,29 +14,43 @@
 -- original mapping so the move is reversible — see README for the down SQL.
 --
 -- ORDERING: run this AFTER sync-versions has created the v0.1.0 row AND made
--- it current (sync-versions runs on postbuild). The update targets
+-- it current (sync-versions runs on postbuild). The move targets
 -- `version = '0.1.0' AND is_current`, so running it out of order — or after a
 -- later version has already taken over as current — is a no-op rather than a
 -- move onto a non-current version, which would leave threads hidden AND
 -- destroy the original scoping. Safe to re-run.
 
--- 1. Preserve the original mapping so this is reversible. IF NOT EXISTS means
---    a re-run will not overwrite the first run's snapshot with a now-empty set.
-CREATE TABLE IF NOT EXISTS "comment_version_backup_0008" AS
-SELECT "id", "base_version_id"
-  FROM "comments"
- WHERE "base_version_id" = (SELECT "id" FROM "versions" WHERE "version" = '0.0.1');
+-- 1. Backup tables: STRUCTURE ONLY, deliberately not populated here.
+--
+--    Populating them at creation time would be wrong. These statements run
+--    unconditionally, but the move below is guarded — so on the documented
+--    "safe to run early" path they would capture whatever existed at that
+--    moment, and IF NOT EXISTS means the real run later would never refresh
+--    them. Anything written against 0.0.1 in between would then be moved but
+--    absent from the backup, and the rollback SQL would strand it on the wrong
+--    version. The population happens inside the same atomic statement as the
+--    move instead, so the two can never disagree.
+CREATE TABLE IF NOT EXISTS "comment_version_backup_0008" (
+  "id" uuid PRIMARY KEY,
+  "base_version_id" uuid NOT NULL
+);
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "proposed_edit_version_backup_0008" AS
-SELECT "id", "base_version_id"
-  FROM "proposed_edits"
- WHERE "base_version_id" = (SELECT "id" FROM "versions" WHERE "version" = '0.0.1');
+CREATE TABLE IF NOT EXISTS "proposed_edit_version_backup_0008" (
+  "id" uuid PRIMARY KEY,
+  "base_version_id" uuid NOT NULL
+);
 --> statement-breakpoint
--- 2. Move both tables in a SINGLE statement. scripts/apply-migration.ts sends
---    each statement as its own request (neon serverless HTTP — one implicit
---    transaction per call), so two separate UPDATEs could leave the two tables
---    in different version scopes if the second failed. A data-modifying CTE
---    keeps them atomic.
+-- 2. Snapshot and move, in a SINGLE statement.
+--
+--    scripts/apply-migration.ts sends each statement as its own request (neon
+--    serverless HTTP — one implicit transaction per call), so separate
+--    statements could leave the backups and the two tables inconsistent if one
+--    failed. Every sub-statement of a data-modifying CTE sees the same
+--    snapshot, so the INSERTs record pre-update values even though the UPDATEs
+--    run in the same statement.
+--
+--    ON CONFLICT DO NOTHING keeps the FIRST run's mapping on a re-run while
+--    still capturing any rows a previous (no-op) run did not see.
 --
 --    endorsements is deliberately NOT re-pointed: endorsing v0.0.1 is a
 --    statement about that version's text, not about v0.1.0's, and the table is
@@ -46,6 +60,22 @@ WITH "tgt" AS (
 ),
 "src" AS (
   SELECT "id" FROM "versions" WHERE "version" = '0.0.1' LIMIT 1
+),
+"snap_comments" AS (
+  INSERT INTO "comment_version_backup_0008" ("id", "base_version_id")
+  SELECT "id", "base_version_id"
+    FROM "comments"
+   WHERE "base_version_id" = (SELECT "id" FROM "src")
+     AND EXISTS (SELECT 1 FROM "tgt")
+  ON CONFLICT ("id") DO NOTHING
+),
+"snap_proposed_edits" AS (
+  INSERT INTO "proposed_edit_version_backup_0008" ("id", "base_version_id")
+  SELECT "id", "base_version_id"
+    FROM "proposed_edits"
+   WHERE "base_version_id" = (SELECT "id" FROM "src")
+     AND EXISTS (SELECT 1 FROM "tgt")
+  ON CONFLICT ("id") DO NOTHING
 ),
 "moved_comments" AS (
   UPDATE "comments"

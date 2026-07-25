@@ -137,13 +137,13 @@
     },
     {
       "id": 11,
-      "slug": "safe-tested-honest-systems",
-      "human_text": "You Have the Right to Safe, Tested, Honest Systems",
+      "slug": "safe-tested-systems",
+      "human_text": "You Have the Right to Safe, Tested Systems",
       "prohibited_behaviors": [],
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Honesty",
+        "HumaneBench as measurement infrastructure",
         "NIST AI Risk Management Framework",
         "EU AI Act conformity assessments",
         "Model cards and system documentation"

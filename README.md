@@ -73,14 +73,14 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 ### Post-deploy steps for the 0.1.0 publish
 
-Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here. After the deploy:
+Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.** After the deploy:
 
 ```
 pnpm tsx scripts/apply-migration.ts drizzle/0007_signatures_signer_signed_at_idx.sql
 pnpm tsx scripts/apply-migration.ts drizzle/0008_repoint_comments_to_v0_1_0.sql
 ```
 
-0007 is two indexes (correctness is unaffected, but `/signers`, `/signatories`, and the homepage ticker fall back to full scans without them). 0008 carries the existing discussion forward. Both are safe to re-run.
+0007 adds **two** indexes on `signatures` — `(signer_id, signed_at DESC)` for the deduplicated signer lists behind `/signers` and `/signatories`, and `(signed_at DESC)` for the `signed_at > cutoff` scan behind `/api/signers/recent`, the homepage ticker polled about once a minute by every open tab. Correctness is unaffected either way; without them those queries fall back to full scans. 0008 carries the existing discussion forward. Both are safe to re-run.
 
 0008 only moves comments onto v0.1.0 while v0.1.0 is the *current* version, so running it out of order — for instance after a later version has taken over — is a no-op rather than a move that would leave threads hidden with their original scoping destroyed.
 
@@ -100,7 +100,14 @@ UPDATE "proposed_edits" AS p
  WHERE p."id" = b."id";
 ```
 
-This restores only the rows that were carried forward — comments genuinely written against v0.1.0 are not in the backup and are left where they are. Drop the backup tables once the publish has settled.
+This restores only the rows that were carried forward — comments genuinely written against v0.1.0 are not in the backup and are left where they are. The backups are populated inside the same statement that performs the move, so they always match what was actually moved, including on a re-run.
+
+⚠️ **Do not run `pnpm db:push` while the backup tables exist.** They are intentionally not declared in `src/lib/db/schema.ts`, and drizzle-kit treats tables missing from the schema as drops — one push would silently destroy the only copy of the original mapping. Drop them yourself once the publish has settled:
+
+```sql
+DROP TABLE IF EXISTS "comment_version_backup_0008";
+DROP TABLE IF EXISTS "proposed_edit_version_backup_0008";
+```
 
 ## "Implement as Code" surface for AI builders
 

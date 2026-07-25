@@ -129,6 +129,35 @@ async function seedPublishedUpgrade() {
   return { db, currentId: await versionId(db, "0.1.0"), editId };
 }
 
+/** How many comment rows the migration recorded in its backup table. */
+async function backupCount(db: TestDb): Promise<number> {
+  const res = await db.execute(
+    sql.raw(`SELECT count(*)::int AS n FROM "comment_version_backup_0008"`),
+  );
+  const rows = (res as unknown as { rows: { n: number }[] }).rows;
+  return rows[0].n;
+}
+
+/** The operator-facing rollback published in README.md — both halves. */
+async function rollback(db: TestDb) {
+  await db.execute(
+    sql.raw(`
+      UPDATE "comments" AS c
+         SET "base_version_id" = b."base_version_id"
+        FROM "comment_version_backup_0008" AS b
+       WHERE c."id" = b."id"
+    `),
+  );
+  await db.execute(
+    sql.raw(`
+      UPDATE "proposed_edits" AS p
+         SET "base_version_id" = b."base_version_id"
+        FROM "proposed_edit_version_backup_0008" AS b
+       WHERE p."id" = b."id"
+    `),
+  );
+}
+
 async function editVersionOf(db: TestDb, editId: string) {
   const [row] = await db
     .select({ baseVersionId: proposedEdits.baseVersionId })
@@ -140,13 +169,25 @@ async function editVersionOf(db: TestDb, editId: string) {
 
 describe("0008 repoint comments to the new current version", () => {
   it("executes every statement in the file", () => {
-    // Guards against a mangled `--> statement-breakpoint` collapsing the
-    // backups and the update into one chunk, or a statement being dropped.
+    // Guards against a mangled `--> statement-breakpoint` collapsing chunks or
+    // a statement being dropped. The assertions on the final statement are
+    // deliberately discriminating: they name the two properties that make this
+    // migration safe, so splitting the CTE back into independent UPDATEs or
+    // dropping the current-version guard fails here rather than silently.
     const statements = migrationStatements();
     expect(statements).toHaveLength(3);
-    expect(statements[0]).toMatch(/comment_version_backup_0008/);
-    expect(statements[1]).toMatch(/proposed_edit_version_backup_0008/);
-    expect(statements[2]).toMatch(/proposed_edits/);
+    expect(statements[0]).toMatch(/CREATE TABLE IF NOT EXISTS "comment_version_backup_0008"/);
+    expect(statements[1]).toMatch(/CREATE TABLE IF NOT EXISTS "proposed_edit_version_backup_0008"/);
+    // Atomic: the snapshot and both moves are one data-modifying CTE.
+    expect(statements[2]).toMatch(/"moved_comments" AS/);
+    expect(statements[2]).toMatch(/"snap_comments" AS/);
+    expect(statements[2]).toMatch(/"snap_proposed_edits" AS/);
+    // Only fires while 0.1.0 is actually current.
+    expect(statements[2]).toMatch(/AND "is_current"/);
+    // The backups must NOT be populated at creation time — see the file's
+    // comment: an early no-op run would otherwise freeze a stale snapshot.
+    expect(statements[0]).not.toMatch(/SELECT/);
+    expect(statements[1]).not.toMatch(/SELECT/);
   });
 
   it("hides the existing thread without the migration (the bug it fixes)", async () => {
@@ -235,24 +276,68 @@ describe("0008 repoint comments to the new current version", () => {
   });
 
   it("records the original mapping so the move can be reversed", async () => {
-    const { db, currentId } = await seedPublishedUpgrade();
+    const { db, currentId, editId } = await seedPublishedUpgrade();
     const oldId = await versionId(db, "0.0.1");
     await applyMigration(db);
     expect(await listCommentsForVersion(db, currentId)).toHaveLength(1);
+    expect(await editVersionOf(db, editId)).toBe(currentId);
 
-    // The down SQL documented in README, run against the backup table.
-    await db.execute(
-      sql.raw(`
-        UPDATE "comments" AS c
-           SET "base_version_id" = b."base_version_id"
-          FROM "comment_version_backup_0008" AS b
-         WHERE c."id" = b."id";
-      `),
-    );
+    // BOTH halves of the down SQL published in the README. The proposed_edits
+    // half is operator-facing rollback procedure; if it is never executed, a
+    // typo in it is discovered during a live rollback.
+    await rollback(db);
 
     expect(await listCommentsForVersion(db, currentId)).toHaveLength(0);
     expect(
       (await listCommentsForVersion(db, oldId)).map((c) => c.body),
     ).toEqual(["old-thread"]);
+    expect(await editVersionOf(db, editId)).toBe(oldId);
+  });
+
+  // The failure this migration's structure exists to prevent. The backups are
+  // created unconditionally but the move is guarded, so if the backups were
+  // POPULATED at creation time, an early no-op run would freeze a snapshot that
+  // IF NOT EXISTS then never refreshes — and anything written against 0.0.1
+  // between the two runs would be moved but absent from the backup, leaving the
+  // rollback unable to restore it. Populating inside the guarded CTE avoids it.
+  it("captures rows written between a premature run and the real one", async () => {
+    const db = await createTestDb();
+    // First: 0.1.0 exists but is not yet current — the documented no-op path.
+    await syncVersions(db, [
+      { ...doc("0.0.1"), isCurrent: true },
+      { ...doc("0.1.0"), isCurrent: false },
+    ]);
+    await seedCommentOnVersion(db, "0.0.1", "before-early-run", "article-1-s-1");
+
+    await applyMigration(db);
+
+    // The tables exist but captured nothing, because nothing moved.
+    expect(await backupCount(db)).toBe(0);
+    const oldId = await versionId(db, "0.0.1");
+    expect(await listCommentsForVersion(db, oldId)).toHaveLength(1);
+
+    // A comment arrives after the premature run.
+    await seedCommentOnVersion(db, "0.0.1", "after-early-run", "article-2-s-1");
+
+    // Now the publish completes and the migration is run for real.
+    await db.update(versions).set({ isCurrent: false });
+    await db
+      .update(versions)
+      .set({ isCurrent: true })
+      .where(eq(versions.version, "0.1.0"));
+    await applyMigration(db);
+
+    const currentId = await versionId(db, "0.1.0");
+    expect(
+      (await listCommentsForVersion(db, currentId)).map((c) => c.body).sort(),
+    ).toEqual(["after-early-run", "before-early-run"]);
+    // BOTH are in the backup — including the one written after the early run.
+    expect(await backupCount(db)).toBe(2);
+
+    // And the rollback genuinely restores both.
+    await rollback(db);
+    expect(
+      (await listCommentsForVersion(db, oldId)).map((c) => c.body).sort(),
+    ).toEqual(["after-early-run", "before-early-run"]);
   });
 });

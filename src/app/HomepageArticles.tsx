@@ -235,13 +235,14 @@ export const articles: Article[] = [
   },
   {
     number: "11",
-    title: "You Have the Right to Safe, Tested, Honest Systems",
-    body: "An AI system released into the world must be tested for the things people will actually use it for, and must say plainly what it cannot do. No shipping capabilities that were never evaluated. No confident answers in domains the system was never validated in. Known limitations, failure modes, and error rates belong in public before deployment — not discovered afterward by the people harmed.",
-    pullQuote: "It has to work, and admit what it can't do.",
+    title: "You Have the Right to Safe, Tested Systems",
+    body: "Before an AI system is used to make a decision about you, it must be tested and shown to be safe and effective.",
+    pullQuote:
+      "The burden of proving it works falls on the company that builds it, not on you to prove it broke you after the fact.",
     connects: [
       {
-        title: "HumaneBench Principle — Honesty",
-        slug: "humanebench-principle-honesty",
+        title: "HumaneBench as measurement infrastructure",
+        slug: "humanebench-as-measurement-infrastructure",
       },
       {
         title: "NIST AI Risk Management Framework",
