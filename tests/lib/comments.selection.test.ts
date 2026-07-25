@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   nextSelectionState,
-  shouldEmitSelection,
+  shouldScrollComposerIntoView,
   type AnchoredSelection,
 } from "@/lib/comments/selection";
 
@@ -81,10 +81,91 @@ describe("nextSelectionState", () => {
   });
 });
 
-describe("shouldEmitSelection", () => {
-  it("agrees with the reducer", () => {
-    expect(shouldEmitSelection(null, sel("a-1", "x"))).toBe(true);
-    expect(shouldEmitSelection(sel("a-1", "x"), sel("a-1", "x"))).toBe(false);
-    expect(shouldEmitSelection(null, sel("a-1", "  "))).toBe(false);
+describe("shouldScrollComposerIntoView", () => {
+  const VH = 800;
+  /** Column stacked below the fold — the narrow-viewport case. */
+  const offScreen = { top: 1400, bottom: 2000 };
+  /** Column beside the article and visible — the desktop case. */
+  const onScreen = { top: 120, bottom: 700 };
+
+  it("scrolls for a new anchor when the column is off-screen", () => {
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: null,
+        anchorId: "a-1",
+        rect: offScreen,
+        viewportHeight: VH,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not scroll while the same anchor's selection is being adjusted", () => {
+    // Dragging an iOS selection handle re-emits with the same anchor; scrolling
+    // on each would yank the sentence out from under the finger.
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: "a-1",
+        anchorId: "a-1",
+        rect: offScreen,
+        viewportHeight: VH,
+      }),
+    ).toBe(false);
+  });
+
+  it("scrolls again when the user picks a different sentence", () => {
+    // Regression guard: gating on "composer already open" instead of on the
+    // anchor left a second selection updating the composer off-screen.
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: "a-1",
+        anchorId: "a-2",
+        rect: offScreen,
+        viewportHeight: VH,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not scroll when the column is already visible", () => {
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: null,
+        anchorId: "a-1",
+        rect: onScreen,
+        viewportHeight: VH,
+      }),
+    ).toBe(false);
+  });
+
+  it("treats a column scrolled off the top as off-screen", () => {
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: null,
+        anchorId: "a-1",
+        rect: { top: -900, bottom: -100 },
+        viewportHeight: VH,
+      }),
+    ).toBe(true);
+  });
+
+  it("counts a column resting exactly at the bottom edge as off-screen", () => {
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: null,
+        anchorId: "a-1",
+        rect: { top: VH, bottom: VH + 400 },
+        viewportHeight: VH,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a partially visible column put", () => {
+    expect(
+      shouldScrollComposerIntoView({
+        lastScrolledAnchorId: null,
+        anchorId: "a-1",
+        rect: { top: VH - 40, bottom: VH + 400 },
+        viewportHeight: VH,
+      }),
+    ).toBe(false);
   });
 });
