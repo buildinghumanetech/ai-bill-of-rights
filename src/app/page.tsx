@@ -29,6 +29,17 @@ export default async function Home() {
           </Link>{" "}
           to back them up.
         </p>
+        <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-zinc-600">
+          It&apos;s a living document, not a petition to take or leave. Sign v
+          {data.currentVersion}, or{" "}
+          <Link
+            href="/proposed"
+            className="font-semibold text-blue-600 underline underline-offset-4 hover:text-blue-700"
+          >
+            mark up the v{data.proposedVersion} draft
+          </Link>{" "}
+          and tell us what you&apos;d change.
+        </p>
       </section>
 
       <HeroSection />
@@ -66,7 +77,19 @@ export default async function Home() {
             baseline. Companies that won&apos;t agree to them are telling
             you who they are.
           </p>
+          <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-600">
+            Not the whole way there for you? That&apos;s what the v
+            {data.proposedVersion} draft is for — highlight any line and tell us
+            what you&apos;d change. You don&apos;t have to agree with every word
+            to have a say in the next version.
+          </p>
           <div className="mt-10 flex flex-col items-center gap-6">
+            <Link
+              href="/proposed"
+              className="rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+            >
+              Suggest a change to v{data.proposedVersion} →
+            </Link>
             <Link
               href={`/v/${data.currentVersion}/as-code`}
               className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
