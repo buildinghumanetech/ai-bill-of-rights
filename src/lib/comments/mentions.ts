@@ -47,18 +47,67 @@ export interface ParsedMention {
 const WORD_CHAR = /[\p{L}\p{N}\p{M}_]/u;
 /**
  * Characters that may NOT immediately precede a mention's `@`, because they
- * mean the `@` belongs to something else — an email address or a URL path.
+ * mean the `@` is part of an email local part rather than opening a mention.
  *
- * Rejecting a set is better than whitelisting openers: a whitelist silently
- * dropped ordinary mentions like "Hi,@Alice" and "cc:@Alice". `/` is essential
- * here — without it "https://medium.com/@alice" would notify signer Alice.
+ * Rejecting a set beats whitelisting openers, which silently dropped ordinary
+ * mentions like "Hi,@Alice" and "cc:@Alice". The set is kept to what a
+ * realistic address actually needs: adding `& ! # = ? ~` for RFC completeness
+ * bought no coverage (the set still isn't RFC-complete, since `'` is
+ * deliberately out so a quoted "'@Alice'" resolves) while silently dropping
+ * "Great!@Alice" and "Really?@Alice".
  *
- * Rejects bob@, josé@, 田中@, bob.smith@, medium.com/@alice, and
- * "sentence.@Alice". Known gap: the apostrophe is left OUT so that a quoted
- * "'@Alice'" still resolves, which means "bob'smith@alice.com" is not caught.
+ * `/` is NOT here — a bare character class cannot tell "medium.com/@alice" (a
+ * URL) from "@Alice/@Bob" (two mentions). See `isUrlSlashBefore`.
  */
-const MENTION_BLOCKER = /[\p{L}\p{N}\p{M}_.+%\-/&!#=?~]/u;
+const MENTION_BLOCKER = /[\p{L}\p{N}\p{M}_.+%-]/u;
 const HAS_LETTER = /\p{L}/u;
+/** Hyphens that can sit inside a name, including typographic variants that
+ * arrive via paste or autocorrect. */
+const NAME_HYPHENS = ["-", "‐", "‑"];
+/** A dotted host, e.g. the "medium.com" in "medium.com/@alice". */
+const DOTTED_HOST = /[\p{L}\p{N}]\.[\p{L}]/u;
+
+/**
+ * The code point ending at `i`, stepping back over a surrogate pair. Indexing
+ * `body[i - 1]` would yield a lone low surrogate, which matches no Unicode
+ * property — so an astral-script email local part ("𐐨@alice.com") would slip
+ * past the opener check and mail the wrong person.
+ */
+function codePointBefore(body: string, i: number): string | undefined {
+  if (i <= 0) return undefined;
+  const cp = body.codePointAt(i - 1);
+  // A low surrogate here means the real code point starts one unit earlier.
+  if (cp !== undefined && cp >= 0xdc00 && cp <= 0xdfff && i >= 2) {
+    const full = body.codePointAt(i - 2);
+    if (full !== undefined) return String.fromCodePoint(full);
+  }
+  return cp === undefined ? undefined : String.fromCodePoint(cp);
+}
+
+/**
+ * Whether the `/` immediately before `i` is a URL path separator rather than a
+ * plain separator between two mentions.
+ *
+ * Decided from the whitespace-delimited token, not from the single character:
+ * "https://medium.com/@alice" and "github.com/@alice" are URLs, while
+ * "@Alice/@Bob" and "and/or/@Alice" are not. Blanket-rejecting every `/`
+ * silently dropped the latter, which is the same over-rejection this module
+ * removed from the opener whitelist.
+ */
+function isUrlSlashBefore(body: string, i: number): boolean {
+  let start = i - 1;
+  while (start > 0 && !/\s/u.test(body[start - 1])) start--;
+  const segment = body.slice(start, i - 1);
+  return segment.includes("://") || DOTTED_HOST.test(segment);
+}
+
+/** Whether the `@` at `i` belongs to a URL or an email address. */
+function isBlockedOpener(body: string, i: number): boolean {
+  const prev = codePointBefore(body, i);
+  if (prev === undefined) return false;
+  if (prev === "/") return isUrlSlashBefore(body, i);
+  return MENTION_BLOCKER.test(prev);
+}
 
 /**
  * Whether the character at `i` is a word char, tested by code POINT — indexing
@@ -86,7 +135,9 @@ function endsMidWord(body: string, end: number): boolean {
   const cp = body.codePointAt(end);
   if (cp === undefined) return false;
   const ch = String.fromCodePoint(cp);
-  if (ch === "-") return isWordCharAt(body, end + 1);
+  // Typographic hyphens count too, or "@Jean‑Pierre" with a U+2011 would let
+  // signer "Jean" match a partial word again.
+  if (NAME_HYPHENS.includes(ch)) return isWordCharAt(body, end + ch.length);
   return WORD_CHAR.test(ch);
 }
 /**
@@ -187,7 +238,7 @@ export function parseMentions(
     // Reject an @ that belongs to an email address or a URL path.
     // "sentence.@Alice" is caught by this too; that false negative is
     // preferable to mailing the wrong person.
-    if (i > 0 && MENTION_BLOCKER.test(body[i - 1])) {
+    if (isBlockedOpener(body, i)) {
       i++;
       continue;
     }
