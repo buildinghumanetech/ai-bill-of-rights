@@ -361,11 +361,26 @@ describe("parseMentions", () => {
       expect(result[0].signerId).toBe("3");
     });
 
-    it("ignores an email address with an astral-script local part", () => {
-      // U+10428 (Deseret) is a surrogate pair; indexing body[i-1] would see a
-      // lone low surrogate, which matches no Unicode property.
-      const body = "write \u{10428}@alice.com";
+    // The URL check must not be gated on one specific preceding character, or
+    // each of these reaches the wrong recipient by a different route.
+    it.each([
+      ["query string", "see https://example.com/p?ref=@alice"],
+      ["fragment", "see https://example.com/page#@alice"],
+      ["ampersand in query", "see https://x.com/l?a=1&@alice"],
+      ["dotted-quad host", "see 192.168.1.5/@alice"],
+      ["scheme-less dotted-quad", "see 10.0.0.7/@alice"],
+    ])("does not treat @name in a %s as a mention", (_label, body) => {
       expect(parseMentions(body, signers)).toEqual([]);
+    });
+
+    // DOTTED_HOST must not be loose enough to read prose abbreviations as hosts.
+    it.each([
+      ["e.g.", "e.g./@Alice"],
+      ["etc.", "etc./@Alice"],
+    ])("still matches a mention after the abbreviation %s", (_label, body) => {
+      const result = parseMentions(body, signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
     });
   });
 
@@ -382,11 +397,8 @@ describe("parseMentions", () => {
       expect(result[0].signerId).toBe("3");
     });
 
-    it("still rejects a name cut short by a hyphenated given name", () => {
-      const jean = [{ id: "1", displayName: "Jean Dupont" }];
-      expect(parseMentions("@Jean-Pierre hi", jean)).toEqual([]);
-    });
-
+    // The ASCII-hyphen case is covered in "hyphenated and composed names";
+    // this block only pins the typographic variants and the punctuation uses.
     // Typographic hyphens arrive via paste and autocorrect.
     it.each([
       ["U+2010 hyphen", "‐"],
@@ -408,8 +420,23 @@ describe("parseMentions", () => {
       ["hyphen", "bob-smith@alice.com"],
       ["underscore", "bob_smith@alice.com"],
       ["digit", "bob2@alice.com"],
+      // Astral-script local part: U+10428 (Deseret) is a surrogate pair, so
+      // indexing body[i-1] would see a lone low surrogate matching no property.
+      ["astral letter", "\u{10428}@alice.com"],
     ])("does not open a mention after a %s", (_label, body) => {
       expect(parseMentions(`write ${body}`, signers)).toEqual([]);
+    });
+
+    it("does not judge the opener by the character before an unpaired surrogate", () => {
+      // sanitizeText strips only C0/DEL, so a lone surrogate can reach here.
+      // Stepping back blindly treated the char TWO positions back as the
+      // opener, so these two bodies disagreed: "a" blocked the mention and "!"
+      // allowed it. An unpaired surrogate is not an email-local character, so
+      // both must resolve.
+      const afterLetter = parseMentions("a\uDC28@Alice", signers);
+      const afterPunct = parseMentions("Great!\uDC28@Alice", signers);
+      expect(afterLetter.map((m) => m.signerId)).toEqual(["3"]);
+      expect(afterPunct.map((m) => m.signerId)).toEqual(["3"]);
     });
 
     // Punctuation that an address doesn't realistically need must NOT block,

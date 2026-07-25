@@ -64,8 +64,15 @@ const HAS_LETTER = /\p{L}/u;
 /** Hyphens that can sit inside a name, including typographic variants that
  * arrive via paste or autocorrect. */
 const NAME_HYPHENS = ["-", "‐", "‑"];
-/** A dotted host, e.g. the "medium.com" in "medium.com/@alice". */
-const DOTTED_HOST = /[\p{L}\p{N}]\.[\p{L}]/u;
+/**
+ * A dotted host, e.g. the "medium.com" in "medium.com/@alice". Digits are
+ * allowed on both sides so dotted-quad hosts ("192.168.1.5/@alice") count.
+ *
+ * Anchored at the END of the segment so a trailing prose abbreviation isn't
+ * read as a host: "e.g./@Alice" and "etc./@Alice" must still resolve. A host is
+ * always the last thing before the path separator.
+ */
+const DOTTED_HOST = /[\p{L}\p{N}]\.[\p{L}\p{N}]+$/u;
 
 /**
  * The code point ending at `i`, stepping back over a surrogate pair. Indexing
@@ -76,36 +83,53 @@ const DOTTED_HOST = /[\p{L}\p{N}]\.[\p{L}]/u;
 function codePointBefore(body: string, i: number): string | undefined {
   if (i <= 0) return undefined;
   const cp = body.codePointAt(i - 1);
-  // A low surrogate here means the real code point starts one unit earlier.
-  if (cp !== undefined && cp >= 0xdc00 && cp <= 0xdfff && i >= 2) {
-    const full = body.codePointAt(i - 2);
-    if (full !== undefined) return String.fromCodePoint(full);
+  if (cp === undefined) return undefined;
+  // A low surrogate means the real code point may start one unit earlier — but
+  // only if that unit is actually its HIGH surrogate. Comment bodies can hold
+  // an unpaired surrogate (sanitizeText strips only C0/DEL), and stepping back
+  // blindly would judge the opener against the wrong character entirely.
+  if (cp >= 0xdc00 && cp <= 0xdfff && i >= 2) {
+    const hi = body.charCodeAt(i - 2);
+    if (hi >= 0xd800 && hi <= 0xdbff) {
+      const full = body.codePointAt(i - 2);
+      if (full !== undefined) return String.fromCodePoint(full);
+    }
   }
-  return cp === undefined ? undefined : String.fromCodePoint(cp);
+  return String.fromCodePoint(cp);
 }
 
 /**
- * Whether the `/` immediately before `i` is a URL path separator rather than a
- * plain separator between two mentions.
+ * Whether the `@` at `i` sits inside a URL.
  *
- * Decided from the whitespace-delimited token, not from the single character:
- * "https://medium.com/@alice" and "github.com/@alice" are URLs, while
- * "@Alice/@Bob" and "and/or/@Alice" are not. Blanket-rejecting every `/`
- * silently dropped the latter, which is the same over-rejection this module
- * removed from the opener whitelist.
+ * Decided from the whole whitespace-delimited token rather than the single
+ * preceding character. That distinction is the entire point: no character class
+ * can tell "medium.com/@alice" (a URL) from "@Alice/@Bob" (two mentions), and
+ * gating this check on one specific character just moves the hole to the next
+ * one — `?ref=@alice`, `#@alice` and `&@alice` all reach the same wrong
+ * recipient by a different route.
+ *
+ * A token is a URL if the part before the `@` has a scheme or ends in a dotted
+ * host. "@Alice/@Bob", "and/or/@Alice", "Great!@Alice" and "e.g./@Alice" have
+ * neither, so they still resolve.
  */
-function isUrlSlashBefore(body: string, i: number): boolean {
-  let start = i - 1;
+function isInUrlToken(body: string, i: number): boolean {
+  let start = i;
   while (start > 0 && !/\s/u.test(body[start - 1])) start--;
-  const segment = body.slice(start, i - 1);
-  return segment.includes("://") || DOTTED_HOST.test(segment);
+  const before = body.slice(start, i);
+  if (before.includes("://")) return true;
+  // Take everything up to the first path/query/fragment separator, so what
+  // DOTTED_HOST inspects ends at the host: "example.com/p?ref=" -> "example.com".
+  const host = before.split(/[/?#]/u)[0];
+  return DOTTED_HOST.test(host);
 }
 
 /** Whether the `@` at `i` belongs to a URL or an email address. */
 function isBlockedOpener(body: string, i: number): boolean {
   const prev = codePointBefore(body, i);
   if (prev === undefined) return false;
-  if (prev === "/") return isUrlSlashBefore(body, i);
+  if (isInUrlToken(body, i)) return true;
+  // A bare `/` outside a URL is an ordinary separator, as in "@Alice/@Bob".
+  if (prev === "/") return false;
   return MENTION_BLOCKER.test(prev);
 }
 
