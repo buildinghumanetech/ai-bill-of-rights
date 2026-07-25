@@ -52,8 +52,11 @@ const realScroll = Element.prototype.scrollIntoView;
  * unrelated markup: an `h3` -> `h2` a11y fix would have made the column report
  * composer geometry and quietly disarmed them.
  *
- * `height` is passed through as well as top/bottom because the scroll-alignment
- * choice reads it.
+ * The `height` argument is what sets `bottom`, and `bottom - top` is the only
+ * thing either rule measures — `ScrollDecisionInput` doesn't even declare a
+ * `height` field. The `height` key on these fakes is there for DOMRect
+ * faithfulness and is read by nothing, so keep it consistent with `bottom` and
+ * don't be tempted to use it *instead* of `bottom`.
  */
 function placeComposerAt(top: number, height: number = COMPOSER_HEIGHT) {
   const composerRect = { top, bottom: top + height, height } as DOMRect;
@@ -172,6 +175,19 @@ describe("<CommentsColumn> composer auto-scroll", () => {
     selectText("a-1", "Opt-out is not consent.");
     expect(scrolled).toHaveLength(1);
     expect(scrollOpts[0].block).toBe("start");
+  });
+
+  it("chooses the alignment from the composer's height, not the column's", () => {
+    // The alignment wiring needs its own discriminating case: the column is only
+    // COLUMN_LEAD taller, so for most heights both fit or both overflow and
+    // pointing composerScrollBlock at the column would go unnoticed. Here the
+    // composer is 780 (fits in 800 -> "center") while the column is 830
+    // (doesn't -> "start"), so the two genuinely disagree.
+    placeComposerAt(VIEWPORT_HEIGHT + 400, VIEWPORT_HEIGHT - 20);
+    render(<CommentsColumn {...columnProps()} />);
+    selectText("a-1", "Opt-out is not consent.");
+    expect(scrolled).toHaveLength(1);
+    expect(scrollOpts[0].block).toBe("center");
   });
 
   it("does not scroll when the composer is already fully visible", () => {

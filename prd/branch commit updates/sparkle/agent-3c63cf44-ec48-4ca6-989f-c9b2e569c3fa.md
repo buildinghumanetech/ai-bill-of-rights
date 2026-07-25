@@ -5,6 +5,86 @@
 
 ### Summary of changes since last update
 
+Round 7 (roborev job 44, on merged commit 005fcba): **0 Mediums, 3 Lows**, all
+taken. Nothing wrong with the feature. The notable thing is the *pattern*: for
+the third round running, the finding was a non-discriminating test assertion —
+each time in the code I had just written to fix the previous round's
+non-discriminating test assertion.
+
+### The pattern, stated plainly (read this before writing another test here):
+
+- Round 5: the composer-vs-column geometry test didn't discriminate — the mock
+  gave the column's rect to the wrapper too.
+- Round 6: the *fix* for that keyed column-vs-wrapper on `querySelector("h3")`,
+  which a routine `h3` → `h2` a11y change would silently disarm.
+- Round 7: `composerScrollBlock`, added in round 6 to fix round 6's bug, has
+  alignment tests that don't discriminate composer geometry from column
+  geometry either.
+
+Each round the instance was fixed and the *class* was reintroduced one function
+over. The feature has been clean since round 4; the recurring defect is writing
+an assertion that passes for the right reason today without checking it would
+fail for the wrong one. **The test to apply: name the plausible wrong
+implementation, and confirm the assertion fails against it.** Not "does this
+pass", but "what would still pass that shouldn't".
+
+### Detail of changes made:
+
+- **One `fitsInViewport` predicate now feeds both rules.** "Does the composer fit
+  on screen?" was written twice in two shapes — `Math.min(height,
+  viewportHeight)` as a clamp in `shouldScrollComposerIntoView`, and `height >
+  viewportHeight` as a branch in `composerScrollBlock`. They *have* to agree: the
+  clamp is what makes a tall composer's visible ratio saturate at 1, and
+  `"start"` alignment is what makes that saturated state a usable resting
+  position rather than a stuck one. The realistic drift is someone adding an
+  Android keyboard inset to `viewportHeight` at one site only — which restores
+  exactly the stuck-at-the-bottom bug PR #45 fixed, **with both test suites still
+  green**, because each function's tests pin its own half in isolation. That
+  hazard is now spelled out in the predicate's doc comment.
+- **Added the discriminating alignment test.** The column is only COLUMN_LEAD
+  taller than the composer, so for most heights both fit or both overflow and
+  pointing `composerScrollBlock` at the column would go unnoticed. The new case
+  sits in the 50px band where they disagree: composer 780 fits in 800 →
+  `"center"`, column 830 doesn't → `"start"`. Verified red by rewiring the
+  alignment call to `el.parentElement.getBoundingClientRect()` — 1 failure, and
+  it is the only test that catches it.
+- **Corrected a doc comment that was actively misleading.** `placeComposerAt`'s
+  new note claimed `height` was passed through "because the scroll-alignment
+  choice reads it". It doesn't: `composerScrollBlock` computes `bottom - top`,
+  and `ScrollDecisionInput.composerRect` doesn't declare a `height` field at all.
+  A reader trusting that comment could have "simplified" the fake rect by
+  dropping `bottom` and keeping `height`, silently breaking every geometry test.
+  Now says what is true — the argument sets `bottom`, `bottom - top` is the only
+  thing measured, and the `height` key exists for DOMRect faithfulness and is
+  read by nothing.
+
+### Verification actually run (not assumed):
+
+- Mutation: alignment decided from the column's rect → 1 failure, the new test.
+- `tsc --noEmit` clean. `eslint src` → 114 problems, unchanged baseline.
+- Full suite: **327 tests, all passing.**
+
+### Potential concerns to address:
+
+- **Seven review rounds is enough.** Rounds 5-7 found zero correctness bugs in
+  the feature and three defects in its test scaffolding, each one created by the
+  previous round's fix. That is a loop with diminishing returns, and continuing
+  it mostly generates more surface to get wrong. Stop here unless the behaviour
+  changes.
+- **Still unvalidated on hardware, now for the fourth entry running:**
+  `SELECTION_SETTLE_MS = 350` and `MIN_VISIBLE_FRACTION = 0.5`. jsdom cannot
+  reproduce iOS selection-handle timing or the Android keyboard's effect on
+  `innerHeight` — and note that the keyboard inset is precisely the drift hazard
+  `fitsInViewport` was extracted to contain. A human with a phone would settle
+  more than another round of review.
+
+---
+
+## Progress Update as of [2026-07-25 09:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
 Round 6 (roborev job 39, on the merged commit 737e11e): **0 Mediums, 3 Lows**,
 all taken. One is a genuine usability bug that PR #42 *introduced* — the clamp
 traded an infinite re-scroll for a stuck resting position — so this is a
