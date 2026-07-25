@@ -320,5 +320,68 @@ describe("parseMentions", () => {
       expect(result).toHaveLength(1);
       expect(result[0].signerId).toBe("1");
     });
+
+    it("skips a bare single-letter initial to find the usable short name", () => {
+      // The length rule must live inside the token search, not after it, or
+      // "J" is picked and then rejected, dropping the candidate entirely.
+      const initial = [{ id: "1", displayName: "J Erika Anderson" }];
+      const result = parseMentions("@Erika hi", initial);
+      expect(result).toHaveLength(1);
+      expect(result[0].displayName).toBe("J Erika Anderson");
+    });
+  });
+
+  // An @ inside a URL path is not a mention. Pasting a link to someone's
+  // profile is an ordinary comment body.
+  describe("URLs", () => {
+    it.each([
+      ["medium", "check out https://medium.com/@alice"],
+      ["mastodon", "follow https://mastodon.social/@alice"],
+      ["bare host", "see github.com/@alice"],
+    ])("does not treat /@name in a %s URL as a mention", (_label, body) => {
+      expect(parseMentions(body, signers)).toEqual([]);
+    });
+
+    it("still matches a mention on the line after a URL", () => {
+      const result = parseMentions("https://example.com\n@Alice thoughts?", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+  });
+
+  describe("hyphen as punctuation rather than part of a name", () => {
+    it("matches a mention followed by a double hyphen", () => {
+      const result = parseMentions("@Alice-- what do you think?", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+
+    it("matches a mention with a trailing hyphen at end of body", () => {
+      const result = parseMentions("cc @Alice-", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+
+    it("still rejects a name cut short by a hyphenated given name", () => {
+      const jean = [{ id: "1", displayName: "Jean Dupont" }];
+      expect(parseMentions("@Jean-Pierre hi", jean)).toEqual([]);
+    });
+  });
+
+  describe("documented NFC/NFD limitation", () => {
+    it("fails safe when the stored name is NFD and the body is NFC", () => {
+      // Pins the KNOWN LIMITATION in the module docstring: no normalization,
+      // so this notifies nobody rather than risking the wrong person.
+      const nfdStored = [{ id: "1", displayName: "María Peña".normalize("NFD") }];
+      const nfcBody = "gracias @María Peña!".normalize("NFC");
+      expect(parseMentions(nfcBody, nfdStored)).toEqual([]);
+    });
+
+    it("matches when stored name and body use the same normalization", () => {
+      const nfd = "María Peña".normalize("NFD");
+      const result = parseMentions(`gracias @${nfd}!`, [{ id: "1", displayName: nfd }]);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("1");
+    });
   });
 });
