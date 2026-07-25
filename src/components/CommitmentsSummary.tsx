@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { articles } from "@/app/HomepageArticles";
+import { articles, splitSentences } from "@/app/HomepageArticles";
 
 /**
  * A condensed, read-only rendering of the nine commitments.
@@ -12,10 +12,17 @@ import { articles } from "@/app/HomepageArticles";
  * this must not add a round-trip to it.
  */
 
-/** First sentence of an article body — enough to convey the commitment. */
+/**
+ * First sentence of an article body — enough to convey the commitment.
+ *
+ * Delegates to `splitSentences` rather than looking for the first `". "`:
+ * that naive form cuts an article body containing "e.g. ", "U.S." or "vs."
+ * mid-clause, and misses a first sentence that ends in `?` or `!` (returning
+ * the whole paragraph instead of a one-liner). Returns the body unchanged if
+ * it has no recognisable sentence break.
+ */
 export function gist(body: string): string {
-  const end = body.indexOf(". ");
-  return end === -1 ? body : body.slice(0, end + 1);
+  return splitSentences(body)[0] ?? body.trim();
 }
 
 interface Props {

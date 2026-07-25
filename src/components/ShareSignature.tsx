@@ -19,7 +19,11 @@ export function ShareSignature({ signerId, siteUrl }: Props) {
   const [copied, setCopied] = useState(false);
 
   const copyUrl = signerShareUrl(siteUrl, signerId, "copy");
-  const shareText = `I signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name.`;
+  // Near-verbatim copies of this pitch also live in `src/app/SignModal.tsx`
+  // and `src/lib/email/templates.ts`; they should be consolidated, but all
+  // three are not one owner's to move right now.
+  const shareText =
+    "I signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name.";
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     `${shareText} ${signerShareUrl(siteUrl, signerId, "x")}`,
   )}`;
