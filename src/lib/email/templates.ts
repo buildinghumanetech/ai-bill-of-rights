@@ -35,12 +35,15 @@ export function signConfirmation(opts: {
   signatureNumber?: number;
   totalSignatures?: number;
   /**
-   * The signer's own "why I signed" sentence, when they wrote one. It leads
-   * every share line below instead of the boilerplate — their words travel
-   * further than a form letter.
+   * Signer id, so every link back to their page carries ?ref= attribution.
+   * Null degrades to an untagged-but-still-channelled link rather than
+   * crediting whoever happened to be in the URL before.
+   *
+   * There is deliberately no `whyISigned` param: this email is sent the
+   * instant the signature lands, and the "why I signed" statement is captured
+   * on the step AFTER that. It is null at send time for every signer, so a
+   * param for it would be a promise the template can never keep.
    */
-  whyISigned?: string | null;
-  /** Signer id, so the share links can carry ?ref= attribution. */
   signerId?: string | null;
 }): { subject: string; text: string; html: string } {
   const sigNum = opts.signatureNumber ?? 1;
@@ -51,13 +54,15 @@ export function signConfirmation(opts: {
   const ref = opts.signerId ?? null;
   const shareUrlFor = (channel: ShareChannel) =>
     withShareParams(opts.signerPageUrl, { ref, channel });
-  const shareTextFor = (channel: ShareChannel) =>
-    buildShareText({ whyISigned: opts.whyISigned, channel });
+  const shareTextFor = (channel: ShareChannel) => buildShareText({ channel });
 
-  const shareUrl = withShareParams(opts.signerPageUrl, {
-    ref,
-    channel: "confirmation-email",
-  });
+  /**
+   * The signer clicking through from the email body is itself a share surface
+   * worth measuring, so the "view my signature" links get the same treatment
+   * as the share buttons — under their own channel, so a self-click never gets
+   * counted as an X or LinkedIn conversion.
+   */
+  const ownPageUrl = shareUrlFor("confirmation-email");
   const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareTextFor("x"))}&url=${encodeURIComponent(shareUrlFor("x"))}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrlFor("linkedin"))}`;
   const emailShareHref = `mailto:?subject=${encodeURIComponent("Sign the AI Bill of Rights")}&body=${encodeURIComponent(`${shareTextFor("email")}\n\n${shareUrlFor("email")}`)}`;
@@ -83,7 +88,7 @@ Bring two friends — share your signature:
   Share on LinkedIn: ${linkedinHref}
   Share via Email: ${emailShareHref}
 
-View your public signature page: ${opts.signerPageUrl}
+View your public signature page: ${ownPageUrl}
 
 Your data, your choice — you can revoke any time:
 ${opts.revokeUrl}
@@ -136,7 +141,7 @@ ${opts.revokeUrl}
 
   <!-- View My Signature CTA -->
   <div style="padding:24px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
-    <a href="${esc(opts.signerPageUrl)}" style="display:inline-block;padding:12px 32px;background:#059669;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View My Signature</a>
+    <a href="${esc(ownPageUrl)}" style="display:inline-block;padding:12px 32px;background:#059669;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View My Signature</a>
   </div>
 
   <!-- Footer -->

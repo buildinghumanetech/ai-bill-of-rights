@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { MyAccountButton } from "@/components/MyAccountButton";
 import { getSignatureCount } from "@/lib/db/queries";
+import { SiteAnalytics } from "@/lib/analytics/SiteAnalytics";
 import { LiveSignersProvider } from "./LiveSignersProvider";
 import LiveSignerBanner from "./LiveSignerBanner";
 import "./globals.css";
@@ -74,6 +75,9 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       >
         <body className="min-h-full flex flex-col">
+          {/* Injects the analytics script. Without it every track() call in
+              src/lib/analytics is a silent no-op. */}
+          <SiteAnalytics />
           <LiveSignersProvider initialCount={initialCount}>
             <MyAccountButton />
             <LiveSignerBanner />

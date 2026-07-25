@@ -18,6 +18,12 @@ import { SelfieCapture } from "@/components/SelfieCapture";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
 import { buildShareText } from "@/lib/share/share-text";
 import { signerShareUrl, type ShareChannel } from "@/lib/share/urls";
+import {
+  trackShareClicked,
+  trackSignatureCompleted,
+  trackSignFormSubmitted,
+  trackSignModalOpened,
+} from "@/lib/analytics/track";
 
 interface Props {
   open: boolean;
@@ -120,6 +126,68 @@ function formatNamePreview(
   return `${maskedFirst} ${maskedLast}`.trim();
 }
 
+export interface PostSignShareLinks {
+  /** The plain link shown in the copy box. */
+  shareUrl: string;
+  twitterHref: string;
+  linkedinHref: string;
+  emailHref: string;
+  /** LinkedIn's dialog carries no text, so this is what people paste. */
+  suggestedMessage: string;
+}
+
+/**
+ * Every outbound link on the post-signature share step.
+ *
+ * Pure and exported so it can be pinned by tests: this is the highest-intent
+ * share surface on the site, and a `?ref=`/`?via=` that quietly falls off one
+ * of these buttons is invisible until the referral numbers are already wrong.
+ * Everything goes through `signerShareUrl` — nothing here hand-builds a URL.
+ *
+ * Returns inert values (`""` / `"#"`) until both the signer id and the origin
+ * exist, so a half-built link is never rendered as a real one. `origin` is
+ * empty during SSR, before the client has a `window`.
+ */
+export function buildPostSignShareLinks(opts: {
+  origin: string;
+  signerId: string | null;
+  whyISigned: string | null;
+}): PostSignShareLinks {
+  const ready = Boolean(opts.signerId && opts.origin);
+  const urlFor = (channel: ShareChannel) =>
+    ready ? signerShareUrl(opts.origin, opts.signerId!, channel) : "";
+  const textFor = (channel: ShareChannel) =>
+    buildShareText({ whyISigned: opts.whyISigned, channel });
+
+  if (!ready) {
+    return {
+      shareUrl: "",
+      twitterHref: "#",
+      linkedinHref: "#",
+      emailHref: "#",
+      suggestedMessage: textFor("linkedin"),
+    };
+  }
+
+  return {
+    shareUrl: urlFor("copy"),
+    twitterHref: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+      textFor("x"),
+    )}&url=${encodeURIComponent(urlFor("x"))}`,
+    // LinkedIn's share-offsite endpoint takes no text — the copy travels with
+    // the OG card, which is why the quote also renders into the image.
+    linkedinHref: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+      urlFor("linkedin"),
+    )}`,
+    emailHref: `mailto:?subject=${encodeURIComponent(
+      "Sign the AI Bill of Rights",
+    )}&body=${encodeURIComponent(
+      `${textFor("email")}\n\n${urlFor("email")}`,
+    )}`,
+    suggestedMessage: textFor("linkedin"),
+  };
+}
+
 function clerkErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "errors" in err) {
     const errors = (err as { errors?: Array<{ message?: string }> }).errors;
@@ -187,6 +255,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   >(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Top of the funnel. `mode` is the honest answer to "which button did they
+  // come from" — the two modes are genuinely different intents, and the drop
+  // -off from here to `signature_completed` is the number worth arguing about.
+  useEffect(() => {
+    if (!open) return;
+    trackSignModalOpened({ source: mode });
+  }, [open, mode]);
 
   // Close on Escape. Use the DOM KeyboardEvent (not React's synthetic
   // event imported above) — addEventListener expects globalThis.KeyboardEvent.
@@ -275,10 +351,32 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
   if (!open) return null;
 
+  /**
+   * The conversion event, reported from the one place that knows all three
+   * facts: how they verified, whether they came in on somebody's share link,
+   * and which surface that link was on. The last two are read server-side from
+   * httpOnly cookies and handed back on the result — the browser cannot work
+   * them out for itself.
+   *
+   * Fire-and-forget by construction: `track()` swallows its own errors, so
+   * this can never turn a completed signature into a failed one.
+   */
+  function reportSignatureCompleted(res: {
+    referred?: boolean;
+    channel?: string | null;
+  }) {
+    trackSignatureCompleted({
+      method,
+      referred: res.referred ?? false,
+      channel: res.channel ?? null,
+    });
+  }
+
   async function handleFormSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    if (mode === "sign") trackSignFormSubmitted({ method });
 
     try {
       // If the user is already authenticated (returning visitor or a stale
@@ -317,6 +415,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
           setError(res.error ?? "We couldn't record your signature.");
           return;
         }
+        reportSignatureCompleted(res);
         if (res.signerId) setSignerId(res.signerId);
         if (res.displayName) setSignerName(res.displayName);
         setStep("done");
@@ -452,7 +551,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       }
 
       // Hand off to the server action to record the signature / create the account.
-      let res: { success: boolean; error?: string; signerId?: string; displayName?: string };
+      let res: {
+        success: boolean;
+        error?: string;
+        signerId?: string;
+        displayName?: string;
+        referred?: boolean;
+        channel?: string | null;
+      };
       if (mode === "comment-only") {
         res = await createSignerFromModal({
           firstName,
@@ -478,6 +584,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
         setError(res.error ?? (mode === "comment-only" ? "We couldn't create your account." : "We couldn't record your signature."));
         return;
       }
+      if (mode === "sign") reportSignatureCompleted(res);
       if (res.signerId) setSignerId(res.signerId);
       if (res.displayName) setSignerName(res.displayName);
       setStep("done");
@@ -508,17 +615,11 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       : phoneDigits.replace(/\D/g, "").length >= 7);
 
   // Every outbound link goes through the canonical builder so the ?ref=/?via=
-  // attribution can never silently fall off one of these buttons.
+  // attribution can never silently fall off one of these buttons. Leads with
+  // the signer's own sentence once they've written one.
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const shareUrlFor = (channel: ShareChannel) =>
-    signerId && origin ? signerShareUrl(origin, signerId, channel) : "";
-  /** The plain link shown in the copy box. */
-  const shareUrl = shareUrlFor("copy");
-
-  // Lead with the signer's own sentence once they've written one; fall back to
-  // the boilerplate until then.
-  const shareTextFor = (channel: ShareChannel) =>
-    buildShareText({ whyISigned: whySaved, channel });
+  const { shareUrl, twitterHref, linkedinHref, emailHref, suggestedMessage } =
+    buildPostSignShareLinks({ origin, signerId, whyISigned: whySaved });
 
   async function handleSaveWhy() {
     setWhyPending(true);
@@ -540,8 +641,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
     }
   }
 
+  /** Every share surface on the post-signature step reports through here. */
+  function reportShareClicked(channel: ShareChannel) {
+    trackShareClicked({ channel, surface: "post-sign" });
+  }
+
   async function copyShareUrl() {
     if (!shareUrl) return;
+    reportShareClicked("copy");
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -608,6 +715,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       if (res.error) {
         setInviteResult({ kind: "error", message: res.error });
       } else {
+        // Only a send that actually left the building counts as a share.
+        if (res.sent > 0) reportShareClicked("invite");
         setInviteResult({
           kind: "success",
           sent: res.sent,
@@ -625,26 +734,6 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setInvitePending(false);
     }
   }
-
-  const twitterHref = signerId
-    ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-        shareTextFor("x"),
-      )}&url=${encodeURIComponent(shareUrlFor("x"))}`
-    : "#";
-  // LinkedIn's share-offsite endpoint takes no text — the copy travels with
-  // the OG card, which is why the quote also renders into the image.
-  const linkedinHref = signerId
-    ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-        shareUrlFor("linkedin"),
-      )}`
-    : "#";
-  const emailHref = signerId
-    ? `mailto:?subject=${encodeURIComponent(
-        "Sign the AI Bill of Rights",
-      )}&body=${encodeURIComponent(
-        `${shareTextFor("email")}\n\n${shareUrlFor("email")}`,
-      )}`
-    : "#";
 
   return (
     <div
@@ -1265,11 +1354,12 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     <span className="mb-1 block font-semibold uppercase tracking-[0.14em] text-[#0a66c2]">
                       Suggested message
                     </span>
-                    {shareTextFor("linkedin")}
+                    {suggestedMessage}
                   </p>
                   <div className="mt-3 flex items-center gap-2">
                     <a
                       href={twitterHref}
+                      onClick={() => reportShareClicked("x")}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-center text-xs font-medium text-white hover:bg-zinc-700"
@@ -1278,6 +1368,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     </a>
                     <a
                       href={linkedinHref}
+                      onClick={() => reportShareClicked("linkedin")}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 rounded-lg bg-[#0a66c2] px-3 py-2 text-center text-xs font-medium text-white hover:bg-[#0a55a3]"
@@ -1286,6 +1377,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     </a>
                     <a
                       href={emailHref}
+                      onClick={() => reportShareClicked("email")}
                       className="flex-1 rounded-lg bg-zinc-200 px-3 py-2 text-center text-xs font-medium text-zinc-900 hover:bg-zinc-300"
                     >
                       Email
