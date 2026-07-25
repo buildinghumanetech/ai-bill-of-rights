@@ -67,4 +67,87 @@ describe("parseMentions", () => {
     expect(result).toHaveLength(1);
     expect(result[0].signerId).toBe("2"); // Dan
   });
+
+  // People type mentions by hand — there is no autocomplete in the composer —
+  // so the cases below are what actually shows up in real comment bodies.
+  describe("hand-typed names", () => {
+    it("matches case-insensitively", () => {
+      const result = parseMentions("hey @alice and @DANIEL ODIO", signers);
+      expect(result.map((m) => m.signerId)).toEqual(["3", "1"]);
+    });
+
+    it("reports the canonical display name even when typed in another case", () => {
+      const result = parseMentions("hey @alice", signers);
+      expect(result[0].displayName).toBe("Alice");
+    });
+
+    it("matches a first name alone (@Bob reaches Bob Smith)", () => {
+      const result = parseMentions("thanks @Bob!", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("4");
+      expect(result[0].displayName).toBe("Bob Smith");
+      expect(result[0].matchEnd).toBe(11); // "@Bob", not "@Bob Smith"
+    });
+
+    it("still prefers the full name when the whole thing is typed", () => {
+      const result = parseMentions("thanks @Bob Smith!", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].matchEnd).toBe(17); // consumed "@Bob Smith"
+    });
+
+    it("lets a signer whose full name is a first name win over another's first name", () => {
+      // "Dan" is a full display name; "Daniel Odio" contributes first name "Daniel".
+      const withDanielFirst = [
+        { id: "1", displayName: "Dan Brown" },
+        { id: "2", displayName: "Dan" },
+      ];
+      const result = parseMentions("@Dan hello", withDanielFirst);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("2");
+    });
+
+    it("matches a mention followed by an apostrophe", () => {
+      const result = parseMentions("@Alice's point stands", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+      expect(result[0].matchEnd).toBe(6);
+    });
+  });
+
+  // Notifying the wrong person is worse than notifying nobody.
+  describe("refuses to guess", () => {
+    it("returns nothing when a first name is ambiguous", () => {
+      const twoErikas = [
+        { id: "1", displayName: "Erika Anderson" },
+        { id: "2", displayName: "Erika Smith" },
+      ];
+      expect(parseMentions("@Erika what do you think?", twoErikas)).toEqual([]);
+    });
+
+    it("resolves an ambiguous first name once the full name is typed", () => {
+      const twoErikas = [
+        { id: "1", displayName: "Erika Anderson" },
+        { id: "2", displayName: "Erika Smith" },
+      ];
+      const result = parseMentions("@Erika Smith hi", twoErikas);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("2");
+    });
+
+    it("does not match a shorter name inside a longer typed name", () => {
+      // A signer named "Erik" must not be notified by "@Erika".
+      const erikOnly = [{ id: "1", displayName: "Erik" }];
+      expect(parseMentions("@Erika hello", erikOnly)).toEqual([]);
+    });
+
+    it("ignores the @ inside an email address", () => {
+      const result = parseMentions("reach me at bob@alice.com", signers);
+      expect(result).toEqual([]);
+    });
+
+    it("ignores signers with a blank display name", () => {
+      const blank = [{ id: "1", displayName: "   " }];
+      expect(parseMentions("@ hello", blank)).toEqual([]);
+    });
+  });
 });

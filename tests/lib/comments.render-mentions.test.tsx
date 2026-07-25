@@ -51,4 +51,14 @@ describe("renderBodyWithMentions", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("No at-signs here.");
   });
+
+  it("highlights the text the author typed rather than the canonical name", () => {
+    // Matching is case-insensitive and accepts first names, so echoing the
+    // display name here would silently rewrite the comment.
+    const result = renderBodyWithMentions("ok @bob said so", signers);
+    expect(result).toHaveLength(3);
+    const span = result[1] as { props: { children: string } };
+    expect(span.props.children).toBe("@bob");
+    expect(result[2]).toBe(" said so");
+  });
 });
