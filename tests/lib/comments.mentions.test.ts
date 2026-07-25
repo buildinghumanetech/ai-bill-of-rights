@@ -368,16 +368,32 @@ describe("parseMentions", () => {
       ["fragment", "see https://example.com/page#@alice"],
       ["ampersand in query", "see https://x.com/l?a=1&@alice"],
       ["dotted-quad host", "see 192.168.1.5/@alice"],
-      ["scheme-less dotted-quad", "see 10.0.0.7/@alice"],
+      ["host with a port", "see example.com:8080/@alice"],
+      ["trailing-dot FQDN", "see example.com./@alice"],
     ])("does not treat @name in a %s as a mention", (_label, body) => {
       expect(parseMentions(body, signers)).toEqual([]);
     });
 
-    // DOTTED_HOST must not be loose enough to read prose abbreviations as hosts.
+    // A URL ends at a comma or a closing bracket; a mention after one is real.
     it.each([
-      ["e.g.", "e.g./@Alice"],
-      ["etc.", "etc./@Alice"],
-    ])("still matches a mention after the abbreviation %s", (_label, body) => {
+      ["comma", "see https://example.com,@Alice"],
+      ["closing paren", "[docs](https://x.com/d)@Alice"],
+      ["closing bracket", "[https://x.com/d]@Alice"],
+    ])("matches a mention after a URL ended by a %s", (_label, body) => {
+      const result = parseMentions(body, signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+
+    // The host pattern must not be loose enough to read prose or version
+    // numbers as hosts, or the mention is silently dropped.
+    it.each([
+      ["the abbreviation e.g.", "e.g./@Alice"],
+      ["the abbreviation etc.", "etc./@Alice"],
+      ["a version number", "v1.2/@Alice"],
+      ["a decimal", "2.5/@Alice"],
+      ["a section number", "section 3.11/@Alice"],
+    ])("still matches a mention after %s", (_label, body) => {
       const result = parseMentions(body, signers);
       expect(result).toHaveLength(1);
       expect(result[0].signerId).toBe("3");
@@ -452,6 +468,20 @@ describe("parseMentions", () => {
       const result = parseMentions(body, signers);
       expect(result).toHaveLength(1);
       expect(result[0].signerId).toBe("3");
+    });
+
+    // The pairs above and below differ ONLY in whether a host follows the @.
+    // That is the signal a character-based rule cannot see: every one of these
+    // local parts ends in punctuation that must not block a prose mention.
+    it.each([
+      ["exclamation", "bob!@alice.com"],
+      ["question mark", "bob?@alice.com"],
+      ["ampersand", "bob&@alice.com"],
+      ["equals", "bob=@alice.com"],
+      ["hash", "bob#@alice.com"],
+      ["tilde", "bob~@alice.com"],
+    ])("does not open a mention for an address whose local part ends in a %s", (_label, body) => {
+      expect(parseMentions(`write ${body}`, signers)).toEqual([]);
     });
   });
 
