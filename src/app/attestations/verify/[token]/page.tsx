@@ -22,12 +22,12 @@ export default async function VerifyPage({
       {outcome === "published" ? (
         <>
           <h1 className="text-3xl font-semibold tracking-tight">Confirmed.</h1>
-          <p className="mt-4 text-zinc-700 dark:text-zinc-300">
+          <p className="mt-4 text-zinc-700">
             Your attestation is now public. Thanks for committing.
           </p>
           <a
             href="/attestations"
-            className="mt-8 inline-block rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white dark:bg-zinc-50 dark:text-zinc-950"
+            className="mt-8 inline-block rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white"
           >
             See all attestations
           </a>
@@ -35,7 +35,7 @@ export default async function VerifyPage({
       ) : outcome === "review" ? (
         <>
           <h1 className="text-3xl font-semibold tracking-tight">Confirmed — pending review.</h1>
-          <p className="mt-4 text-zinc-700 dark:text-zinc-300">
+          <p className="mt-4 text-zinc-700">
             Your email is confirmed. Because your organization name matches a
             high-profile AI lab, we&apos;ll review the attestation manually
             before publishing it. We&apos;ll email you when it goes live (or if
@@ -47,7 +47,7 @@ export default async function VerifyPage({
           <h1 className="text-3xl font-semibold tracking-tight text-red-700">
             Link not valid
           </h1>
-          <p className="mt-4 text-zinc-700 dark:text-zinc-300">
+          <p className="mt-4 text-zinc-700">
             {errorMessage || "This verification link is unknown or expired."}
           </p>
         </>

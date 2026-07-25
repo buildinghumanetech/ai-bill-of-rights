@@ -20,7 +20,7 @@ export default async function AttestationsPage({
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight">Attestations</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-sm text-zinc-600">
         AI products whose builders publicly committed to a version of the Bill
         of Rights{version ? ` (filtered: v${version})` : ""}.
       </p>
@@ -35,7 +35,7 @@ export default async function AttestationsPage({
         <div className="mt-8 flex justify-center">
           <a
             href={`/attestations?page=${pageNum + 1}${version ? `&version=${encodeURIComponent(version)}` : ""}`}
-            className="rounded-full border border-zinc-300 px-6 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            className="rounded-full border border-zinc-300 px-6 py-2 text-sm font-medium hover:bg-zinc-100"
           >
             Next page →
           </a>
