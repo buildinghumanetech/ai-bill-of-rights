@@ -48,31 +48,60 @@ export interface ShareParams {
 }
 
 /**
- * Set attribution params on an absolute URL. Invalid refs are dropped rather
- * than propagated, so a malformed id can never poison a share link.
+ * Set the attribution params on a URL.
  *
- * These params REPLACE any already on the URL, they don't stack. That matters:
- * a signer who lands on `/?ref=A&via=x`, copies the address bar, and shares it
- * would otherwise produce `?ref=A&...&ref=B`. Since `parseRef` reads the FIRST
- * value, B's attribution would be silently dropped and A credited twice — the
- * exact failure this module exists to prevent.
+ * Semantics, keyed on whether the caller *mentions* a param at all:
+ *
+ *   - key absent from `params`  → whatever is on the URL is left untouched.
+ *     The caller isn't expressing an opinion about it.
+ *   - key present and valid     → replaces any existing value.
+ *   - key present but invalid   → the existing value is REMOVED, not kept.
+ *     A caller who says "attribute this to X" and supplies a broken X must
+ *     not silently ship a link crediting whoever happened to be there before
+ *     — that credits someone for a share they did not make. Pass `null` to
+ *     deliberately strip attribution.
+ *
+ * Values replace rather than stack. A signer who lands on `/?ref=A&via=x`,
+ * copies the address bar and shares would otherwise produce `?ref=A&...&ref=B`;
+ * since `parseRef` reads the FIRST value, B would be silently dropped and A
+ * credited twice — the exact failure this module exists to prevent.
+ *
+ * Only the two attribution params are rewritten. Every other param keeps its
+ * original bytes, because re-serialising the query through `URLSearchParams`
+ * applies form-encoding rules to params we were never asked to touch: `%20`
+ * becomes `+` and `~` becomes `%7E`. That is actively wrong for `mailto:`
+ * links, where RFC 6068 reads `+` as a literal plus — a shared mail draft
+ * would arrive reading "I+just+signed".
  */
 export function withShareParams(url: string, params: ShareParams = {}): string {
-  const { ref, channel } = params;
-  const hasRef = isValidRef(ref);
-  const hasChannel = isShareChannel(channel);
-  if (!hasRef && !hasChannel) return url;
+  const setsRef = "ref" in params;
+  const setsChannel = "channel" in params;
+  if (!setsRef && !setsChannel) return url;
+
+  const ref = isValidRef(params.ref) ? params.ref : null;
+  const channel = isShareChannel(params.channel) ? params.channel : null;
 
   const [base, hash = ""] = splitHash(url);
   const qIndex = base.indexOf("?");
   const path = qIndex === -1 ? base : base.slice(0, qIndex);
-  const query = new URLSearchParams(qIndex === -1 ? "" : base.slice(qIndex + 1));
+  const rawQuery = qIndex === -1 ? "" : base.slice(qIndex + 1);
 
-  // `set` overwrites every existing occurrence rather than appending.
-  if (hasRef) query.set(REF_PARAM, ref);
-  if (hasChannel) query.set(CHANNEL_PARAM, channel);
+  // Split on & and drop the pairs we own, comparing only the key so the
+  // untouched pairs are carried through verbatim.
+  const kept = rawQuery
+    .split("&")
+    .filter((pair) => pair.length > 0)
+    .filter((pair) => {
+      const key = pair.split("=")[0];
+      if (setsRef && key === REF_PARAM) return false;
+      if (setsChannel && key === CHANNEL_PARAM) return false;
+      return true;
+    });
 
-  const qs = query.toString();
+  if (ref) kept.push(`${REF_PARAM}=${encodeURIComponent(ref)}`);
+  if (channel) kept.push(`${CHANNEL_PARAM}=${encodeURIComponent(channel)}`);
+
+  const qs = kept.join("&");
   return `${path}${qs ? `?${qs}` : ""}${hash ? `#${hash}` : ""}`;
 }
 

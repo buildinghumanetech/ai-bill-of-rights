@@ -46,6 +46,7 @@ export async function createTestDb(): Promise<TestDb> {
       referred_by_signer_id uuid references signers(id),
       created_at timestamptz not null default now()
     );
+    create index signers_referred_by_idx on signers (referred_by_signer_id);
 
     create table consent_records (
       id uuid primary key default gen_random_uuid(),

@@ -1,5 +1,39 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-24 21:25 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged the scorecard-mechanism worker and verified its safety constraint by hand. Then triaged roborev job 10, which caught a **regression I introduced in my own previous fix**: rewriting `withShareParams` to use `URLSearchParams` silently form-encoded unrelated query params, which corrupts `mailto:` share links. Fixed that, and tightened the ref semantics and the DB test assertions.
+
+### Detail of changes made:
+- Merged `sparkle/agent-5d141524-51fe-4c0c-9e8d-b4e8fdcabe59` (scorecard mechanism). Adds `src/lib/scorecard/` (parser/validator/loader), `/scorecard` + `/scorecard/[slug]` pages, OG cards, and `content/scorecard/` with a README and one entry.
+- **Independently verified the scorecard safety constraint** rather than trusting the worker's claim: grepped all committed scorecard content, source, and tests for real AI company names — clean (the only regex hits were `generateMetadata`/`toMatchObject`). The one committed entry is `Example AI Labs`, marked `fictional: true`, with every URL on `example.com` and every assessment paragraph self-labelled "(Fictional.)".
+- **Verified the citation rule is a hard failure, not a claim.** Exercised the validator directly: a `falls-short` verdict with no citations, with `citations: []`, with a citation missing `url`, missing `checkedOn`, or with a non-http URL are all rejected. The error text is genuinely good — *"status 'falls-short' is a public claim about a company and requires at least one citation"*. A required `fictional` field forces every author to state plainly whether an entry is real.
+- Confirmed both scorecard pages set `robots: { index: false, follow: false }` and that nothing in the layout, homepage, or components links to them — reachable by URL only, as intended, until the owner decides to publish. Rendered the scorecard OG card (200, `image/png`, 57,913 bytes) and inspected it; it correctly reports **0 companies / 0 assessments**, because `page.tsx` and the OG route both filter `!e.fictional` so demo content can never inflate a public count.
+- **Fixed (regression, mine): `withShareParams` corrupted unrelated query params.** My previous fix parsed the whole query into `URLSearchParams` and re-serialised it, which applies form-encoding to params the caller never asked to touch: `?title=Hello%20World` came back as `Hello+World`, and `~` became `%7E`. Verified empirically. The sharp case is `mailto:` — RFC 6068 reads `+` as a literal plus, so a shared mail draft would have arrived reading "I+just+signed". Rewrote it to split the query on `&` and drop only the `ref`/`via` pairs, leaving every other pair byte-identical. Regression tests pin `%20`, `~`, and a full mailto body.
+- **Fixed: ambiguous ref semantics.** Previously an absent ref and an invalid ref were indistinguishable, and both left an existing `ref=A` in place — so a caller saying "attribute this to B" with a broken B would ship a link crediting A for a share A never made, labelled with B's channel. Semantics are now keyed on whether the caller *mentions* the key: absent → leave untouched (no opinion expressed); valid → replace; present-but-invalid, or explicit `null` → remove. Docstring rewritten to describe what happens to the *incoming* URL.
+- **Fixed: the FK test would have stayed green with no FK.** It asserted only `.rejects.toThrow()`, which also passes on a renamed column, a NOT NULL violation, or a pglite connection failure. Now asserts SQLSTATE `23503` (foreign_key_violation) specifically.
+- **Fixed: test DDL missing the index.** Added `create index signers_referred_by_idx` to `tests/_helpers/pglite-db.ts`, so the helper matches `schema.ts` on the exact artifact the previous commit fixed.
+
+### Roborev triage (job 10, commit 61cfc20)
+- High — `ARTICLES` exported from a route file breaks `next build`: **rejected as a false positive, again.** This is the same carry-over claim from job 9. I had already disproved it with a real `next build` under Next 16.2.6 (TypeScript ran, build succeeded) and had already moved the constant to `src/app/api/og/articles.ts` in `3754b22` for test-isolation reasons. The reviewer flagged it as "still unaddressed" because it re-reviewed the parent commit.
+- Low — `URLSearchParams` re-encoding: **fixed**, see above. Correct and valuable finding.
+- Low — ref semantics on invalid input: **fixed**, see above. Correct.
+- Low — weak FK assertion + missing index in test DDL: **fixed**, see above. Correct.
+
+### Verification
+- `./node_modules/.bin/vitest run` — **45 files / 298 tests, all passing**.
+- `./node_modules/.bin/tsc --noEmit` — clean. `eslint` on changed files — clean.
+- Scorecard validator exercised by hand across 6 malformed-input cases; all rejected with actionable messages.
+
+### Potential concerns to address:
+- The share-link semantics are now precise but subtle (absent vs invalid vs null). Every call site added during the pending call-site migration should be checked against them — in particular anything building a `mailto:` link, which is the case the encoding bug would have hit.
+- The scorecard is deliberately unlinked and `noindex`. Publishing it is a separate, deliberate act: add navigation and flip `robots`.
+- Two of three roborev reviews so far have led with a High finding that did not survive verification. The Low findings, by contrast, have been consistently accurate and worth acting on.
+
+---
+
 ## Progress Update as of 2026-07-24 21:00 Pacific
 *(Most recent updates at top)*
 

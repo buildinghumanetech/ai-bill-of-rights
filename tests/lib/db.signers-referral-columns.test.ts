@@ -76,17 +76,27 @@ describe("signers.referredBySignerId", () => {
     expect(row.referredBySignerId).toBeNull();
   });
 
-  it("rejects a referrer id that does not exist", async () => {
+  it("rejects a referrer id that does not exist, via the foreign key", async () => {
     // This is the important one: a stale or forged ?ref= must not be
     // insertable. Whatever writes attribution has to tolerate this rejection
     // without failing the signature itself.
+    //
+    // Asserting the SQLSTATE rather than just "it threw": a bare toThrow()
+    // would also pass if the column were renamed, if a NOT NULL were added,
+    // or if pglite failed to connect — i.e. it would stay green in exactly
+    // the cases where the FK had silently stopped existing.
     const db = await createTestDb();
-    await expect(
-      insertSigner(db, {
+    let code: string | undefined;
+    try {
+      await insertSigner(db, {
         clerkUserId: "user_ref_d",
         referredBySignerId: "99999999-9999-9999-9999-999999999999",
-      }),
-    ).rejects.toThrow();
+      });
+    } catch (err) {
+      code = (err as { code?: string }).code;
+    }
+    // 23503 = foreign_key_violation
+    expect(code).toBe("23503");
   });
 
   it("supports counting how many people a signer brought in", async () => {

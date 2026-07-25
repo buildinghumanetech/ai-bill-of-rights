@@ -102,16 +102,64 @@ describe("withShareParams", () => {
     expect(sp.getAll("ref")).toEqual([ID]);
   });
 
-  it("leaves an existing ref alone when the new one is invalid", () => {
-    // An invalid ref is dropped, so the URL keeps whatever it already had
-    // rather than being silently stripped of working attribution.
+  it("removes an existing ref when the caller supplies an invalid one", () => {
+    // A caller who says "attribute this to X" with a broken X must not ship a
+    // link crediting whoever was there before — that credits someone for a
+    // share they didn't make.
     const out = withShareParams(`https://example.org/?ref=${OTHER_ID}`, {
       ref: "not-a-uuid",
       channel: "x",
     });
     const sp = new URL(out).searchParams;
+    expect(sp.get("ref")).toBeNull();
+    expect(sp.get("via")).toBe("x");
+  });
+
+  it("strips attribution when ref is explicitly null", () => {
+    const out = withShareParams(`https://example.org/?ref=${OTHER_ID}&v=1`, {
+      ref: null,
+    });
+    const sp = new URL(out).searchParams;
+    expect(sp.get("ref")).toBeNull();
+    expect(sp.get("v")).toBe("1");
+  });
+
+  it("leaves an existing ref untouched when the caller doesn't mention ref", () => {
+    // Not passing the key at all is different from passing a bad value: the
+    // caller is expressing no opinion, so don't rewrite what's there.
+    const out = withShareParams(`https://example.org/?ref=${OTHER_ID}`, {
+      channel: "x",
+    });
+    const sp = new URL(out).searchParams;
     expect(sp.get("ref")).toBe(OTHER_ID);
     expect(sp.get("via")).toBe("x");
+  });
+
+  // Regression: only the attribution params may be rewritten. Re-serialising
+  // the whole query through URLSearchParams form-encodes params we were never
+  // asked to touch.
+  it("preserves percent-encoding on unrelated params", () => {
+    const out = withShareParams("https://example.org/?title=Hello%20World", {
+      ref: ID,
+    });
+    expect(out).toContain("title=Hello%20World");
+    expect(out).not.toContain("Hello+World");
+  });
+
+  it("does not escape characters it was not asked to touch", () => {
+    const out = withShareParams("https://example.org/?path=a~b", { ref: ID });
+    expect(out).toContain("path=a~b");
+  });
+
+  it("keeps a mailto body intact", () => {
+    // RFC 6068 reads `+` in a mailto as a literal plus, so form-encoding here
+    // would deliver "I+just+signed" into the recipient's mail client.
+    const mailto =
+      "mailto:?subject=Sign%20the%20AI%20Bill%20of%20Rights&body=I%20just%20signed";
+    const out = withShareParams(mailto, { ref: ID });
+    expect(out).toContain("subject=Sign%20the%20AI%20Bill%20of%20Rights");
+    expect(out).toContain("body=I%20just%20signed");
+    expect(out).not.toContain("+");
   });
 });
 
