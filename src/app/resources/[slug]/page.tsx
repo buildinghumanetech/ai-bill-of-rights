@@ -15,7 +15,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const r = getResource(slug);
-  if (!r) return { title: "Resource not found" };
+  if (!r) {
+    return buildPageMetadata({
+      title: "Resource not found — AI Bill of Rights",
+      description: "That resource doesn't exist.",
+    });
+  }
   return buildPageMetadata({
     title: `${r.title} — AI Bill of Rights`,
     description: r.subtitle || r.title,

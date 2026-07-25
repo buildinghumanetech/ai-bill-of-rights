@@ -23,7 +23,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const signer = await getSignerById(id);
-  if (!signer) return { title: "Signer not found" };
+  if (!signer) {
+    return buildPageMetadata({
+      title: "Signer not found — AI Bill of Rights",
+      description: "That signature doesn't exist or has been revoked.",
+    });
+  }
   return buildPageMetadata({
     title: `${signer.displayName} signed the AI Bill of Rights`,
     description: `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`,

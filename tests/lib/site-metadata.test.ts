@@ -98,9 +98,15 @@ describe("getSiteUrl", () => {
     else process.env.VERCEL_ENV = ORIGINAL_VERCEL_ENV;
   });
 
+  // VERCEL_ENV is load-bearing here, so every case pins it rather than
+  // depending on whatever the ambient environment happens to have.
+  beforeEach(() => {
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_URL;
+  });
+
   it("falls back to the production origin when nothing is configured", () => {
     delete process.env.NEXT_PUBLIC_SITE_URL;
-    delete process.env.VERCEL_URL;
     expect(getSiteUrl()).toBe(PRODUCTION_ORIGIN);
   });
 
@@ -112,6 +118,7 @@ describe("getSiteUrl", () => {
 
   it("uses VERCEL_URL so previews advertise themselves, not production", () => {
     delete process.env.NEXT_PUBLIC_SITE_URL;
+    process.env.VERCEL_ENV = "preview";
     process.env.VERCEL_URL = "preview.vercel.app";
     expect(getSiteUrl()).toBe("https://preview.vercel.app");
   });
