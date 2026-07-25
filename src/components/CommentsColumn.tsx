@@ -7,6 +7,7 @@ import { countComments, commentCountLabel } from "@/lib/comments/count";
 import {
   COMPOSER_CLOSED_EVENT,
   SELECTION_EVENT,
+  composerScrollBlock,
   shouldScrollComposerIntoView,
   type AnchoredSelection,
 } from "@/lib/comments/selection";
@@ -75,8 +76,9 @@ export function CommentsColumn({
     const el = composerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    if (shouldScrollComposerIntoView({ composerRect: rect, viewportHeight: window.innerHeight })) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const measurement = { composerRect: rect, viewportHeight: window.innerHeight };
+    if (shouldScrollComposerIntoView(measurement)) {
+      el.scrollIntoView({ behavior: "smooth", block: composerScrollBlock(measurement) });
     }
   }, [pendingSelection]);
 
@@ -107,7 +109,10 @@ export function CommentsColumn({
   const totalComments = countComments(threadedComments);
 
   return (
-    <div className="space-y-4 pt-5">
+    // The testid is a stable hook for the composer-vs-column geometry tests.
+    // They previously told the two apart by looking for an <h3>, which a routine
+    // heading-level change would have silently disarmed.
+    <div data-testid="comments-column" className="space-y-4 pt-5">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Comments{totalComments > 0 ? ` · ${totalComments}` : ""}
       </h3>

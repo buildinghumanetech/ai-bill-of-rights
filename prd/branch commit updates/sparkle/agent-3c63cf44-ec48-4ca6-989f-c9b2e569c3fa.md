@@ -1,5 +1,79 @@
 # Branch Progress: sparkle/agent-3c63cf44-ec48-4ca6-989f-c9b2e569c3fa
 
+## Progress Update as of [2026-07-25 09:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Round 6 (roborev job 39, on the merged commit 737e11e): **0 Mediums, 3 Lows**,
+all taken. One is a genuine usability bug that PR #42 *introduced* — the clamp
+traded an infinite re-scroll for a stuck resting position — so this is a
+follow-up on landed code, not polish. Also merged `origin/main` (23 commits
+behind; another agent's mention/URL-parsing work) cleanly, no conflicts.
+
+### Detail of changes made:
+
+- **`block: "center"` strands the top of a tall composer.** Centering an element
+  taller than the viewport puts its *middle* on screen, so the quote block and
+  the top of the `MentionTextarea` (`NewCommentForm.tsx` renders quote first,
+  then the textarea) sit above the fold. `shouldScrollComposerIntoView` then
+  measures `visible = viewportHeight` → ratio 1 → declines, so nothing ever
+  corrects it: the user is parked at the bottom of a box they must type into the
+  top of, with no recovery but scrolling by hand.
+  **This resting state only became reachable because of the clamp in #42** —
+  before it, the ratio could never reach 0.5 and it would have kept re-scrolling
+  (the bug #42 fixed). Net: that PR traded an infinite loop for a stuck position.
+  New `composerScrollBlock({composerRect, viewportHeight})` in
+  `src/lib/comments/selection.ts` returns `"start"` when the composer is taller
+  than the viewport, `"center"` otherwise. Kept as a separate pure function so
+  the alignment choice is testable without a DOM, same as the visibility rule.
+- **The round-5 test hook was itself fragile.** `placeComposerAt` told column
+  from wrapper by `el.querySelector("h3")`, coupling *both* geometry guards to a
+  heading level in unrelated markup. An `h3` → `h2` a11y fix would have made the
+  column report `composerRect`, so the discriminating geometry test would stop
+  discriminating and `expect(...querySelector("h3")).toBeNull()` would pass
+  trivially — both green while measuring nothing. That is the exact failure mode
+  round 5 had just corrected, reintroduced one layer down.
+  Now: `data-testid="comments-column"` on the outer div is the hook, and the
+  structural assertion is an identity check (`scrolled[0] === composer.parentElement`)
+  rather than the absence of a tag. Verified by mutating the heading to `<h2>`
+  *and* moving the ref back to the column — both guards still fail.
+- **Trimmed 41 lines of doc comment down to what a reader needs at the call
+  site.** It had accumulated the full history of the superseded anchor gate and
+  the smooth-scroll-vs-debounce timing note, all of which is reproduced verbatim
+  in this log and in the commit messages. Kept the rule, the clamp rationale, and
+  the measure-the-composer line; the archaeology now lives here only. This also
+  makes the block cheaper to keep true — round 5's finding was precisely that
+  this comment had drifted out of sync with its own code.
+
+### Verification actually run (not assumed):
+
+- **Guards proven red by mutation.** (A) force `"center"` unconditionally → 2
+  failures (the pure test and the component test). (B) heading `h3` → `h2` **and**
+  ref moved to the column → 2 failures; under the old tag-keyed mock this
+  combination passed silently, which is the whole point.
+- `tsc --noEmit` → clean. `eslint src` → 114 problems, unchanged baseline.
+- Full suite: **40 files, 238 tests, all passing.**
+
+### Potential concerns to address:
+
+- **`composerScrollBlock` uses a strict `>` against `viewportHeight`.** A
+  composer exactly the viewport's height centers, which is correct but means the
+  boundary behaviour flips on a single pixel. Both sides are pinned by tests
+  (`box(VH)` → center, `box(VH + 1)` → start) so a change is at least visible,
+  but nobody has looked at what a real 1-pixel-over composer does on hardware.
+- **Six review rounds, and the last two found no correctness bug in the feature
+  itself** — round 5 found my tests asserted less than claimed, round 6 found a
+  bug my own fix introduced plus a fragile hook. The signal is that the mobile
+  selection path has settled and the remaining risk has moved into the test
+  scaffolding. Worth stopping the review loop here unless something changes.
+- **Still unvalidated on hardware:** `SELECTION_SETTLE_MS = 350` and
+  `MIN_VISIBLE_FRACTION = 0.5`, carried forward from the two previous entries.
+  jsdom cannot reproduce iOS selection-handle timing or the Android keyboard's
+  effect on `innerHeight`. This needs a human with a phone.
+
+---
+
 ## Progress Update as of [2026-07-25 08:45 Pacific]
 *(Most recent updates at top)*
 
