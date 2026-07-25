@@ -64,6 +64,8 @@ export async function createTestDb(): Promise<TestDb> {
     );
     create unique index signatures_signer_version_unique
       on signatures (signer_id, version_id);
+    create index signatures_signer_signed_at_idx
+      on signatures (signer_id, signed_at desc);
 
     create table proposed_edits (
       id uuid primary key default gen_random_uuid(),

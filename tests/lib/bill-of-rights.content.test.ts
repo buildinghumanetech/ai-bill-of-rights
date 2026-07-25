@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "@/lib/markdown/parse";
 import { articles as homepageArticles } from "@/app/HomepageArticles";
+import { getResource, listResourceSlugs } from "@/lib/resources";
 
 /**
  * The canonical document lives in `content/bill-of-rights/v<version>.md`, but the
@@ -241,38 +242,6 @@ describe("homepage articles array", () => {
       ).toBe(true);
     });
   });
-});
-
-describe("resource pages", () => {
-  // /resources/[slug] splits the body on blank lines and renders each chunk as
-  // a plain React text node — there is no markdown renderer. Any markdown
-  // syntax in these files reaches the reader as literal characters.
-  const files = fs
-    .readdirSync(RESOURCES_ROOT)
-    .filter((f) => f.endsWith(".md"))
-    .sort();
-
-  it("finds resource files to check", () => {
-    expect(files.length).toBeGreaterThan(0);
-  });
-
-  it("contains no markdown syntax the renderer cannot handle", () => {
-    for (const file of files) {
-      const raw = fs.readFileSync(path.join(RESOURCES_ROOT, file), "utf-8");
-      // Body only — frontmatter is parsed out by getResource().
-      const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
-      const offenders: string[] = [];
-      if (/\*/.test(body)) offenders.push("emphasis (*)");
-      if (/^#{1,6}\s/m.test(body)) offenders.push("heading (#)");
-      if (/\[[^\]]*\]\([^)]*\)/.test(body)) offenders.push("link ([](…))");
-      if (/^\s*[-+]\s+/m.test(body)) offenders.push("list item");
-      if (/`/.test(body)) offenders.push("code (`)");
-      expect(
-        offenders,
-        `${file} uses ${offenders.join(", ")}, which renders as literal characters`,
-      ).toEqual([]);
-    }
-  });
 
   it("points every 'Connects to' pill at a resource file that exists", () => {
     for (const article of homepageArticles) {
@@ -290,5 +259,49 @@ describe("resource pages", () => {
     const byNumber = new Map(homepageArticles.map((a) => [a.number, a]));
     expect(byNumber.get("10")?.connects?.length).toBeGreaterThan(0);
     expect(byNumber.get("11")?.connects?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("resource pages", () => {
+  // /resources/[slug] renders `title`, `subtitle`, and each blank-line-separated
+  // body chunk as plain React text nodes — there is no markdown renderer. Any
+  // markdown syntax in these files reaches the reader as literal characters.
+  //
+  // Goes through getResource(), the same parser the page uses, so this can't
+  // drift from the real frontmatter handling.
+  const slugs = listResourceSlugs();
+
+  it("finds resource files to check", () => {
+    expect(slugs.length).toBeGreaterThan(0);
+  });
+
+  it("contains no markdown syntax the renderer cannot handle", () => {
+    for (const slug of slugs) {
+      const resource = getResource(slug);
+      expect(resource, `${slug}.md failed to parse`).not.toBeNull();
+      // Every field the page renders as a text node.
+      const rendered = [
+        resource!.title,
+        resource!.subtitle,
+        resource!.body,
+      ].join("\n\n");
+
+      const offenders: string[] = [];
+      if (/\*/.test(rendered)) offenders.push("emphasis (*)");
+      if (/(^|\s)_[^_\s][^_]*_(\s|$|[.,;:!?])/m.test(rendered))
+        offenders.push("underscore emphasis (_)");
+      if (/^#{1,6}\s/m.test(rendered)) offenders.push("heading (#)");
+      if (/^\s*>/m.test(rendered)) offenders.push("blockquote (>)");
+      if (/\[[^\]]*\]\([^)]*\)/.test(rendered)) offenders.push("link ([](…))");
+      if (/^\s*[-+]\s+/m.test(rendered)) offenders.push("list item (-)");
+      if (/^\s*\d+\.\s+/m.test(rendered)) offenders.push("ordered list (1.)");
+      if (/^\s*(=|-){3,}\s*$/m.test(rendered))
+        offenders.push("setext underline");
+      if (/`/.test(rendered)) offenders.push("code (`)");
+      expect(
+        offenders,
+        `${slug}.md uses ${offenders.join(", ")}, which renders as literal characters`,
+      ).toEqual([]);
+    }
   });
 });

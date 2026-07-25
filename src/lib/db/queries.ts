@@ -1,4 +1,4 @@
-import { eq, count, countDistinct, desc, gt, and, isNull, isNotNull, asc, sum, sql } from "drizzle-orm";
+import { eq, count, countDistinct, desc, gt, and, isNull, isNotNull, asc, sum, sql, notExists, aliasedTable } from "drizzle-orm";
 import { versions, signatures, signers, comments, attestations, commentVotes, commentReports } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
@@ -66,6 +66,14 @@ export async function getSignatureNumber(
   return Number(rows[0]?.value ?? 1);
 }
 
+/**
+ * Rows in `signers` — NOT the public signature count.
+ *
+ * This includes admin-added non-signers (see createNonSigner in
+ * server/actions/admin.ts), who have a signer row but have never signed
+ * anything. Public "how many people signed" surfaces want getSignatureCount().
+ * Kept for admin/reporting use; it has no callers in the app today.
+ */
 export async function getSignerCount(db: any = getDefaultDb()): Promise<number> {
   const rows = await db.select({ value: count() }).from(signers);
   return Number(rows[0]?.value ?? 0);
@@ -119,7 +127,10 @@ export async function listSignatures(
   const rows = await client
     .select()
     .from(latestPerSigner)
-    .orderBy(desc(latestPerSigner.signedAt))
+    // signerId breaks ties: OFFSET paging over rows with identical signed_at
+    // (bulk/admin-created signatures) is otherwise undefined-order, so a person
+    // could appear on two consecutive pages or on neither.
+    .orderBy(desc(latestPerSigner.signedAt), latestPerSigner.signerId)
     .limit(opts.limit)
     .offset(opts.offset);
   return rows as SignerListItem[];
@@ -161,12 +172,23 @@ export interface RecentSignerEvent {
 
 const SIXTY_MINUTES_MS = 60 * 60 * 1000;
 
+/**
+ * People who signed for the FIRST time since `cutoff`, newest first — the
+ * homepage ticker's feed.
+ *
+ * Re-signatures are excluded. `/api/signers/recent` returns this list next to
+ * getSignatureCount(), which counts distinct people, so announcing a re-sign
+ * would pop a name into the ticker as though someone just signed while the
+ * counter beside it did not move — and would announce the same person to the
+ * homepage twice. Publishing a new version is exactly what triggers re-signing.
+ */
 export async function listRecentSignersSince(
   since: Date | null,
   db: any = null,
 ): Promise<RecentSignerEvent[]> {
   const client = db ?? getDefaultDb();
   const cutoff = since ?? new Date(Date.now() - SIXTY_MINUTES_MS);
+  const earlier = aliasedTable(signatures, "earlier_signatures");
   const rows = await client
     .select({
       id: signers.id,
@@ -176,7 +198,24 @@ export async function listRecentSignersSince(
     })
     .from(signatures)
     .innerJoin(signers, eq(signers.id, signatures.signerId))
-    .where(and(gt(signatures.signedAt, cutoff), isNull(signers.softBannedAt)))
+    .where(
+      and(
+        gt(signatures.signedAt, cutoff),
+        isNull(signers.softBannedAt),
+        // No earlier signature by this person — i.e. this is their first.
+        notExists(
+          client
+            .select({ one: sql`1` })
+            .from(earlier)
+            .where(
+              and(
+                eq(earlier.signerId, signatures.signerId),
+                sql`${earlier.signedAt} < ${signatures.signedAt}`,
+              ),
+            ),
+        ),
+      ),
+    )
     .orderBy(desc(signatures.signedAt));
   return rows as RecentSignerEvent[];
 }
