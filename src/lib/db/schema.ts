@@ -56,6 +56,16 @@ export const signers = pgTable("signers", {
   })
     .notNull()
     .default("major"),
+  // Optional short statement the signer writes at signing time ("why I signed").
+  // Rendered on their public page, in their OG share card, and used as the
+  // default share text — a signer's own words travel further than boilerplate.
+  whyISigned: text("why_i_signed"),
+  // Attribution: which existing signer's share link brought this person in.
+  // Self-referencing FK, so it needs the AnyPgColumn escape hatch for the
+  // circular type reference. Null = arrived without a ref param.
+  referredBySignerId: uuid("referred_by_signer_id").references(
+    (): AnyPgColumn => signers.id,
+  ),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

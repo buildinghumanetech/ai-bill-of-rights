@@ -42,6 +42,8 @@ export async function createTestDb(): Promise<TestDb> {
       is_admin boolean not null default false,
       soft_banned_at timestamptz,
       notification_preference text not null default 'major' check (notification_preference in ('major','minor','none')),
+      why_i_signed text,
+      referred_by_signer_id uuid references signers(id),
       created_at timestamptz not null default now()
     );
 
