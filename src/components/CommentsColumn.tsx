@@ -4,15 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import type { ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { findCommentInTree } from "@/lib/db/queries";
 import { countComments, commentCountLabel } from "@/lib/comments/count";
-import { COMPOSER_CLOSED_EVENT } from "@/app/ArticleSelectionContainer";
+import {
+  COMPOSER_CLOSED_EVENT,
+  SELECTION_EVENT,
+  shouldScrollComposerIntoView,
+  type AnchoredSelection,
+} from "@/lib/comments/selection";
 import { NewCommentForm } from "./NewCommentForm";
 import { CommentView } from "./CommentView";
-
-interface SelectionEvent {
-  anchorId: string;
-  selectedText: string;
-  rect: { top: number; left: number; width: number; height: number };
-}
 
 interface Props {
   baseVersionId: string | null;
@@ -50,54 +49,58 @@ export function CommentsColumn({
   onActiveChange,
   onPostedTopLevel,
 }: Props) {
-  const [pendingSelection, setPendingSelection] = useState<SelectionEvent | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<AnchoredSelection | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
-  /** Mirrors whether the composer is open, readable from event handlers. */
-  const composerOpenRef = useRef(false);
+  /** Anchor the column was last scrolled to; see shouldScrollComposerIntoView. */
+  const lastScrolledAnchorRef = useRef<string | null>(null);
 
   // Listen for text-selection events emitted by ArticleSelectionContainer.
   useEffect(() => {
     const onSelect = (e: Event) => {
-      const detail = (e as CustomEvent<SelectionEvent>).detail;
-      // Only pull the page when the composer first appears. Adjusting an iOS
-      // selection handle re-emits with different text, and scrolling on every
-      // one of those would yank the text out from under the finger still
-      // dragging it.
-      const justOpened = !composerOpenRef.current;
-      composerOpenRef.current = true;
+      const detail = (e as CustomEvent<AnchoredSelection>).detail;
       setPendingSelection(detail);
       onActiveChange(null);
 
-      if (!justOpened) return;
       requestAnimationFrame(() => {
         const el = columnRef.current;
         if (!el) return;
-        // Scroll when the composer would land off-screen — true whenever the
-        // column is stacked below the document (narrow viewports), without
-        // hardcoding a breakpoint that could drift from the grid's `md`.
-        const { top } = el.getBoundingClientRect();
-        if (top > window.innerHeight - 120) {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const rect = el.getBoundingClientRect();
+        if (
+          !shouldScrollComposerIntoView({
+            lastScrolledAnchorId: lastScrolledAnchorRef.current,
+            anchorId: detail.anchorId,
+            rect,
+            viewportHeight: window.innerHeight,
+          })
+        ) {
+          return;
         }
+        lastScrolledAnchorRef.current = detail.anchorId;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
       });
     };
-    window.addEventListener("selection-in-anchor", onSelect);
-    return () => window.removeEventListener("selection-in-anchor", onSelect);
+    window.addEventListener(SELECTION_EVENT, onSelect);
+    return () => window.removeEventListener(SELECTION_EVENT, onSelect);
   }, [onActiveChange]);
 
-  /** Composer dismissed — let the container accept the same selection again. */
+  /**
+   * Every path that dismisses the composer must come through here. Clearing
+   * `pendingSelection` without also clearing the container's dedupe guard is
+   * what made the guard go sticky in the first place.
+   */
   function closeComposer() {
-    composerOpenRef.current = false;
+    lastScrolledAnchorRef.current = null;
     setPendingSelection(null);
     window.dispatchEvent(new CustomEvent(COMPOSER_CLOSED_EVENT));
   }
 
-  // Clicking a saved highlight clears any in-progress composer.
+  // Activating a saved highlight (click, or Enter/Space — they're focusable
+  // buttons) clears any in-progress composer. This has to go through
+  // closeComposer too: mouse users happen to be rescued by the container's
+  // mousedown reset, but a keyboard user would otherwise leave the dedupe
+  // guard stale and be unable to re-select the same phrase.
   useEffect(() => {
-    if (activeCommentId) {
-      composerOpenRef.current = false;
-      setPendingSelection(null);
-    }
+    if (activeCommentId) closeComposer();
   }, [activeCommentId]);
 
   const activeComment = activeCommentId

@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { nextSelectionState, type AnchoredSelection } from "@/lib/comments/selection";
+import {
+  COMPOSER_CLOSED_EVENT,
+  SELECTION_EVENT,
+  nextSelectionState,
+  type AnchoredSelection,
+} from "@/lib/comments/selection";
 
 /**
  * Wraps the interactive article list and watches for text selections inside
@@ -16,9 +21,6 @@ import { nextSelectionState, type AnchoredSelection } from "@/lib/comments/selec
  * and an in-progress composer is never remounted out from under the user.
  */
 const SELECTION_SETTLE_MS = 350;
-
-/** Fired by `<CommentsColumn>` when the composer is dismissed or submitted. */
-export const COMPOSER_CLOSED_EVENT = "selection-composer-closed";
 
 export function ArticleSelectionContainer({
   children,
@@ -66,22 +68,7 @@ export function ArticleSelectionContainer({
       lastEmitted = step.last;
       if (!step.emit || !observed) return;
 
-      const sel = window.getSelection();
-      const rect = sel?.getRangeAt(0).getBoundingClientRect();
-      window.dispatchEvent(
-        new CustomEvent("selection-in-anchor", {
-          detail: {
-            anchorId: observed.anchorId,
-            selectedText: observed.selectedText,
-            rect: {
-              top: rect?.top ?? 0,
-              left: rect?.left ?? 0,
-              width: rect?.width ?? 0,
-              height: rect?.height ?? 0,
-            },
-          },
-        }),
-      );
+      window.dispatchEvent(new CustomEvent(SELECTION_EVENT, { detail: observed }));
     }
 
     function onMouseUp() {

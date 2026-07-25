@@ -1,5 +1,94 @@
 # Branch Progress: sparkle/agent-3c63cf44-ec48-4ca6-989f-c9b2e569c3fa
 
+## Progress Update as of [2026-07-24 21:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Closes two Medium regressions roborev found in the previous commit's fix (PR
+#34) — my `justOpened` gate traded the mid-gesture yank for a *different*
+mobile failure, and one composer-dismissal path still leaked a stale guard —
+plus five cleanups. Both regressions were verified real before fixing (the
+keyboard repro depends on the highlights being focusable, which
+`HomepageArticles.tsx:373-374` confirms: `role="button"`, `tabIndex={0}`,
+Enter/Space handler).
+
+### Detail of changes made:
+
+- **Second mobile selection stopped scrolling.** Gating the scroll on a
+  closed→open composer transition meant: highlight P → page scrolls down to the
+  composer → user scrolls back up to the article (no reason to cancel, and the
+  composer isn't visible from up there) → highlight Q → `justOpened === false` →
+  no scroll, composer silently swaps to Q far off-screen. That is the original
+  "nothing happens on a phone" bug wearing a different hat. Now gated on
+  **selection identity** instead: `shouldScrollComposerIntoView` returns false
+  when the anchor matches the last one scrolled to. Dragging an iOS selection
+  handle keeps the same `anchorId`, so the yank stays suppressed, while a
+  genuinely new sentence scrolls again.
+- **The `activeCommentId` dismissal leaked a stale guard.** It cleared
+  `pendingSelection` without dispatching `COMPOSER_CLOSED_EVENT` — the exact bug
+  class the previous commit set out to kill, via a different exit. Mouse users
+  were rescued incidentally (clicking a highlight fires `mousedown` inside the
+  article container → `forgetLastEmit`), but keyboard users were not: select P
+  with Shift+Arrow → Tab to a highlight → Enter → re-select P → suppressed
+  forever. Now routed through `closeComposer()`, so *every* dismissal path
+  clears the guard.
+- **`composerOpenRef` removed.** It was a hand-maintained mirror of derived
+  state updated in three places, and it desynced when `baseVersionId` is null:
+  set to `true` on first emit, but no composer renders, so nothing ever set it
+  back — killing the mobile auto-scroll for the rest of the session with no
+  visible cause. Replaced by `lastScrolledAnchorRef`, which records a fact that
+  actually happened rather than mirroring render state.
+- **Dropped the `- 120` magic number.** It stood in for the composer's height
+  and was measured against the column's top, which over-triggered on desktop:
+  on a short viewport the sticky column's top could exceed `innerHeight - 120`
+  while article text was still perfectly selectable, smooth-scrolling a layout
+  where the composer was already reachable. The condition is now plain
+  "is the column outside the viewport" (`top >= vh || bottom <= 0`), with no
+  constant.
+- **Event names moved to `src/lib/comments/selection.ts`** as `SELECTION_EVENT`
+  and `COMPOSER_CLOSED_EVENT`. `CommentsColumn` was importing the entire
+  `ArticleSelectionContainer` module to read one string, and `"selection-in-anchor"`
+  was a bare literal in two files. The names are a contract *between* the two
+  components, not part of either one's API.
+- **Dead code removed.** The `rect` field on the selection event was written by
+  the container, typed in `CommentsColumn`, and read by nobody — the re-read
+  `getSelection()` and `?? 0` fallbacks existed only to fabricate a value for it.
+  Event detail is now just `AnchoredSelection`. Also deleted the
+  `shouldEmitSelection` wrapper, which after the reducer refactor was referenced
+  only by its own test.
+
+### Testing
+
+- `shouldScrollComposerIntoView` is a pure function with 7 tests covering the
+  same-anchor drag case, the new-sentence case (an explicit regression guard for
+  the bug above), already-visible, scrolled-off-the-top, and the exact bottom
+  edge. Extracting the *decision* keeps it testable in the repo's existing
+  node-only vitest setup — no jsdom/testing-library dependency added.
+- Suite **208 passing / 38 files**; `tsc --noEmit` clean; `eslint src` back to
+  the exact baseline (114 problems, all pre-existing — an earlier revision of
+  this commit added a stray unused-disable warning, since removed).
+- Live in Chrome: emit still fires, re-emit after `COMPOSER_CLOSED_EVENT` works,
+  a new sentence emits, and the event detail now carries only
+  `["anchorId","selectedText"]`. The "column already visible → don't scroll"
+  branch was confirmed against a real measured rect (top 337, vh 862).
+
+### Potential concerns to address:
+
+- **The off-screen scroll branch was not verified on a real narrow viewport.**
+  The browser harness could not change the inner viewport width (`resize_window`
+  left `innerWidth` at 1512), and faking it by offsetting the `<aside>` did not
+  move the measured rect. That branch rests on its unit tests. **This and the
+  `SELECTION_SETTLE_MS = 350` timing are the two things worth checking on a real
+  phone** — they are the only remaining unknowns in the mobile path.
+- **There are still no component tests anywhere under `tests/`.** Roborev has
+  now flagged this twice. The decision logic is extracted and covered, but the
+  event wiring (`mousedown`/`touchstart`/`COMPOSER_CLOSED_EVENT` listeners, the
+  `activeCommentId` effect) is verified only by hand in a browser. Adding jsdom
+  + `@testing-library/react` would close it and is a contained change.
+
+---
+
 ## Progress Update as of [2026-07-24 21:30 Pacific]
 *(Most recent updates at top)*
 
