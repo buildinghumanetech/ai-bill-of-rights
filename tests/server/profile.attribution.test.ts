@@ -108,14 +108,19 @@ describe("upsertSignerProfile attribution", () => {
   });
 
   it("refuses to credit someone for referring themselves", async () => {
-    // Sharing your own link and clicking it is not a referral. Without this,
-    // the "people you brought in" count is trivially self-inflatable.
+    // Sharing your own link and clicking it is not a referral.
+    //
+    // Note what this does and does not prove: the guard lives in
+    // `resolveReferrerId`, and no production call path can currently reach it
+    // (the only caller is the INSERT branch of `upsertSignerProfile`, which
+    // by definition runs when the signer has no row and so cannot yet hold
+    // their own id). This pins the rule for any future caller — it is not
+    // evidence that self-referral is being blocked in production today.
     const db = await createTestDb();
     const ownId = await seedSigner(db, "user_self");
 
-    // Simulate the same Clerk user coming back through the sign path with
-    // their own signer id in the cookie. The row already exists, so drive the
-    // check at the resolver — which is the layer that owns the rule.
+    // Drive the check at the resolver directly, since the row already exists
+    // and the upsert path would take its UPDATE branch.
     await expect(
       resolveReferrerId(db, { ref: ownId, clerkUserId: "user_self" }),
     ).resolves.toBeNull();

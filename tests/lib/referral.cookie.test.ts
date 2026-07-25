@@ -72,12 +72,50 @@ describe("referralCookiesToSet", () => {
   });
 
   it("drops an unknown channel rather than storing it", () => {
-    const out = referralCookiesToSet({
-      searchParams: new URLSearchParams(`ref=${REF_A}&via=carrier-pigeon`),
-      existingRef: null,
-      existingChannel: null,
+    const out = byName(
+      referralCookiesToSet({
+        searchParams: new URLSearchParams(`ref=${REF_A}&via=carrier-pigeon`),
+        existingRef: null,
+        existingChannel: null,
+      }),
+    );
+    expect(out[REF_COOKIE].value).toBe(REF_A);
+    // An unknown channel is no channel: the channel cookie is written as an
+    // explicit clear, never with the junk value. (This assertion changed with
+    // the desync fix below — it used to expect no channel cookie at all.)
+    expect(out[REF_CHANNEL_COOKIE]).toMatchObject({ value: "", maxAge: 0 });
+  });
+
+  it("clears a stale channel when a ref arrives without one", () => {
+    // The desync: someone lands on `/?via=x` (channel only), comes back weeks
+    // later on a bare `/?ref=A`. Leaving `via=x` in place would credit A with
+    // a share on a surface A never used. The pair must describe one event, so
+    // the channel is cleared rather than inherited.
+    const out = byName(
+      referralCookiesToSet({
+        searchParams: new URLSearchParams(`ref=${REF_A}`),
+        existingRef: null,
+        existingChannel: "x",
+      }),
+    );
+    expect(out[REF_COOKIE].value).toBe(REF_A);
+    expect(out[REF_CHANNEL_COOKIE]).toMatchObject({
+      value: "",
+      maxAge: 0,
+      path: "/",
     });
-    expect(out.map((c) => c.name)).toEqual([REF_COOKIE]);
+  });
+
+  it("overwrites a stale channel when the ref link carries its own", () => {
+    const out = byName(
+      referralCookiesToSet({
+        searchParams: new URLSearchParams(`ref=${REF_A}&via=linkedin`),
+        existingRef: null,
+        existingChannel: "x",
+      }),
+    );
+    expect(out[REF_COOKIE].value).toBe(REF_A);
+    expect(out[REF_CHANNEL_COOKIE].value).toBe("linkedin");
   });
 
   it("treats a malformed existing ref as no attribution at all", () => {

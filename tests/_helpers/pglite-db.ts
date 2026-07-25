@@ -43,7 +43,9 @@ export async function createTestDb(): Promise<TestDb> {
       soft_banned_at timestamptz,
       notification_preference text not null default 'major' check (notification_preference in ('major','minor','none')),
       why_i_signed text,
-      referred_by_signer_id uuid references signers(id),
+      -- on delete set null mirrors schema.ts: deleting a signer who referred
+      -- someone must succeed and leave the referred signer standing.
+      referred_by_signer_id uuid references signers(id) on delete set null,
       created_at timestamptz not null default now()
     );
     create index signers_referred_by_idx on signers (referred_by_signer_id);

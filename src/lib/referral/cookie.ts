@@ -6,12 +6,15 @@
  * we stash it in a cookie the moment they land and read it back at signing
  * time (see src/server/actions/sign-from-modal.ts).
  *
- * Two rules the rest of the code depends on:
+ * Three rules the rest of the code depends on:
  *   1. FIRST REF WINS. Whoever actually made the introduction keeps the
  *      credit — a later `?ref=` from a different sharer never overwrites it.
  *   2. Nothing unvalidated is ever stored. Refs must pass `isValidRef`
  *      (a UUID) and channels must be a known `ShareChannel`; anything else is
  *      dropped on the floor rather than written to a cookie or the database.
+ *   3. THE PAIR NEVER DESYNCHRONISES. When a ref is recorded, the channel
+ *      cookie is rewritten in the same breath — set or cleared — so `via` can
+ *      only ever describe the share event that `ref` came from.
  *
  * `referralCookiesToSet` is deliberately pure so it can be tested without a
  * request: the proxy hands it the incoming params + existing cookies and just
@@ -77,6 +80,14 @@ function cookie(name: string, value: string, secure: boolean): ReferralCookie {
 }
 
 /**
+ * An expiring, empty version of a cookie — same name and path, so it actually
+ * overwrites the one in the browser rather than sitting alongside it.
+ */
+function clearCookie(name: string, secure: boolean): ReferralCookie {
+  return { ...cookie(name, "", secure), maxAge: 0 };
+}
+
+/**
  * Decide which attribution cookies (if any) this request should set.
  * Returns an empty array for the overwhelmingly common case — no attribution
  * params, or a visitor who is already attributed — so the proxy can skip
@@ -94,12 +105,21 @@ export function referralCookiesToSet(
   const out: ReferralCookie[] = [];
 
   if (incomingRef && !alreadyAttributed) {
-    // A new introduction. Record it, and record the channel alongside it so
+    // A new introduction. The channel cookie is written UNCONDITIONALLY here —
+    // set to this link's channel, or cleared when the link carries none — so
     // the pair always describes the same share event.
+    //
+    // Leaving a stale channel in place instead would desynchronise it from the
+    // ref: someone who first arrives on `/?via=x`, then later clicks a bare
+    // `/?ref=A`, would end up with `ref=A, via=x` and credit A with a share on
+    // a surface A never used. An unknown channel is no channel, so the same
+    // clear applies when `?via=` is present but not a known ShareChannel.
     out.push(cookie(REF_COOKIE, incomingRef, secure));
-    if (incomingChannel) {
-      out.push(cookie(REF_CHANNEL_COOKIE, incomingChannel, secure));
-    }
+    out.push(
+      incomingChannel
+        ? cookie(REF_CHANNEL_COOKIE, incomingChannel, secure)
+        : clearCookie(REF_CHANNEL_COOKIE, secure),
+    );
     return out;
   }
 

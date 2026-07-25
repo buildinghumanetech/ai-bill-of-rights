@@ -65,8 +65,17 @@ export const signers = pgTable(
     // Attribution: which existing signer's share link brought this person in.
     // Self-referencing FK, so it needs the AnyPgColumn escape hatch for the
     // circular type reference. Null = arrived without a ref param.
+    //
+    // ON DELETE SET NULL is load-bearing, not tidiness. Without it the FK
+    // defaults to NO ACTION and Postgres refuses to delete anyone who ever
+    // referred someone — account deletion and GDPR erasure break for exactly
+    // the people who successfully shared the site (none of the three deletion
+    // paths clear the referring rows first). SET NULL rather than CASCADE:
+    // attribution is a historical fact about how someone arrived, so losing it
+    // is the correct casualty; cascading would delete real signers.
     referredBySignerId: uuid("referred_by_signer_id").references(
       (): AnyPgColumn => signers.id,
+      { onDelete: "set null" },
     ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
