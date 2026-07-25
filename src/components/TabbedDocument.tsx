@@ -5,8 +5,10 @@ import { TabBar } from "@/components/TabBar";
 import { HomepageArticles } from "@/app/HomepageArticles";
 import { ArticleSelectionContainer } from "@/app/ArticleSelectionContainer";
 import { CommentsColumn } from "@/components/CommentsColumn";
+import { FeedbackInvite } from "@/components/FeedbackInvite";
 import FloatingSignButton from "@/app/FloatingSignButton";
 import SignModal from "@/app/SignModal";
+import { countComments } from "@/lib/comments/count";
 import type { CommentWithSelection, ThreadedComment, SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 
 interface Props {
@@ -40,6 +42,7 @@ export function TabbedDocument({
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [signModalOpen, setSignModalOpen] = useState(false);
   const articleRef = useRef<HTMLDivElement | null>(null);
+  const proposedTopRef = useRef<HTMLDivElement | null>(null);
 
   // Back/forward buttons should swap tabs without a navigation.
   useEffect(() => {
@@ -107,6 +110,17 @@ export function TabbedDocument({
     }
   }
 
+  // "Give feedback" from the Current tab: switch to the draft and put the top
+  // of the document in view, since the invite sits well down the page.
+  function openDraft() {
+    handleTabChange("proposed");
+    requestAnimationFrame(() => {
+      proposedTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  const commentCount = countComments(threadedComments);
+
   const handleHighlightClick = useCallback((id: string) => {
     setActiveCommentId(id);
   }, []);
@@ -158,10 +172,18 @@ export function TabbedDocument({
     <>
       {/* Current tab — full-width, single-column */}
       <div className={activeTab === "current" ? "relative mx-auto mt-8 max-w-3xl" : "hidden"}>
+        <FeedbackInvite
+          variant="current"
+          currentVersion={currentVersion}
+          proposedVersion={proposedVersion}
+          commentCount={commentCount}
+          onOpenDraft={openDraft}
+        />
         <TabBar
           active={activeTab}
           currentVersion={currentVersion}
           proposedVersion={proposedVersion}
+          commentCount={commentCount}
           onTabChange={handleTabChange}
         />
         <div className="relative sm:px-12">
@@ -174,11 +196,19 @@ export function TabbedDocument({
       {/* Proposed tab — two-column grid on md+.
           wrapperClass widens the outer wrapper when the right column widens (deep nesting),
           so the TabBar divider (which spans the wrapper) covers the full grid. */}
-      <div className={activeTab === "proposed" ? wrapperClass : "hidden"}>
+      <div className={activeTab === "proposed" ? wrapperClass : "hidden"} ref={proposedTopRef}>
+        <FeedbackInvite
+          variant="proposed"
+          currentVersion={currentVersion}
+          proposedVersion={proposedVersion}
+          commentCount={commentCount}
+          onOpenDraft={openDraft}
+        />
         <TabBar
           active={activeTab}
           currentVersion={currentVersion}
           proposedVersion={proposedVersion}
+          commentCount={commentCount}
           onTabChange={handleTabChange}
         />
 
