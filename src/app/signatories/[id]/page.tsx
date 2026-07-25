@@ -9,6 +9,7 @@ import {
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
+import { CommitmentsSummary } from "@/components/CommitmentsSummary";
 import { SelfieAvatar } from "@/components/SelfieAvatar";
 import { ReportSelfieButton } from "@/components/ReportSelfieButton";
 import SignTrigger from "../../SignTrigger";
@@ -44,6 +45,15 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * This route is the destination of every share the site produces, so most of
+ * its traffic is strangers, not the signer. It is therefore built as a landing
+ * page for a first-time visitor: who signed and why → what the AI Bill of
+ * Rights actually says → add your name. Provenance (which versions were
+ * signed) is real but meaningless to a newcomer, so it sits below the
+ * conversion path. The owner instead gets the share box and the revoke link —
+ * "share your signature" is only a sensible ask of the person who signed.
+ */
 export default async function SignerProfile({
   params,
 }: {
@@ -60,7 +70,11 @@ export default async function SignerProfile({
   const isSignedInViewer = Boolean(userId);
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
-  const signatureUrl = `${siteUrl}/signatories/${signer.id}`;
+
+  const whyISigned: string | null =
+    typeof signer.whyISigned === "string" && signer.whyISigned.trim().length > 0
+      ? signer.whyISigned.trim()
+      : null;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32 sm:py-24">
@@ -100,55 +114,80 @@ export default async function SignerProfile({
         </div>
       </div>
 
-      <section className="mt-10">
+      {whyISigned ? (
+        <figure className="mt-8 border-l-4 border-blue-600 pl-5">
+          <blockquote className="text-xl leading-snug text-zinc-900 sm:text-2xl">
+            &ldquo;{whyISigned}&rdquo;
+          </blockquote>
+          <figcaption className="mt-3 text-sm text-zinc-500">
+            — {signer.displayName}, on why they signed
+          </figcaption>
+        </figure>
+      ) : null}
+
+      {isOwner ? (
+        <ShareSignature signerId={signer.id} siteUrl={siteUrl} />
+      ) : (
+        <section className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
+            Add your name to the{" "}
+            <Link
+              href="/"
+              className="underline underline-offset-4 hover:text-zinc-700"
+            >
+              AI Bill of Rights
+            </Link>
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700">
+            Join {signer.displayName} and the earliest signers demanding
+            human-centered AI. It takes about a minute.
+          </p>
+          <div className="mt-6">
+            <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
+              Sign the AI Bill of Rights
+            </SignTrigger>
+          </div>
+        </section>
+      )}
+
+      <CommitmentsSummary
+        className="mt-14"
+        heading={isOwner ? "What you signed" : "What they signed"}
+      />
+
+      {!isOwner ? (
+        <div className="mt-10 text-center">
+          <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
+            Add your name
+          </SignTrigger>
+        </div>
+      ) : null}
+
+      <section className="mt-14 border-t border-zinc-200 pt-8">
         <h2 className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-          Signed versions
+          Signature record
         </h2>
         <ul className="mt-3 flex flex-col gap-2">
           {sigs.map((s: { version: string; signedAt: Date }) => (
             <li
               key={s.version + s.signedAt.toISOString()}
-              className="rounded-lg border border-zinc-200 px-4 py-3"
+              className="rounded-lg border border-zinc-200 px-4 py-3 text-sm"
             >
-              <Link
-                href={`/v/${s.version}`}
-                className="font-medium text-zinc-900 underline-offset-4 hover:underline"
-              >
-                v{s.version}
-              </Link>
-              <span className="ml-2 text-sm text-zinc-500">
+              <span className="text-zinc-700">
+                Signed version{" "}
+                <Link
+                  href={`/v/${s.version}`}
+                  className="font-medium text-zinc-900 underline-offset-4 hover:underline"
+                >
+                  v{s.version}
+                </Link>
+              </span>
+              <span className="ml-2 text-zinc-500">
                 on {s.signedAt.toISOString().slice(0, 10)}
               </span>
             </li>
           ))}
         </ul>
-      </section>
-
-      <ShareSignature
-        displayName={signer.displayName}
-        signatureUrl={signatureUrl}
-      />
-
-      <section className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
-        <h2 className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
-          Add your name to the{" "}
-          <Link
-            href="/"
-            className="underline underline-offset-4 hover:text-zinc-700"
-          >
-            AI Bill of Rights
-          </Link>
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700">
-          Nine commitments we&apos;re demanding from every AI company.
-          <br />
-          Join {signer.displayName} as a signer.
-        </p>
-        <div className="mt-6">
-          <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
-            Sign the AI Bill of Rights
-          </SignTrigger>
-        </div>
       </section>
 
       {!isOwner && isSignedInViewer && activeSelfie ? (
