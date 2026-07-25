@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { signers } from "@/lib/db/schema";
+import {
+  consentRecords,
+  signatures,
+  signers,
+  versions,
+} from "@/lib/db/schema";
 import { recordSignature } from "@/server/actions/sign";
 import { resolveSignatureStatus } from "@/lib/db/signature-status";
+import { reaffirmSignature } from "@/lib/db/reaffirm";
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 
@@ -154,10 +161,97 @@ describe("resolveSignatureStatus", () => {
     // Only one signature, so first and latest coincide — the point is that the
     // field is populated rather than left undefined for the "signing since" copy.
     expect(status.firstSignedAt).toBe(status.signedAt);
+    expect(status.firstVersion).toBe("0.0.1");
     expect(Number.isNaN(Date.parse(status.firstSignedAt))).toBe(false);
   });
 
-  it("does not delete or hide the earlier signature when the person re-affirms", async () => {
+  it("pairs firstSignedAt with the version actually signed on that date", async () => {
+    // The bug this guards: rendering "signing since <first date> (<latest
+    // version>)" states a date the person did not sign that version on.
+    const db = await createTestDb();
+    await syncVersions(db, [
+      {
+        version: "0.0.1",
+        publishedAt: new Date("2026-01-01T00:00:00Z"),
+        markdown: markdownFor("0.0.1"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: false,
+        gitCommitSha: null,
+      },
+      {
+        version: "0.0.2",
+        publishedAt: new Date("2026-05-01T00:00:00Z"),
+        markdown: markdownFor("0.0.2"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: false,
+        gitCommitSha: null,
+      },
+      {
+        version: "0.1.0",
+        publishedAt: new Date("2026-07-24T00:00:00Z"),
+        markdown: markdownFor("0.1.0"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: true,
+        gitCommitSha: null,
+      },
+    ]);
+    const signer = await seedSigner(db, "u-two");
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString: "0.0.1",
+      consentTextHash: "1".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString: "0.0.2",
+      consentTextHash: "2".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    const status = await resolveSignatureStatus(db, signer, "0.1.0");
+
+    if (status.state !== "signed-earlier") throw new Error("unreachable");
+    // Latest pair travels together...
+    expect(status.version).toBe("0.0.2");
+    // ...and so does the first pair. Swapping latest/earliest must fail here.
+    expect(status.firstVersion).toBe("0.0.1");
+    expect(Date.parse(status.firstSignedAt)).toBeLessThan(
+      Date.parse(status.signedAt),
+    );
+  });
+
+  it("reports signed-newer when the requested version predates what they signed", async () => {
+    // Viewing an archive page after signing the current version. There is
+    // nothing to re-affirm, and "what's been added since you signed" would be
+    // backwards.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedSigner(db, "u-archive");
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString: "0.1.0",
+      consentTextHash: "3".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    const status = await resolveSignatureStatus(db, signer, "0.0.1");
+
+    expect(status.state).toBe("signed-newer");
+    if (status.state !== "signed-newer") throw new Error("unreachable");
+    expect(status.version).toBe("0.1.0");
+    expect(status.requestedVersion).toBe("0.0.1");
+  });
+});
+
+describe("reaffirmSignature", () => {
+  it("adds a signature on the current version without touching the earlier one", async () => {
     const db = await createTestDb();
     await seedVersions(db);
     const signer = await seedSigner(db, "u-reaffirm");
@@ -168,8 +262,11 @@ describe("resolveSignatureStatus", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
     });
-    // The re-affirm path adds a row; it never touches the old one.
-    await recordSignature(db, {
+    expect((await resolveSignatureStatus(db, signer, "0.1.0")).state).toBe(
+      "signed-earlier",
+    );
+
+    const res = await reaffirmSignature(db, {
       signerId: signer.id,
       versionString: "0.1.0",
       consentTextHash: "0".repeat(64),
@@ -177,19 +274,136 @@ describe("resolveSignatureStatus", () => {
       capturedFields: {} as any,
     });
 
-    const { signatures } = await import("@/lib/db/schema");
-    const { eq } = await import("drizzle-orm");
+    expect(res).toEqual({ ok: true, created: true });
     const rows = await db
       .select()
       .from(signatures)
       .where(eq(signatures.signerId, signer.id));
-
     expect(rows).toHaveLength(2);
+    // Both versions now read as signed — the old signature is intact.
     expect((await resolveSignatureStatus(db, signer, "0.1.0")).state).toBe(
       "signed",
     );
     expect((await resolveSignatureStatus(db, signer, "0.0.1")).state).toBe(
       "signed",
     );
+  });
+
+  it("stamps the signature with the affirmed version's markdown hash", async () => {
+    // This, not the consent hash, is what binds the signature to the new text.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedSigner(db, "u-hash");
+
+    await reaffirmSignature(db, {
+      signerId: signer.id,
+      versionString: "0.1.0",
+      consentTextHash: "4".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    const [version] = await db
+      .select()
+      .from(versions)
+      .where(eq(versions.version, "0.1.0"))
+      .limit(1);
+    const [sig] = await db
+      .select()
+      .from(signatures)
+      .where(eq(signatures.signerId, signer.id));
+    expect(sig.versionHashAtSigning).toBe(version.markdownHash);
+  });
+
+  it("is a genuine no-op on a repeat, leaving no orphan consent record", async () => {
+    // recordSignature inserts consent BEFORE the signature, so detecting a
+    // repeat via the unique-constraint violation would leak a consent_records
+    // row on every call — and consent_records has no unique constraint, so a
+    // loop would write unbounded rows.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedSigner(db, "u-repeat");
+
+    const first = await reaffirmSignature(db, {
+      signerId: signer.id,
+      versionString: "0.1.0",
+      consentTextHash: "5".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+    const consentAfterFirst = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+
+    for (let i = 0; i < 3; i++) {
+      const repeat = await reaffirmSignature(db, {
+        signerId: signer.id,
+        versionString: "0.1.0",
+        consentTextHash: "6".repeat(64),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        capturedFields: {} as any,
+      });
+      expect(repeat).toEqual({ ok: true, created: false });
+    }
+
+    expect(first).toEqual({ ok: true, created: true });
+    const consentAfterRepeats = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+    expect(consentAfterRepeats).toHaveLength(consentAfterFirst.length);
+    const sigs = await db
+      .select()
+      .from(signatures)
+      .where(eq(signatures.signerId, signer.id));
+    expect(sigs).toHaveLength(1);
+  });
+
+  it("refuses a version that is not current, and writes nothing", async () => {
+    // The client supplies the version string, so this is reachable by any
+    // authenticated user. Attaching signatures to archived versions is not
+    // something any surface offers.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedSigner(db, "u-archived");
+
+    const res = await reaffirmSignature(db, {
+      signerId: signer.id,
+      versionString: "0.0.1",
+      consentTextHash: "7".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(
+      await db
+        .select()
+        .from(signatures)
+        .where(eq(signatures.signerId, signer.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(consentRecords)
+        .where(eq(consentRecords.signerId, signer.id)),
+    ).toHaveLength(0);
+  });
+
+  it("refuses an unknown version", async () => {
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedSigner(db, "u-unknown");
+
+    const res = await reaffirmSignature(db, {
+      signerId: signer.id,
+      versionString: "9.9.9",
+      consentTextHash: "8".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    expect(res.ok).toBe(false);
   });
 });

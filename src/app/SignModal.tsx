@@ -233,8 +233,9 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   /**
    * One-click re-affirm for someone who signed an earlier version. Reuses the
    * profile they already gave us — re-entering their name to say "yes, this
-   * one too" would be busywork — but records a genuinely new signature and
-   * consent record against the new text. Their earlier signature is untouched.
+   * one too" would be busywork — but writes a genuinely new signature row,
+   * stamped with the new version's markdown hash. Their earlier signature is
+   * left untouched.
    */
   async function handleReaffirm() {
     setReaffirming(true);
@@ -668,7 +669,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
           </div>
         )}
 
-        {step === "form" && signatureStatus?.state === "signed" && (
+        {/*
+          "signed-newer" renders here too: they signed a version newer than the
+          one asked about, so there is nothing to re-affirm — offering to sign a
+          superseded version is not something any surface should do.
+        */}
+        {step === "form" &&
+          (signatureStatus?.state === "signed" ||
+            signatureStatus?.state === "signed-newer") && (
           <div>
             <h2
               id="sign-modal-title"
@@ -766,22 +774,28 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                   : "Email"}{" "}
                 — signing since{" "}
                 {formatSignedDate(signatureStatus.firstSignedAt)} (v
-                {signatureStatus.version})
+                {signatureStatus.firstVersion})
+                {signatureStatus.version !== signatureStatus.firstVersion ? (
+                  <>
+                    , most recently v{signatureStatus.version} on{" "}
+                    {formatSignedDate(signatureStatus.signedAt)}
+                  </>
+                ) : null}
               </div>
             </div>
 
+            {/*
+              Deliberately does NOT name or count the new Articles. That copy
+              would be a second, unguarded transcription of the document text,
+              free to drift from content/bill-of-rights/ with no test to catch
+              it — and it would be wrong for any version pair other than the one
+              it was written for. The document itself is one click away.
+            */}
             <p className="mt-5 text-sm text-zinc-600">
               Your signature still counts and still appears in the public list —
-              nothing has changed. Since you signed, v
-              {signatureStatus.requestedVersion} added two new Articles:{" "}
-              <span className="font-medium text-zinc-900">
-                Freedom From Algorithmic Discrimination
-              </span>{" "}
-              and{" "}
-              <span className="font-medium text-zinc-900">
-                the Right to Safe, Tested Systems
-              </span>
-              . If you want your name on the new version too, add it below.
+              nothing has changed. v{signatureStatus.requestedVersion} is a
+              newer version of the document than the one you signed. If you want
+              your name on it too, add it below.
             </p>
 
             {error ? (

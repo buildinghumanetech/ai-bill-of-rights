@@ -37,17 +37,43 @@ export interface SignedEarlierStatus {
   state: "signed-earlier";
   displayName: string;
   verificationMethod: "email" | "sms";
+  /** When they signed `version` — the most recent version they affirmed. */
   signedAt: string;
   version: string;
   requestedVersion: string;
   /** Their first-ever signature, for "signing since" copy. */
   firstSignedAt: string;
+  /**
+   * The version `firstSignedAt` belongs to. Kept alongside the date because
+   * pairing the FIRST date with the LATEST version in one sentence states
+   * something untrue: someone who signed v0.0.1 in January and v0.0.2 in May
+   * would read "signing since January (v0.0.2)", a date they did not sign that
+   * version on.
+   */
+  firstVersion: string;
+}
+
+/**
+ * They signed a version NEWER than the one being asked about — the archive
+ * case, e.g. viewing /v/0.0.1 after signing 0.1.0. Distinct from
+ * `signed-earlier` because there is nothing to re-affirm: offering to sign a
+ * superseded version is not a thing any surface should do, and copy about
+ * "what's been added since you signed" would be backwards.
+ */
+export interface SignedNewerStatus {
+  state: "signed-newer";
+  displayName: string;
+  verificationMethod: "email" | "sms";
+  signedAt: string;
+  version: string;
+  requestedVersion: string;
 }
 
 export type SignerSignatureStatus =
   | { state: "not-signed" }
   | SignedStatus
-  | SignedEarlierStatus;
+  | SignedEarlierStatus
+  | SignedNewerStatus;
 
 interface SignerLike {
   id: string;
@@ -76,6 +102,7 @@ export async function resolveSignatureStatus(
     .select({
       signedAt: signatures.signedAt,
       version: versions.version,
+      publishedAt: versions.publishedAt,
     })
     .from(signatures)
     .innerJoin(versions, eq(versions.id, signatures.versionId))
@@ -102,13 +129,35 @@ export async function resolveSignatureStatus(
   // one worth showing them. rows is already newest-first.
   const latest = rows[0];
   const earliest = rows[rows.length - 1];
-  return {
-    state: "signed-earlier",
+  const common = {
     displayName: signer.displayName,
     verificationMethod: signer.verificationMethod,
     signedAt: toIso(latest.signedAt),
     version: latest.version,
     requestedVersion: versionString,
+  };
+
+  // Did they sign something NEWER than what was asked about? Compare by
+  // publish date rather than parsing the version string — publishedAt is what
+  // orders versions everywhere else, and semver-ish string comparison would
+  // get "0.10.0" vs "0.9.0" wrong.
+  const requested = await db
+    .select({ publishedAt: versions.publishedAt })
+    .from(versions)
+    .where(eq(versions.version, versionString))
+    .limit(1);
+  if (requested.length > 0) {
+    const requestedAt = new Date(requested[0].publishedAt as Date).getTime();
+    const signedVersionAt = new Date(latest.publishedAt as Date).getTime();
+    if (signedVersionAt > requestedAt) {
+      return { ...common, state: "signed-newer" };
+    }
+  }
+
+  return {
+    ...common,
+    state: "signed-earlier",
     firstSignedAt: toIso(earliest.signedAt),
+    firstVersion: earliest.version,
   };
 }

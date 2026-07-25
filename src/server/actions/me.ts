@@ -8,7 +8,8 @@ import {
   resolveSignatureStatus,
   type SignerSignatureStatus,
 } from "@/lib/db/signature-status";
-import { recordSignature } from "./sign";
+import { reaffirmSignature } from "@/lib/db/reaffirm";
+import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
@@ -59,13 +60,23 @@ export async function getMySignatureStatus(
  * the profile they already gave us.
  *
  * This is the "re-affirm" path for someone who signed an earlier version. It
- * is a real, freshly consented signature — a new consent record is rendered
- * and hashed against the text of the version being affirmed, exactly as a
- * first-time signature is — not a backfilled copy of the old one. Nobody is
- * ever recorded as having agreed to text they did not act on.
- *
- * Their earlier signature is left untouched: the two rows together are the
+ * writes a real, new signature row — never a backfilled copy of the old one —
+ * so nobody is ever recorded as having agreed to a version they did not act
+ * on. Their earlier signature is left untouched: the two rows together are the
  * record of which versions this person has affirmed and when.
+ *
+ * What binds this signature to the new text is `signatures.version_hash_at_
+ * signing`, which `reaffirmSignature` copies from the version row. It is NOT
+ * the consent hash: `renderConsentText` renders `content/consent/v*.md`, the
+ * data-collection disclosure, which contains no bill text and no bill version
+ * — so that hash is identical whichever version is affirmed. Do not read the
+ * consent record as evidence of which document text someone agreed to.
+ *
+ * No confirmation email is sent, unlike the first-time sign paths. That is
+ * deliberate for now: this action can be triggered for every existing signer
+ * by a routine version publish, and mailing the whole signer list is a
+ * decision to make on purpose rather than as a side effect. Revisit if
+ * re-affirm becomes a common flow.
  */
 export async function reaffirmMySignature(
   versionString: string,
@@ -84,6 +95,25 @@ export async function reaffirmMySignature(
   }
   const signer = signerRows[0];
 
+  // Cheap to call and reachable by any authenticated user, so bound it even
+  // though reaffirmSignature makes a repeat a no-op.
+  try {
+    await enforceRateLimit(db, {
+      bucket: "reaffirm",
+      signerId: signer.id,
+      windowSec: 3600,
+      max: 10,
+      countSql: `SELECT count(*)::int AS n FROM "consent_records"
+                  WHERE "signer_id" = $1
+                    AND "consented_at" > now() - interval '1 hour'`,
+    });
+  } catch {
+    return {
+      success: false,
+      error: "Too many attempts. Please try again later.",
+    };
+  }
+
   const h = await headers();
   const fields = extractCapturedFields(h, {
     sessionUtc: new Date().toISOString(),
@@ -98,17 +128,14 @@ export async function reaffirmMySignature(
   });
 
   try {
-    await recordSignature(db, {
+    const res = await reaffirmSignature(db, {
       signerId: signer.id,
       versionString,
       consentTextHash: sha256Hex(consentText),
       capturedFields: fields,
     });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "";
-    // Double-submit, or they signed this version in another tab. Either way
-    // the desired end state already holds, so report success.
-    if (/duplicate key|unique/i.test(msg)) return { success: true };
+    if (!res.ok) return { success: false, error: res.error };
+  } catch {
     return { success: false, error: "We couldn't record your signature." };
   }
 
