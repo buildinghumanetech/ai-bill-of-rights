@@ -149,5 +149,97 @@ describe("parseMentions", () => {
       const blank = [{ id: "1", displayName: "   " }];
       expect(parseMentions("@ hello", blank)).toEqual([]);
     });
+
+    it("returns nothing when two signers share a full display name", () => {
+      const twoJohns = [
+        { id: "1", displayName: "John Smith" },
+        { id: "2", displayName: "John Smith" },
+      ];
+      expect(parseMentions("@John Smith please look", twoJohns)).toEqual([]);
+    });
+
+    it("does not rescan inside a consumed ambiguous mention", () => {
+      // "@Erika" is ambiguous; "Ka" must not then match the "ka" tail of it.
+      const signersWithKa = [
+        { id: "1", displayName: "Erika Anderson" },
+        { id: "2", displayName: "Erika Smith" },
+        { id: "3", displayName: "Ka" },
+      ];
+      expect(parseMentions("@Erika hi", signersWithKa)).toEqual([]);
+    });
+  });
+
+  // Boundary checks have to be Unicode-aware; an ASCII-only character class
+  // treats accented letters as boundaries and mails the wrong person.
+  describe("non-ASCII names", () => {
+    it("does not match an ASCII prefix of an accented name", () => {
+      const ana = [{ id: "1", displayName: "Ana" }];
+      expect(parseMentions("@Anaïs thanks", ana)).toEqual([]);
+    });
+
+    it("does not match a short name inside a non-Latin name", () => {
+      const jo = [{ id: "1", displayName: "Jo" }];
+      expect(parseMentions("@Jörg hello", jo)).toEqual([]);
+    });
+
+    it("matches an accented name typed in another case", () => {
+      const maria = [{ id: "1", displayName: "María Peña" }];
+      const result = parseMentions("gracias @maría peña!", maria);
+      expect(result).toHaveLength(1);
+      expect(result[0].displayName).toBe("María Peña");
+    });
+
+    it("ignores an email address with a non-ASCII local part", () => {
+      const alice = [{ id: "1", displayName: "Alice" }];
+      expect(parseMentions("write josé@alice.com", alice)).toEqual([]);
+      expect(parseMentions("write 田中@alice.com", alice)).toEqual([]);
+    });
+
+    it("ignores an email address with a dotted local part", () => {
+      const alice = [{ id: "1", displayName: "Alice" }];
+      expect(parseMentions("write bob.smith@alice.com", alice)).toEqual([]);
+    });
+  });
+
+  // Display names come from user-entered profiles and are not always tidy.
+  describe("untidy display names", () => {
+    it("matches a name stored with doubled internal whitespace", () => {
+      const doubled = [{ id: "1", displayName: "Erika  Anderson" }];
+      const result = parseMentions("@Erika Anderson hi", doubled);
+      expect(result).toHaveLength(1);
+      expect(result[0].displayName).toBe("Erika  Anderson"); // canonical, as stored
+    });
+
+    it("does not turn a title into a mention", () => {
+      // "Dr. Erika Anderson" must not make a bare "@Dr." a mention.
+      const titled = [{ id: "1", displayName: "Dr. Erika Anderson" }];
+      expect(parseMentions("ask @Dr. about it", titled)).toEqual([]);
+    });
+
+    it("does not use a comma-terminated token as a first name", () => {
+      const inverted = [{ id: "1", displayName: "Anderson, Erika" }];
+      expect(parseMentions("@Anderson, hello", inverted)).toEqual([]);
+    });
+
+    it("still matches a title-prefixed name in full", () => {
+      const titled = [{ id: "1", displayName: "Dr. Erika Anderson" }];
+      const result = parseMentions("thanks @Dr. Erika Anderson!", titled);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("1");
+    });
+  });
+
+  describe("mention openers", () => {
+    it("matches a mention in parentheses", () => {
+      const result = parseMentions("(@Alice) said so", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
+
+    it("matches a mention after a newline", () => {
+      const result = parseMentions("cc:\n@Alice", signers);
+      expect(result).toHaveLength(1);
+      expect(result[0].signerId).toBe("3");
+    });
   });
 });
