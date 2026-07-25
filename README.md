@@ -80,7 +80,27 @@ pnpm tsx scripts/apply-migration.ts drizzle/0007_signatures_signer_signed_at_idx
 pnpm tsx scripts/apply-migration.ts drizzle/0008_repoint_comments_to_v0_1_0.sql
 ```
 
-0007 is an index (correctness is unaffected, but `/signers` and `/signatories` fall back to full scans without it). 0008 carries the existing discussion forward. Both are safe to re-run.
+0007 is two indexes (correctness is unaffected, but `/signers`, `/signatories`, and the homepage ticker fall back to full scans without them). 0008 carries the existing discussion forward. Both are safe to re-run.
+
+0008 only moves comments onto v0.1.0 while v0.1.0 is the *current* version, so running it out of order — for instance after a later version has taken over — is a no-op rather than a move that would leave threads hidden with their original scoping destroyed.
+
+### Rolling back the 0.1.0 publish
+
+Reverting `current` in `versions.json` puts the site back on 0.0.1, but comments moved by 0008 would then be scoped to the wrong version and disappear again. 0008 snapshots the original mapping into `comment_version_backup_0008` and `proposed_edit_version_backup_0008` before moving anything, so the move is reversible:
+
+```sql
+UPDATE "comments" AS c
+   SET "base_version_id" = b."base_version_id"
+  FROM "comment_version_backup_0008" AS b
+ WHERE c."id" = b."id";
+
+UPDATE "proposed_edits" AS p
+   SET "base_version_id" = b."base_version_id"
+  FROM "proposed_edit_version_backup_0008" AS b
+ WHERE p."id" = b."id";
+```
+
+This restores only the rows that were carried forward — comments genuinely written against v0.1.0 are not in the backup and are left where they are. Drop the backup tables once the publish has settled.
 
 ## "Implement as Code" surface for AI builders
 

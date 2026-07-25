@@ -13,6 +13,7 @@
 import { neon } from "@neondatabase/serverless";
 import fs from "node:fs";
 import path from "node:path";
+import { splitMigrationSql } from "@/lib/db/split-migration";
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -42,19 +43,9 @@ async function main() {
   }
   const raw = fs.readFileSync(abs, "utf8");
 
-  // Drizzle migration files use --> statement-breakpoint to separate
-  // statements. Fall back to splitting on `;\n` for files that don't have
-  // the breakpoint comment (e.g. hand-written migrations).
-  const breakpoint = "--> statement-breakpoint";
-  let stmts: string[];
-  if (raw.includes(breakpoint)) {
-    stmts = raw.split(breakpoint);
-  } else {
-    stmts = raw.split(/;\s*\n/);
-  }
-  stmts = stmts
-    .map((s) => s.trim().replace(/;$/, "").trim())
-    .filter((s) => s.length > 0 && !/^(--.*\n?)+$/.test(s));
+  // Split via the shared helper so this script and the migration tests always
+  // agree about what will actually be executed.
+  const stmts = splitMigrationSql(raw);
 
   console.log(`Applying ${file} — ${stmts.length} statement(s)`);
 
