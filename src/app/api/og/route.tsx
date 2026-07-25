@@ -13,8 +13,20 @@ export const runtime = "nodejs";
  * they are the whole pitch, readable at a glance in a feed.
  */
 
-/** Short forms of the nine articles — full titles are too long for the card. */
-const ARTICLES = [
+/**
+ * Short forms of the nine articles — the full headings are far too long to fit
+ * a 3x3 grid on a 1200x630 card ("You Have the Right to Know You're Talking to
+ * a Machine" is one cell).
+ *
+ * These are hand-written paraphrases, NOT derived from the markdown, because
+ * the real headings can't be mechanically shortened. That makes them a drift
+ * risk: the Bill of Rights is a living, versioned document, so an edit to
+ * `content/bill-of-rights/` would leave this card silently stale. The guard
+ * against that is `tests/app/og-articles-drift.test.ts`, which parses the
+ * current version's markdown and fails if the article count or their order no
+ * longer lines up with this list. If that test fails, update these strings.
+ */
+export const ARTICLES = [
   "Your data belongs to you",
   "Your memory is portable",
   "Know when it's a machine",

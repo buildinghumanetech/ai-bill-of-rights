@@ -1,5 +1,31 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-24 20:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged the homepage-OG worker branch (`sparkle/agent-b6dfc78b-...`), which fixed the site's biggest share leak: the homepage served zero Open Graph tags. On review of that merge I found the nine article short-forms on the new OG card are hand-written paraphrases rather than derived from the document, which is a silent-drift risk on a living versioned document — so I added a tripwire test and documented the coupling.
+
+### Detail of changes made:
+- Merged `sparkle/agent-b6dfc78b-6e58-4074-a321-61d765b7f8db` (fast-forward, no conflicts). It added `metadataBase` + a full `openGraph`/`twitter` block to the root metadata export in `src/app/layout.tsx`, a new dynamic card at `src/app/api/og/route.tsx`, a README domain correction (`aibillofrights.org` -> `ai-for-people.org`), and 7 tests.
+- **Verified the merge independently rather than trusting the worker's report**: rendered the OG route to a PNG (200, `image/png`, 66,748 bytes) and visually inspected it. Banner/3x3 article grid/amber CTA footer all render correctly; the CTA reads "Be one of the first 1,000 to sign" rather than printing the raw count of ~90, which was the framing constraint.
+- **Found on review:** the nine article titles on the card (`ARTICLES` in `src/app/api/og/route.tsx`) are hand-written short forms, NOT loaded from `content/bill-of-rights/`. They are faithful paraphrases of the v0.0.1 headings (the real headings — e.g. "You Have the Right to Know You're Talking to a Machine" — are far too long for a 3x3 grid on a 1200x630 card, so paraphrasing is the right call). But the Bill of Rights is explicitly a *living, versioned* document, so an edit to the markdown would leave the share card silently misrepresenting it to every social feed, with nothing to catch it.
+- `src/app/api/og/route.tsx`: exported `ARTICLES` and replaced the one-line comment with an explanation of why the list is hand-written, why that is a drift risk, and which test guards it.
+- `tests/app/og-articles-drift.test.ts` (new): parses `versions.json` for the current version, extracts the `## Article N:` headings from that version's markdown, and asserts (a) `ARTICLES` has one entry per article, (b) there are exactly nine, since the 3x3 grid layout depends on it, and (c) each short form still shares a distinctive stem with the heading in the same position — so a reorder or a substantive rewrite trips it. Stop-word filtered and stem-compared at 6 chars so inflections ("manipulation" vs "Manipulated") don't false-positive.
+- **Proved the guard actually fails on drift** rather than being a test that can never go red: temporarily rewrote Article 7 to "Weather Forecasting Standards", confirmed the test failed with an actionable message naming the file to update, then restored the content file and confirmed green.
+
+### Verification
+- `./node_modules/.bin/vitest run` — **40 files / 212 tests, all passing** (up from 37/202 at branch start; +7 from the merged worker, +3 from the drift guard).
+- `./node_modules/.bin/tsc --noEmit` — clean.
+- Homepage OG card rendered and visually inspected at 66,748 bytes.
+
+### Potential concerns to address:
+- The OG card's article short-forms remain a manual mirror of the document. The new test catches drift but cannot fix it — when it goes red, a human must rewrite the short forms. That is the intended trade-off (mechanical shortening of those headings would read badly), but it is a maintenance obligation worth knowing about.
+- `content/bill-of-rights/v0.0.1.spec.json` declares only **1** principle while the markdown has **9** articles. The spec file appears incomplete/stale. Nothing in this change depends on it (the drift test reads the markdown), but anything that trusts `spec.json` as the machine-readable source of the nine principles — including the "implement as code" surface advertised in the README — would be wrong today.
+- The current published version is **0.0.1**, not the `1.0.0` referenced in the README's curl example.
+
+---
+
 ## Progress Update as of 2026-07-24 20:15 Pacific
 *(Most recent updates at top)*
 
