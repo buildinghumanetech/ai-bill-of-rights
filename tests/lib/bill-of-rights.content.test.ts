@@ -65,6 +65,22 @@ describe("bill of rights content index", () => {
       versionsIndex.current,
     );
   });
+
+  // The changelog is written in two places by hand. Renaming an article means
+  // editing both, and nothing else notices if only one is updated.
+  it("matches each version's frontmatter changelog to its history entry", () => {
+    for (const entry of versionsIndex.history) {
+      const { frontmatter } = parseDocument(
+        readVersionFile(entry.version, "md"),
+      );
+      expect(frontmatter.changelog, `v${entry.version} changelog`).toBe(
+        entry.changelog,
+      );
+      expect(frontmatter.version, `v${entry.version} frontmatter version`).toBe(
+        entry.version,
+      );
+    }
+  });
 });
 
 describe("current version document", () => {
@@ -116,6 +132,30 @@ describe("current version document", () => {
         textOf(previous, prior.id),
       );
       expect(carried!.title, `${prior.id} title drifted`).toBe(prior.title);
+    }
+  });
+});
+
+describe("current version agents.md", () => {
+  const raw = readVersionFile(versionsIndex.current, "agents.md");
+  const parsed = parseDocument(readVersionFile(versionsIndex.current, "md"));
+
+  it("names the version it is filed under", () => {
+    expect(raw).toContain(`v${versionsIndex.current}`);
+  });
+
+  // The builder guide restates article titles in "**Article N — <title>.**"
+  // bullets. A rename has to be applied here too, and nothing else catches it.
+  it("uses the canonical title in every article bullet", () => {
+    const bullets = [...raw.matchAll(/^- \*\*Article (\d+) — (.+?)\.\*\*/gm)];
+    expect(bullets.length).toBeGreaterThan(0);
+    for (const [, numberStr, title] of bullets) {
+      const article = parsed.articles.find(
+        (a) => a.id === `article-${numberStr}`,
+      );
+      expect(article, `agents.md references Article ${numberStr}`).toBeDefined();
+      const canonical = article!.title.replace(/^Article \d+:\s*/, "");
+      expect(title, `Article ${numberStr} title in agents.md`).toBe(canonical);
     }
   });
 });

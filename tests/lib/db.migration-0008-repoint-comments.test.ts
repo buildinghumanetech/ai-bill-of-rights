@@ -131,8 +131,17 @@ async function seedPublishedUpgrade() {
 
 /** How many comment rows the migration recorded in its backup table. */
 async function backupCount(db: TestDb): Promise<number> {
+  return countIn(db, "comment_version_backup_0008");
+}
+
+/** How many proposed-edit rows the migration recorded in its backup table. */
+async function editBackupCount(db: TestDb): Promise<number> {
+  return countIn(db, "proposed_edit_version_backup_0008");
+}
+
+async function countIn(db: TestDb, table: string): Promise<number> {
   const res = await db.execute(
-    sql.raw(`SELECT count(*)::int AS n FROM "comment_version_backup_0008"`),
+    sql.raw(`SELECT count(*)::int AS n FROM "${table}"`),
   );
   const rows = (res as unknown as { rows: { n: number }[] }).rows;
   return rows[0].n;
@@ -175,19 +184,50 @@ describe("0008 repoint comments to the new current version", () => {
     // migration safe, so splitting the CTE back into independent UPDATEs or
     // dropping the current-version guard fails here rather than silently.
     const statements = migrationStatements();
-    expect(statements).toHaveLength(3);
+    expect(statements).toHaveLength(4);
     expect(statements[0]).toMatch(/CREATE TABLE IF NOT EXISTS "comment_version_backup_0008"/);
     expect(statements[1]).toMatch(/CREATE TABLE IF NOT EXISTS "proposed_edit_version_backup_0008"/);
+    // Repairs a keyless backup table left by an earlier form of this migration.
+    expect(statements[2]).toMatch(/ADD PRIMARY KEY/);
     // Atomic: the snapshot and both moves are one data-modifying CTE.
-    expect(statements[2]).toMatch(/"moved_comments" AS/);
-    expect(statements[2]).toMatch(/"snap_comments" AS/);
-    expect(statements[2]).toMatch(/"snap_proposed_edits" AS/);
-    // Only fires while 0.1.0 is actually current.
-    expect(statements[2]).toMatch(/AND "is_current"/);
+    expect(statements[3]).toMatch(/"moved_comments" AS/);
+    expect(statements[3]).toMatch(/"snap_comments" AS/);
+    expect(statements[3]).toMatch(/"snap_proposed_edits" AS/);
+    // Only fires while 0.1.0 is actually current — BOTH snapshot CTEs must be
+    // guarded, or a premature run freezes a stale snapshot for that table.
+    expect(statements[3].match(/AND EXISTS \(SELECT 1 FROM "tgt"\)/g) ?? [])
+      .toHaveLength(4); // 2 snapshots + 2 moves
+    expect(statements[3]).toMatch(/AND "is_current"/);
     // The backups must NOT be populated at creation time — see the file's
     // comment: an early no-op run would otherwise freeze a stale snapshot.
     expect(statements[0]).not.toMatch(/SELECT/);
     expect(statements[1]).not.toMatch(/SELECT/);
+  });
+
+  it("survives backup tables left over from the earlier keyless form", async () => {
+    // A previous revision created these with CREATE TABLE ... AS SELECT, which
+    // makes no primary key. CREATE TABLE IF NOT EXISTS then no-ops on them and
+    // the ON CONFLICT ("id") in the move would fail outright.
+    const { db, currentId } = await seedPublishedUpgrade();
+    await db.execute(
+      sql.raw(`
+        CREATE TABLE "comment_version_backup_0008" AS
+          SELECT "id", "base_version_id" FROM "comments" WHERE false;
+        `),
+    );
+    await db.execute(
+      sql.raw(`
+        CREATE TABLE "proposed_edit_version_backup_0008" AS
+          SELECT "id", "base_version_id" FROM "proposed_edits" WHERE false;
+        `),
+    );
+
+    await applyMigration(db);
+
+    expect(
+      (await listCommentsForVersion(db, currentId)).map((c) => c.body),
+    ).toEqual(["old-thread"]);
+    expect(await backupCount(db)).toBe(1);
   });
 
   it("hides the existing thread without the migration (the bug it fixes)", async () => {
@@ -308,16 +348,21 @@ describe("0008 repoint comments to the new current version", () => {
       { ...doc("0.1.0"), isCurrent: false },
     ]);
     await seedCommentOnVersion(db, "0.0.1", "before-early-run", "article-1-s-1");
+    const earlyEdit = await seedProposedEditOnVersion(db, "0.0.1", "early-edit");
 
     await applyMigration(db);
 
-    // The tables exist but captured nothing, because nothing moved.
+    // The tables exist but captured nothing, because nothing moved. Asserted
+    // for BOTH tables: the snapshot CTEs are guarded independently, so an
+    // unguarded proposed-edit snapshot would reintroduce the bug just for it.
     expect(await backupCount(db)).toBe(0);
+    expect(await editBackupCount(db)).toBe(0);
     const oldId = await versionId(db, "0.0.1");
     expect(await listCommentsForVersion(db, oldId)).toHaveLength(1);
 
-    // A comment arrives after the premature run.
+    // A comment and a proposed edit arrive after the premature run.
     await seedCommentOnVersion(db, "0.0.1", "after-early-run", "article-2-s-1");
+    const lateEdit = await seedProposedEditOnVersion(db, "0.0.1", "late-edit");
 
     // Now the publish completes and the migration is run for real.
     await db.update(versions).set({ isCurrent: false });
@@ -331,13 +376,18 @@ describe("0008 repoint comments to the new current version", () => {
     expect(
       (await listCommentsForVersion(db, currentId)).map((c) => c.body).sort(),
     ).toEqual(["after-early-run", "before-early-run"]);
-    // BOTH are in the backup — including the one written after the early run.
+    // BOTH are in the backup — including those written after the early run.
     expect(await backupCount(db)).toBe(2);
+    expect(await editBackupCount(db)).toBe(2);
+    expect(await editVersionOf(db, earlyEdit)).toBe(currentId);
+    expect(await editVersionOf(db, lateEdit)).toBe(currentId);
 
-    // And the rollback genuinely restores both.
+    // And the rollback genuinely restores everything.
     await rollback(db);
     expect(
       (await listCommentsForVersion(db, oldId)).map((c) => c.body).sort(),
     ).toEqual(["after-early-run", "before-early-run"]);
+    expect(await editVersionOf(db, earlyEdit)).toBe(oldId);
+    expect(await editVersionOf(db, lateEdit)).toBe(oldId);
   });
 });

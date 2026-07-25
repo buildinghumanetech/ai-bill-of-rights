@@ -32,9 +32,34 @@ export async function syncVersions(
 
     const existingRow = existingByVersion.get(input.version);
     if (existingRow) {
+      // All three files are immutable once a version has been synced, and all
+      // three are checked. Only checking the markdown would let edits to
+      // agents.md or spec.json pass silently: the `continue` below means the
+      // stored hashes are never updated, so the row would keep serving the old
+      // content at /v/<version>/agents.md and /v/<version>/spec.json with
+      // nothing to indicate the files on disk had moved on.
+      //
+      // If this fires for a version still being drafted, clear the stale row
+      // with `pnpm tsx scripts/unsync-version.ts <version> --yes` — see README.
+      const mismatches: string[] = [];
       if (existingRow.markdownHash !== markdownHash) {
+        mismatches.push(
+          `markdown (existing ${existingRow.markdownHash} vs new ${markdownHash})`,
+        );
+      }
+      if (existingRow.agentsMdHash !== agentsMdHash) {
+        mismatches.push(
+          `agents.md (existing ${existingRow.agentsMdHash} vs new ${agentsMdHash})`,
+        );
+      }
+      if (existingRow.specJsonHash !== specJsonHash) {
+        mismatches.push(
+          `spec.json (existing ${existingRow.specJsonHash} vs new ${specJsonHash})`,
+        );
+      }
+      if (mismatches.length > 0) {
         throw new Error(
-          `Version ${input.version} hash mismatch: existing ${existingRow.markdownHash} vs new ${markdownHash}. The canonical document text is meant to be immutable.`,
+          `Version ${input.version} hash mismatch: ${mismatches.join("; ")}. The canonical document text is meant to be immutable.`,
         );
       }
       // Already in sync — no-op

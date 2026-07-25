@@ -40,6 +40,32 @@ CREATE TABLE IF NOT EXISTS "proposed_edit_version_backup_0008" (
   "base_version_id" uuid NOT NULL
 );
 --> statement-breakpoint
+-- 1b. Repair backups left over from an earlier form of this migration.
+--
+--     A previous revision created these with `CREATE TABLE … AS SELECT`, which
+--     produces NO primary key. `CREATE TABLE IF NOT EXISTS` above silently
+--     no-ops on such a table, and the ON CONFLICT ("id") below would then fail
+--     with "no unique or exclusion constraint matching the ON CONFLICT
+--     specification" — aborting the run in exactly the environments most likely
+--     to have run the earlier form. Add the missing key if it isn't there.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = '"comment_version_backup_0008"'::regclass
+       AND contype = 'p'
+  ) THEN
+    ALTER TABLE "comment_version_backup_0008" ADD PRIMARY KEY ("id");
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = '"proposed_edit_version_backup_0008"'::regclass
+       AND contype = 'p'
+  ) THEN
+    ALTER TABLE "proposed_edit_version_backup_0008" ADD PRIMARY KEY ("id");
+  END IF;
+END $$;
+--> statement-breakpoint
 -- 2. Snapshot and move, in a SINGLE statement.
 --
 --    scripts/apply-migration.ts sends each statement as its own request (neon

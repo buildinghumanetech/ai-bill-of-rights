@@ -106,7 +106,7 @@ pnpm tsx scripts/apply-migration.ts drizzle/0008_repoint_comments_to_v0_1_0.sql
 
 ### Rolling back the 0.1.0 publish
 
-Reverting `current` in `versions.json` puts the site back on 0.0.1, but comments moved by 0008 would then be scoped to the wrong version and disappear again. 0008 snapshots the original mapping into `comment_version_backup_0008` and `proposed_edit_version_backup_0008` before moving anything, so the move is reversible:
+Reverting `current` in `versions.json` puts the site back on 0.0.1, but comments moved by 0008 would then be scoped to the wrong version and disappear again. 0008 snapshots the original mapping into `comment_version_backup_0008` and `proposed_edit_version_backup_0008` **in the same statement that performs the move** — so the backup always reflects exactly what was moved, and a run that moves nothing records nothing. That makes the move reversible:
 
 ```sql
 UPDATE "comments" AS c
