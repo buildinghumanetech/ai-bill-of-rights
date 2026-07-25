@@ -1,4 +1,4 @@
-import { eq, count, desc, gt, and, isNull, isNotNull, asc, sum, sql } from "drizzle-orm";
+import { eq, count, countDistinct, desc, gt, and, isNull, isNotNull, asc, sum, sql } from "drizzle-orm";
 import { versions, signatures, signers, comments, attestations, commentVotes, commentReports } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
@@ -27,8 +27,18 @@ export async function getVersionByString(versionString: string, db: any = getDef
   return rows[0] ?? null;
 }
 
+/**
+ * How many distinct people have signed — across all versions.
+ *
+ * Counts distinct signer_id rather than rows: `signatures` is unique on
+ * (signer_id, version_id), so one person who signs both v0.0.1 and v0.1.0
+ * produces two rows. This number is rendered as "N signatures" and "N other
+ * real people", so it has to count humans.
+ */
 export async function getSignatureCount(db: any = getDefaultDb()): Promise<number> {
-  const rows = await db.select({ value: count() }).from(signatures);
+  const rows = await db
+    .select({ value: countDistinct(signatures.signerId) })
+    .from(signatures);
   return Number(rows[0]?.value ?? 0);
 }
 
@@ -46,9 +56,11 @@ export async function getSignatureNumber(
   if (sigRow.length === 0) return 1;
   const signedAt = sigRow[0].signedAt;
 
-  // 2. Count how many signatures exist at or before that timestamp
+  // 2. Count how many distinct people signed at or before that timestamp.
+  //    Distinct for the same reason as getSignatureCount: a person who signs
+  //    more than one version must not advance everyone else's signer number.
   const rows = await db
-    .select({ value: count() })
+    .select({ value: countDistinct(signatures.signerId) })
     .from(signatures)
     .where(sql`${signatures.signedAt} <= ${signedAt}`);
   return Number(rows[0]?.value ?? 1);

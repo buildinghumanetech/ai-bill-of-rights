@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { getCurrentVersion, getSignatureCount, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
 import { signers, consentRecords, signatures, versions } from "@/lib/db/schema";
 
 const sample = (version: string, isCurrent: boolean) => ({
@@ -29,6 +29,53 @@ describe("db queries", () => {
     const db = await createTestDb();
     const count = await getSignatureCount(db);
     expect(count).toBe(0);
+  });
+
+  // The signatures table is unique on (signer_id, version_id), so one person
+  // who signs two versions produces two rows. getSignatureCount feeds public
+  // copy that reads "N signatures" and "N other real people", and
+  // getSignatureNumber feeds "You're Signer #N" — both must count humans, not
+  // rows, or publishing a new version silently inflates them.
+  it("getSignatureCount counts people, not rows, across versions", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sample("1.0.0", false), sample("1.1.0", true)]);
+    const [v1, v2] = await db.select().from(versions).orderBy(versions.version);
+
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "u-resigner",
+        displayName: "Re Signer",
+        affiliation: null,
+        locationText: null,
+        verificationMethod: "email" as const,
+        verifiedAt: new Date("2026-01-01T00:00:00Z"),
+      })
+      .returning({ id: signers.id });
+    const [record] = await db
+      .insert(consentRecords)
+      .values({
+        signerId: signer.id,
+        consentTextHash: "a".repeat(64),
+        capturedFields: {},
+      })
+      .returning({ id: consentRecords.id });
+
+    for (const v of [v1, v2]) {
+      await db.insert(signatures).values({
+        signerId: signer.id,
+        versionId: v.id,
+        versionHashAtSigning: v.markdownHash,
+        consentRecordId: record.id,
+        signedAt: new Date("2026-01-02T00:00:00Z"),
+      });
+    }
+
+    // Two signature rows, but only one human.
+    const rows = await db.select().from(signatures);
+    expect(rows).toHaveLength(2);
+    expect(await getSignatureCount(db)).toBe(1);
+    expect(await getSignatureNumber(signer.id, db)).toBe(1);
   });
 });
 

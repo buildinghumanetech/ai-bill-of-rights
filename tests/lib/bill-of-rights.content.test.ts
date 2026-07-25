@@ -29,9 +29,19 @@ function readVersionFile(version: string, ext: string): string {
   return fs.readFileSync(path.join(CONTENT_ROOT, `v${version}.${ext}`), "utf-8");
 }
 
+/** The version published immediately before `current`, per versions.json order. */
+function previousVersion(): string {
+  const idx = versionsIndex.history.findIndex(
+    (h) => h.version === versionsIndex.current,
+  );
+  return versionsIndex.history[idx - 1].version;
+}
+
 describe("bill of rights content index", () => {
-  it("names 0.1.0 as the current version", () => {
-    expect(versionsIndex.current).toBe("0.1.0");
+  it("names the newest history entry as the current version", () => {
+    const newest =
+      versionsIndex.history[versionsIndex.history.length - 1].version;
+    expect(versionsIndex.current).toBe(newest);
   });
 
   it("has every history entry backed by all three files on disk", () => {
@@ -82,23 +92,23 @@ describe("current version document", () => {
     }
   });
 
-  it("carries Articles 1-9 over from v0.0.1 verbatim", () => {
-    const previous = parseDocument(readVersionFile("0.0.1", "md"));
+  it("carries every article from the previous version over verbatim", () => {
+    // A published version's markdown hash is locked once synced, so a new
+    // version may only ADD articles — never silently reword an existing one.
+    const previous = parseDocument(readVersionFile(previousVersion(), "md"));
     const textOf = (doc: typeof previous, id: string) =>
       doc.articles
         .find((a) => a.id === id)!
         .paragraphs.flatMap((p) => p.sentences.map((s) => s.text))
         .join(" ");
 
-    for (let i = 1; i <= 9; i++) {
-      const id = `article-${i}`;
-      expect(textOf(parsed, id), `${id} text drifted`).toBe(
-        textOf(previous, id),
+    for (const prior of previous.articles) {
+      const carried = parsed.articles.find((a) => a.id === prior.id);
+      expect(carried, `${prior.id} was dropped`).toBeDefined();
+      expect(textOf(parsed, prior.id), `${prior.id} text drifted`).toBe(
+        textOf(previous, prior.id),
       );
-      expect(
-        parsed.articles.find((a) => a.id === id)!.title,
-        `${id} title drifted`,
-      ).toBe(previous.articles.find((a) => a.id === id)!.title);
+      expect(carried!.title, `${prior.id} title drifted`).toBe(prior.title);
     }
   });
 });
@@ -154,8 +164,59 @@ describe("homepage articles array", () => {
     });
   });
 
+  /**
+   * The homepage splits each article into `body` + `pullQuote`, where the pull
+   * quote is the article's closing line. Rejoined, they must reproduce the
+   * canonical text exactly — otherwise the homepage displays wording that is
+   * not in the document people are actually signing.
+   *
+   * Four articles predate this test and already diverge. They are listed here
+   * rather than silently tolerated, so the exemption is visible and shrinkable:
+   *
+   *   01 — canonical closes "The default is no."; homepage shows
+   *        'The default is "No LLM training on my data"'
+   *   02 — canonical "Memory built on your life is yours." vs "LLM memory ..."
+   *   05 — homepage pull quote is a paraphrase; canonical has no closing line
+   *   06 — homepage pull quote is about an AI agent "license plate", which
+   *        appears NOWHERE in the canonical document
+   *
+   * Do not add to this list. New articles must match exactly.
+   */
+  const KNOWN_PULLQUOTE_DIVERGENCES = new Set(["01", "02", "05", "06"]);
+
+  it("reproduces the canonical text as body + pullQuote", () => {
+    homepageArticles.forEach((article, idx) => {
+      if (KNOWN_PULLQUOTE_DIVERGENCES.has(article.number)) return;
+      const canonical = documentArticles[idx].paragraphs
+        .flatMap((p) => p.sentences.map((s) => s.text))
+        .join(" ");
+      const rejoined = article.pullQuote
+        ? `${article.body} ${article.pullQuote}`
+        : article.body;
+      expect(rejoined, `article ${article.number}`).toBe(canonical);
+    });
+  });
+
+  it("keeps the exemption list honest — every listed article really does diverge", () => {
+    // If someone fixes a legacy pull quote, this fails and tells them to shrink
+    // the list, so the exemption can never outlive the problem.
+    for (const number of KNOWN_PULLQUOTE_DIVERGENCES) {
+      const idx = homepageArticles.findIndex((a) => a.number === number);
+      const article = homepageArticles[idx];
+      const canonical = documentArticles[idx].paragraphs
+        .flatMap((p) => p.sentences.map((s) => s.text))
+        .join(" ");
+      const rejoined = article.pullQuote
+        ? `${article.body} ${article.pullQuote}`
+        : article.body;
+      expect(
+        rejoined,
+        `article ${number} now matches the canonical text — remove it from KNOWN_PULLQUOTE_DIVERGENCES`,
+      ).not.toBe(canonical);
+    }
+  });
+
   it("keeps each article body a prefix of the canonical text", () => {
-    // The homepage body drops the closing line, which is promoted to pullQuote.
     homepageArticles.forEach((article, idx) => {
       const canonical = documentArticles[idx].paragraphs
         .flatMap((p) => p.sentences.map((s) => s.text))
