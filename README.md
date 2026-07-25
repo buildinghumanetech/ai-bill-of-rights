@@ -61,7 +61,26 @@ A new version is a PR that adds:
 
 …and bumps `current` in `content/bill-of-rights/versions.json`.
 
-Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database. Existing signatures stay attached to the version they signed — they do not migrate.
+Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database.
+
+### What does and doesn't carry forward
+
+Several things are scoped to a specific version row, so bumping `current` changes what the site shows. Published documents are immutable — `syncVersions()` hashes the markdown and throws if an already-synced version's text changes — so the only lever is what you migrate.
+
+- **Signatures do not migrate.** They stay attached to the version that was signed. Someone who signed the previous version reads as not-having-signed the new one and will be shown the sign form again. Public counts (`getSignatureCount`) count *distinct people* across all versions, so re-signing never double-counts anyone.
+- **Comments do not migrate on their own.** `comments.base_version_id` points at the version a comment was written against, and the homepage only queries the current version — so without a migration step, publishing hides every existing thread. Ship a small SQL migration re-pointing them, as `drizzle/0008_repoint_comments_to_v0_1_0.sql` does for the 0.0.1 → 0.1.0 publish. **Run it after the deploy**, once `sync-versions` has created the new version row. Only do this when the articles the comments are anchored to are textually unchanged; otherwise the comment ends up attached to wording that moved under it.
+- **Endorsements are intentionally left behind.** Endorsing a version is a statement about that version's text.
+
+### Post-deploy steps for the 0.1.0 publish
+
+Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here. After the deploy:
+
+```
+pnpm tsx scripts/apply-migration.ts drizzle/0007_signatures_signer_signed_at_idx.sql
+pnpm tsx scripts/apply-migration.ts drizzle/0008_repoint_comments_to_v0_1_0.sql
+```
+
+0007 is an index (correctness is unaffected, but `/signers` and `/signatories` fall back to full scans without it). 0008 carries the existing discussion forward. Both are safe to re-run.
 
 ## "Implement as Code" surface for AI builders
 
