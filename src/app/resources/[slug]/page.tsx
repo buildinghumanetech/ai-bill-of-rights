@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResource, listResourceSlugs } from "@/lib/resources";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
 export async function generateStaticParams() {
   return listResourceSlugs().map((slug) => ({ slug }));
@@ -15,16 +16,10 @@ export async function generateMetadata({
   const { slug } = await params;
   const r = getResource(slug);
   if (!r) return { title: "Resource not found" };
-  const title = `${r.title} — AI Bill of Rights`;
-  const description = r.subtitle || r.title;
-  return {
-    title,
-    description,
-    // Next merges metadata shallowly, so without its own openGraph/twitter this
-    // page would inherit the root's and share as if it were the homepage.
-    openGraph: { title, description },
-    twitter: { title, description },
-  };
+  return buildPageMetadata({
+    title: `${r.title} — AI Bill of Rights`,
+    description: r.subtitle || r.title,
+  });
 }
 
 export default async function ResourcePage({

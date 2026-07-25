@@ -40,16 +40,30 @@ export const PRODUCTION_ORIGIN = "https://ai-for-people.org";
  * `NEXT_PUBLIC_SITE_URL`, advertise themselves rather than production.
  */
 export function getSiteUrl(): string {
-  const configured =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+  // VERCEL_URL is set on production deployments too, and it is the
+  // per-deployment hostname rather than the custom domain — so only trust it
+  // off production, or a missing NEXT_PUBLIC_SITE_URL would silently make the
+  // live site advertise a *.vercel.app origin.
+  const previewUrl =
+    process.env.VERCEL_ENV !== "production" && process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || previewUrl;
   if (!configured) return PRODUCTION_ORIGIN;
 
   try {
-    return new URL(configured).toString().replace(/\/$/, "");
+    const url = new URL(configured);
+    // Parseability alone is not enough: `new URL("localhost:3000")` succeeds
+    // with protocol "localhost:" and a null origin, and Next resolves relative
+    // metadata URLs via `new URL(relative, metadataBase)` — which throws
+    // against such an opaque-path base. Insist on a real web origin.
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error(`unsupported protocol ${url.protocol}`);
+    }
+    return url.toString().replace(/\/$/, "");
   } catch {
     console.warn(
-      `[site-metadata] Ignoring unparseable site URL ${JSON.stringify(configured)}; falling back to ${PRODUCTION_ORIGIN}. Include the scheme, e.g. https://example.com`,
+      `[site-metadata] Ignoring unusable site URL ${JSON.stringify(configured)}; falling back to ${PRODUCTION_ORIGIN}. Include the scheme, e.g. https://example.com`,
     );
     return PRODUCTION_ORIGIN;
   }
@@ -81,6 +95,51 @@ export function buildRootMetadata(): Metadata {
       card: "summary",
       title: SITE_TITLE,
       description: SITE_DESCRIPTION,
+    },
+  };
+}
+
+/**
+ * Metadata for a route that needs its own title.
+ *
+ * Use this instead of hand-writing `openGraph`/`twitter` on a page. Next's
+ * shallow merge cuts both ways: a route that omits `openGraph` inherits the
+ * root's (and would share as the homepage), but a route that defines one
+ * *replaces* the root's entirely — silently dropping `siteName` and `type`.
+ * Routing every page through here keeps both halves of that hazard in one
+ * place.
+ *
+ * Routes that deliberately want the site-level card (`/`) should not use this.
+ */
+export function buildPageMetadata({
+  title,
+  description,
+  ogType = "website",
+  imageUrl,
+}: {
+  title: string;
+  description: string;
+  ogType?: "website" | "profile";
+  imageUrl?: string;
+}): Metadata {
+  const images = imageUrl
+    ? [{ url: imageUrl, width: 1200, height: 630 }]
+    : undefined;
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: SITE_NAME,
+      type: ogType,
+      ...(images ? { images } : {}),
+    },
+    twitter: {
+      card: imageUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+      ...(imageUrl ? { images: [imageUrl] } : {}),
     },
   };
 }

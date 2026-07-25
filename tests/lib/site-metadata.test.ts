@@ -5,6 +5,7 @@ import {
   SITE_NAME,
   SITE_TAGLINE,
   SITE_TITLE,
+  buildPageMetadata,
   buildRootMetadata,
   getSiteUrl,
 } from "@/lib/site-metadata";
@@ -88,10 +89,13 @@ describe("buildRootMetadata", () => {
 
 describe("getSiteUrl", () => {
   const ORIGINAL_VERCEL_URL = process.env.VERCEL_URL;
+  const ORIGINAL_VERCEL_ENV = process.env.VERCEL_ENV;
 
   afterEach(() => {
     if (ORIGINAL_VERCEL_URL === undefined) delete process.env.VERCEL_URL;
     else process.env.VERCEL_URL = ORIGINAL_VERCEL_URL;
+    if (ORIGINAL_VERCEL_ENV === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = ORIGINAL_VERCEL_ENV;
   });
 
   it("falls back to the production origin when nothing is configured", () => {
@@ -121,12 +125,84 @@ describe("getSiteUrl", () => {
     expect(() => buildRootMetadata()).not.toThrow();
   });
 
-  it("always returns a parseable absolute URL with no trailing slash", () => {
-    for (const value of ["https://ok.test/", "not a url", "", "//nope"]) {
+  it("rejects a scheme-shaped value that parses but has no real origin", () => {
+    // `new URL("localhost:3000")` does NOT throw — it parses as protocol
+    // "localhost:" with an opaque path and a null origin. Next resolves
+    // relative metadata URLs via `new URL(relative, metadataBase)`, which
+    // throws against such a base, so /signatories/[id] would break.
+    process.env.NEXT_PUBLIC_SITE_URL = "localhost:3000";
+    expect(getSiteUrl()).toBe(PRODUCTION_ORIGIN);
+    const base = new URL(String(buildRootMetadata().metadataBase));
+    expect(() => new URL("/api/og/signer/1", base)).not.toThrow();
+  });
+
+  it("always returns an http(s) URL with a real origin and no trailing slash", () => {
+    for (const value of [
+      "https://ok.test/",
+      "not a url",
+      "",
+      "//nope",
+      "localhost:3000",
+      "127.0.0.1:3000",
+      "www.ai-for-people.org",
+      "ftp://files.test",
+    ]) {
       process.env.NEXT_PUBLIC_SITE_URL = value;
       const url = getSiteUrl();
-      expect(() => new URL(url)).not.toThrow();
+      const parsed = new URL(url);
+      expect(["http:", "https:"]).toContain(parsed.protocol);
+      expect(parsed.origin).not.toBe("null");
       expect(url.endsWith("/")).toBe(false);
     }
+  });
+
+  it("ignores VERCEL_URL on production so the custom domain wins", () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    process.env.VERCEL_ENV = "production";
+    process.env.VERCEL_URL = "ai-bill-of-rights-9fk2x1.vercel.app";
+    expect(getSiteUrl()).toBe(PRODUCTION_ORIGIN);
+  });
+});
+
+describe("buildPageMetadata", () => {
+  it("keeps siteName and type, which a hand-written block would drop", () => {
+    // Next's shallow merge means a child openGraph replaces the root's
+    // wholesale — these fields are not inherited.
+    const og = buildPageMetadata({ title: "T", description: "D" })
+      .openGraph as { siteName?: string; type?: string };
+    expect(og.siteName).toBe(SITE_NAME);
+    expect(og.type).toBe("website");
+  });
+
+  it("uses the page's own title and description, not the site's", () => {
+    const meta = buildPageMetadata({ title: "About", description: "Who we are" });
+    const og = meta.openGraph as { title?: string; description?: string };
+    const tw = meta.twitter as { title?: string; description?: string };
+    for (const value of [meta.title, og.title, tw.title]) {
+      expect(value).toBe("About");
+      expect(value).not.toContain(SITE_TAGLINE);
+    }
+    expect(og.description).toBe("Who we are");
+    expect(tw.description).toBe("Who we are");
+  });
+
+  it("upgrades to a large image card only when an image is supplied", () => {
+    const plain = buildPageMetadata({ title: "T", description: "D" });
+    expect((plain.twitter as { card?: string }).card).toBe("summary");
+    expect((plain.openGraph as { images?: unknown }).images).toBeUndefined();
+
+    const withImage = buildPageMetadata({
+      title: "T",
+      description: "D",
+      ogType: "profile",
+      imageUrl: "/api/og/signer/1",
+    });
+    expect((withImage.twitter as { card?: string }).card).toBe(
+      "summary_large_image",
+    );
+    expect((withImage.openGraph as { type?: string }).type).toBe("profile");
+    expect((withImage.openGraph as { images?: unknown[] }).images).toEqual([
+      { url: "/api/og/signer/1", width: 1200, height: 630 },
+    ]);
   });
 });

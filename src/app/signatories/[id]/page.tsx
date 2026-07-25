@@ -7,6 +7,7 @@ import {
   listSignaturesForSigner,
 } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
+import { buildPageMetadata } from "@/lib/site-metadata";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
 import { SelfieAvatar } from "@/components/SelfieAvatar";
@@ -23,25 +24,12 @@ export async function generateMetadata({
   const { id } = await params;
   const signer = await getSignerById(id);
   if (!signer) return { title: "Signer not found" };
-  const title = `${signer.displayName} signed the AI Bill of Rights`;
-  const description = `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`;
-  const ogUrl = `/api/og/signer/${id}`;
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      type: "profile",
-      images: [{ url: ogUrl, width: 1200, height: 630 }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [ogUrl],
-    },
-  };
+  return buildPageMetadata({
+    title: `${signer.displayName} signed the AI Bill of Rights`,
+    description: `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`,
+    ogType: "profile",
+    imageUrl: `/api/og/signer/${id}`,
+  });
 }
 
 export default async function SignerProfile({
