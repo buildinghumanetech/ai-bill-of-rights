@@ -147,6 +147,32 @@ describe("signer page as a landing page for a stranger", () => {
     expect(recordAt).toBeGreaterThan(commitmentsAt);
   });
 
+  // The heading of the first CTA section is "Add your name to the AI Bill of
+  // Rights", so a bare `toContain("Add your name")` is satisfied without the
+  // second CTA existing at all. These assertions pin the button that sits
+  // *below* the commitments list — the one there to catch a reader who has
+  // just finished the nine articles — so deleting it turns the suite red.
+  it("repeats the sign CTA below the commitments list for a non-owner", async () => {
+    mockSigner();
+    viewerIs(null);
+    const html = await renderPage();
+    const occurrences = html.split("Add your name").length - 1;
+    expect(occurrences).toBe(2);
+    const commitmentsAt = html.indexOf("What they signed");
+    expect(commitmentsAt).toBeGreaterThan(-1);
+    // The last occurrence is the standalone button, after the nine articles.
+    expect(html.lastIndexOf("Add your name")).toBeGreaterThan(commitmentsAt);
+    // ...and after the final article's title, not tucked between them.
+    const lastArticleTitle = articles[articles.length - 1].title.replace(
+      /'/g,
+      "&#x27;",
+    );
+    expect(html.indexOf(lastArticleTitle)).toBeGreaterThan(-1);
+    expect(html.lastIndexOf("Add your name")).toBeGreaterThan(
+      html.indexOf(lastArticleTitle),
+    );
+  });
+
   it("renders the why-I-signed statement as a pull quote when present", async () => {
     mockSigner({
       whyISigned: "Because my kids will grow up with these systems.",
@@ -162,6 +188,22 @@ describe("signer page as a landing page for a stranger", () => {
     expect(html.indexOf("Because my kids")).toBeLessThan(
       html.indexOf("Sign the AI Bill of Rights"),
     );
+  });
+
+  it("bounds the pull quote's height so the sign CTA stays reachable", async () => {
+    // 200 characters is the server-side cap on `whyISigned`; unclamped at this
+    // type size that is roughly seven lines on a phone, burying the CTA.
+    const longest = "A".repeat(200);
+    mockSigner({ whyISigned: longest });
+    viewerIs(null);
+    const html = await renderPage();
+    const quoteAt = html.indexOf("<blockquote");
+    expect(quoteAt).toBeGreaterThan(-1);
+    const openTag = html.slice(quoteAt, html.indexOf(">", quoteAt));
+    expect(openTag).toContain("line-clamp-4");
+    // The quote is still rendered in full — the clamp is visual, not a server
+    // side truncation, so the text stays available to crawlers and a11y tools.
+    expect(html).toContain(longest);
   });
 
   it("renders cleanly when why-I-signed is null", async () => {

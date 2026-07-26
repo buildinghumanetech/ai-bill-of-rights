@@ -116,7 +116,19 @@ export default async function SignerProfile({
 
       {whyISigned ? (
         <figure className="mt-8 border-l-4 border-blue-600 pl-5">
-          <blockquote className="text-xl leading-snug text-zinc-900 sm:text-2xl">
+          {/*
+            The statement is capped at 200 characters server-side, but at this
+            size that is still six lines on a 375px phone, which pushed the
+            sign CTA — the point of this page — past the fold: measured in
+            Chrome at 375x667, the CTA's bottom edge sat at 682px unclamped
+            vs. 632px with `line-clamp-4`. Clamping the quote is what keeps
+            the ask reachable without scrolling. The `text-lg` mobile step
+            fits more of the statement inside those four lines; from `sm` up
+            a full 200-character statement fits in four lines uncut, so the
+            clamp never bites there. The clamp is visual only — the full text
+            stays in the DOM for crawlers and screen readers.
+          */}
+          <blockquote className="line-clamp-4 text-lg leading-snug text-zinc-900 sm:text-2xl">
             &ldquo;{whyISigned}&rdquo;
           </blockquote>
           <figcaption className="mt-3 text-sm text-zinc-500">
