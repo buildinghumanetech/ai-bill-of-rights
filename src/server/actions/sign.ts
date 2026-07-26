@@ -139,6 +139,9 @@ export async function submitSignAction(formData: FormData): Promise<void> {
         revokeUrl: `${siteUrl}/account/revoke`,
         signatureNumber,
         totalSignatures,
+        // Without this every share link in the email — the highest-volume
+        // share surface we have — goes out with no ?ref= at all.
+        signerId: signer.id,
       });
       await sendEmail({ to: email, ...tpl });
     }

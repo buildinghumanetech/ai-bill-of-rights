@@ -103,14 +103,26 @@ export function trackSignFormSubmitted(
 
 /**
  * OTP verified and the signature is recorded. `referred` marks conversions
- * that came in through somebody's share link.
+ * that came in through somebody's share link; `channel` is the `?via=` surface
+ * they originally arrived from, read back out of the first-party cookie at
+ * signing time. Together they are what turns "which surface converts" from a
+ * guess into a number.
+ *
+ * `channel` is deliberately optional and nullable: a visitor who typed the URL
+ * has no channel, and `clean()` strips it rather than filling the dashboard
+ * with an "unknown" bucket that means two different things.
  */
 export function trackSignatureCompleted(
-  opts: { method?: "email" | "phone"; referred?: boolean } = {},
+  opts: {
+    method?: "email" | "phone";
+    referred?: boolean;
+    channel?: ShareChannel | string | null;
+  } = {},
 ): void {
   track(ANALYTICS_EVENTS.signatureCompleted, {
     method: opts.method,
     referred: opts.referred ?? false,
+    channel: opts.channel ?? undefined,
   });
 }
 

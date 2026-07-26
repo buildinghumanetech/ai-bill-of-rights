@@ -2,7 +2,12 @@
 
 import { cookies, headers } from "next/headers";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { REF_COOKIE, readRefCookieValue } from "@/lib/referral/cookie";
+import {
+  REF_CHANNEL_COOKIE,
+  REF_COOKIE,
+  readChannelCookieValue,
+  readRefCookieValue,
+} from "@/lib/referral/cookie";
 import { upsertSignerProfile } from "./profile";
 import { recordSignature } from "./sign";
 import {
@@ -39,17 +44,34 @@ function decodePercentEncoding(s: string): string {
   }
 }
 
-// Read the attribution cookie the proxy stamped on arrival. Best effort by
-// design: if the cookie jar is unavailable or holds junk we return null and
+/** What the proxy stamped on this visitor when they first arrived. */
+interface ReferralAttribution {
+  /** Signer id of whoever introduced them, if anyone. */
+  ref: string | null;
+  /** The `?via=` surface that introduction came from, if it carried one. */
+  channel: string | null;
+}
+
+const UNATTRIBUTED: ReferralAttribution = { ref: null, channel: null };
+
+// Read the attribution cookies the proxy stamped on arrival. Best effort by
+// design: if the cookie jar is unavailable or holds junk we return nulls and
 // the signature proceeds unattributed. A signature is never worth losing over
 // a referral credit.
-async function readRefCookie(): Promise<string | null> {
+//
+// Both cookies are read from the same jar in one go, because the pair always
+// describes the same share event — reading them separately would let a retry
+// pick up a ref from one moment and a channel from another.
+async function readReferralAttribution(): Promise<ReferralAttribution> {
   try {
     const jar = await cookies();
-    return readRefCookieValue(jar.get(REF_COOKIE)?.value);
+    return {
+      ref: readRefCookieValue(jar.get(REF_COOKIE)?.value),
+      channel: readChannelCookieValue(jar.get(REF_CHANNEL_COOKIE)?.value),
+    };
   } catch (err) {
-    console.warn("[referral] could not read ref cookie:", err);
-    return null;
+    console.warn("[referral] could not read attribution cookies:", err);
+    return UNATTRIBUTED;
   }
 }
 
@@ -88,6 +110,17 @@ export interface SignFromModalResult {
   alreadySigned?: boolean;
   signerId?: string;
   displayName?: string;
+  /**
+   * Whether this signature came in through somebody's share link, and which
+   * surface it arrived from. The client reports these to analytics — the
+   * cookies are httpOnly, so the browser cannot work either out for itself,
+   * and without them "which surface converts" stays unanswerable.
+   *
+   * Never a signer id: `referred` is a boolean on purpose. Who referred whom
+   * is a database question (`countReferralsBySigner`), not an analytics one.
+   */
+  referred?: boolean;
+  channel?: string | null;
 }
 
 export async function recordSignatureFromModal(
@@ -155,6 +188,10 @@ export async function recordSignatureFromModal(
     const verificationMethod: "email" | "sms" =
       input.method === "email" ? "email" : "sms";
 
+    // Resolved once, up front: the same pair feeds the database write and the
+    // analytics event the client fires, so they can never disagree.
+    const attribution = await readReferralAttribution();
+
     const profile = await upsertSignerProfile(undefined, {
       clerkUserId: userId,
       displayName,
@@ -162,7 +199,7 @@ export async function recordSignatureFromModal(
       locationText,
       verificationMethod,
       notificationPreference: input.notificationPreference ?? "major",
-      referredBySignerId: await readRefCookie(),
+      referredBySignerId: attribution.ref,
     });
 
     const consentText = renderConsentText(CURRENT_CONSENT_VERSION, {
@@ -230,6 +267,9 @@ export async function recordSignatureFromModal(
           revokeUrl: `${siteUrl}/account/revoke`,
           signatureNumber,
           totalSignatures,
+          // Without this every share link in the email — the highest-volume
+          // share surface we have — goes out with no ?ref= at all.
+          signerId: profile.id,
         });
         await sendEmail({ to: email, ...tpl });
       }
@@ -246,7 +286,13 @@ export async function recordSignatureFromModal(
       console.error("[email] team notification send failed:", err);
     }
 
-    return { success: true, signerId: profile.id, displayName };
+    return {
+      success: true,
+      signerId: profile.id,
+      displayName,
+      referred: attribution.ref !== null,
+      channel: attribution.channel,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return { success: false, error: msg };
@@ -366,7 +412,7 @@ export async function createSignerFromModal(
       locationText,
       verificationMethod,
       notificationPreference: input.notificationPreference ?? "major",
-      referredBySignerId: await readRefCookie(),
+      referredBySignerId: (await readReferralAttribution()).ref,
     });
 
     // Confirmation email (best effort).
