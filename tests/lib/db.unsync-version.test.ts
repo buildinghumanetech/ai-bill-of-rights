@@ -53,6 +53,21 @@ async function seedSignerWithConsent(db: TestDb, name: string) {
   return { signerId: signer.id, recordId: record.id };
 }
 
+/**
+ * Narrow an `UnsyncReport` to its refusal arm. The report is a discriminated
+ * union so that a refusal without a `refusedCode` is a compile error, which
+ * means a test asserting on the refusal fields has to say it expected one —
+ * and gets a clear failure, not `undefined`, if the call actually deleted.
+ */
+function refusal(report: Awaited<ReturnType<typeof unsyncVersion>>) {
+  if (report.deleted) {
+    throw new Error(
+      `expected ${report.version} to be refused, but it was deleted`,
+    );
+  }
+  return report;
+}
+
 async function rowFor(db: TestDb, version: string) {
   const [row] = await db
     .select()
@@ -108,7 +123,7 @@ describe("unsyncVersion", () => {
 
     const report = await unsyncVersion(db, "0.1.0", { dryRun: false });
     expect(report.deleted).toBe(false);
-    expect(report.refusedBecause).toMatch(/current/);
+    expect(refusal(report).refusedBecause).toMatch(/current/);
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
@@ -121,13 +136,13 @@ describe("unsyncVersion", () => {
     const report = await unsyncVersion(db, "0.1.0");
 
     expect(report.deleted).toBe(false);
-    expect(report.refusedCode).toBe("dry_run");
+    expect(refusal(report).refusedCode).toBe("dry_run");
     expect(await rowFor(db, "0.1.0")).toBeDefined();
 
     // Same for the allowCurrent-only shape, against the current version.
     const current = await unsyncVersion(db, "0.0.1", { allowCurrent: true });
     expect(current.deleted).toBe(false);
-    expect(current.refusedCode).toBe("dry_run");
+    expect(refusal(current).refusedCode).toBe("dry_run");
     expect(await rowFor(db, "0.0.1")).toBeDefined();
   });
 
@@ -137,9 +152,9 @@ describe("unsyncVersion", () => {
     const db = await createTestDb();
     await syncVersions(db, [doc("0.0.1", "old", true), doc("0.1.0", "draft")]);
 
-    expect((await unsyncVersion(db, "9.9.9")).refusedCode).toBe("not_found");
-    expect((await unsyncVersion(db, "0.0.1")).refusedCode).toBe("current");
-    expect((await unsyncVersion(db, "0.1.0")).refusedCode).toBe("dry_run");
+    expect(refusal(await unsyncVersion(db, "9.9.9")).refusedCode).toBe("not_found");
+    expect(refusal(await unsyncVersion(db, "0.0.1")).refusedCode).toBe("current");
+    expect(refusal(await unsyncVersion(db, "0.1.0")).refusedCode).toBe("dry_run");
 
     const target = await rowFor(db, "0.1.0");
     const who = await seedSignerWithConsent(db, "Signer");
@@ -149,7 +164,7 @@ describe("unsyncVersion", () => {
       versionHashAtSigning: target.markdownHash,
       consentRecordId: who.recordId,
     });
-    expect((await unsyncVersion(db, "0.1.0")).refusedCode).toBe("referenced");
+    expect(refusal(await unsyncVersion(db, "0.1.0")).refusedCode).toBe("referenced");
   });
 
   it("names the --allow-current override when it refuses a current draft", async () => {
@@ -162,8 +177,8 @@ describe("unsyncVersion", () => {
 
     const report = await unsyncVersion(db, "0.1.0", { dryRun: false });
     expect(report.deleted).toBe(false);
-    expect(report.refusedBecause).toMatch(/--allow-current/);
-    expect(report.refusedBecause).toMatch(/sync-versions/);
+    expect(refusal(report).refusedBecause).toMatch(/--allow-current/);
+    expect(refusal(report).refusedBecause).toMatch(/sync-versions/);
   });
 
   it("clears a current draft when allowCurrent is set and nothing references it", async () => {
@@ -209,7 +224,7 @@ describe("unsyncVersion", () => {
     });
 
     expect(report.deleted).toBe(false);
-    expect(report.refusedBecause).toMatch(/signatures=1/);
+    expect(refusal(report).refusedBecause).toMatch(/signatures=1/);
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
@@ -227,7 +242,7 @@ describe("unsyncVersion", () => {
 
     const report = await unsyncVersion(db, "0.1.0", { dryRun: false });
     expect(report.deleted).toBe(false);
-    expect(report.refusedBecause).toMatch(/signatures=1/);
+    expect(refusal(report).refusedBecause).toMatch(/signatures=1/);
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
@@ -245,7 +260,7 @@ describe("unsyncVersion", () => {
 
     const report = await unsyncVersion(db, "0.1.0", { dryRun: false });
     expect(report.deleted).toBe(false);
-    expect(report.refusedBecause).toMatch(/comments=1/);
+    expect(refusal(report).refusedBecause).toMatch(/comments=1/);
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
@@ -255,7 +270,78 @@ describe("unsyncVersion", () => {
 
     const report = await unsyncVersion(db, "0.1.0", { dryRun: true });
     expect(report.deleted).toBe(false);
-    expect(report.refusedBecause).toBe("dry run");
+    expect(refusal(report).refusedBecause).toBe("dry run");
     expect(await rowFor(db, "0.1.0")).toBeDefined();
+  });
+
+  it("refuses a CURRENT version that could not be restored from disk", async () => {
+    // Deleting the current row is advertised as a temporary state, fixed by
+    // `pnpm sync-versions`. If nothing on disk would restore it, that state is
+    // permanent and every page reading the current version stops rendering.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "live", true)]);
+
+    const report = await unsyncVersion(db, "0.1.0", {
+      dryRun: false,
+      allowCurrent: true,
+      isRestorable: () => ({
+        restorable: false,
+        reason: "v0.1.0.spec.json is missing",
+      }),
+    });
+
+    expect(refusal(report).refusedCode).toBe("not_restorable");
+    // The reason travels through, so the operator learns WHICH file to restore.
+    expect(refusal(report).refusedBecause).toMatch(/v0\.1\.0\.spec\.json/);
+    expect(await rowFor(db, "0.1.0")).toBeDefined();
+  });
+
+  it("still clears a NON-current leftover that is absent from disk", async () => {
+    // The gap the earlier flag-gated check had: this is precisely the stale
+    // leftover the tool exists to clean up. Gating restorability on the
+    // --allow-current FLAG rather than on the row being current made it
+    // undeletable for anyone following the README, which tells operators they
+    // will almost always need that flag.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.0.1", "old", true), doc("0.1.0", "draft")]);
+
+    const report = await unsyncVersion(db, "0.1.0", {
+      dryRun: false,
+      allowCurrent: true,
+      isRestorable: () => ({ restorable: false, reason: "not on disk" }),
+    });
+
+    expect(report.deleted).toBe(true);
+    expect(await rowFor(db, "0.1.0")).toBeUndefined();
+  });
+
+  it("reports not_found, not a restorability refusal, for an unknown version", async () => {
+    // A typo plus --allow-current used to exit 1 with "the database would be
+    // left with no current version" — a claim about a row that does not exist.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "live", true)]);
+
+    const report = await unsyncVersion(db, "9.9.9", {
+      dryRun: false,
+      allowCurrent: true,
+      isRestorable: () => ({ restorable: false, reason: "not on disk" }),
+    });
+
+    expect(report.found).toBe(false);
+    expect(refusal(report).refusedCode).toBe("not_found");
+  });
+
+  it("clears a current draft when it IS restorable", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "before", true)]);
+
+    const report = await unsyncVersion(db, "0.1.0", {
+      dryRun: false,
+      allowCurrent: true,
+      isRestorable: () => ({ restorable: true }),
+    });
+
+    expect(report.deleted).toBe(true);
+    expect(await rowFor(db, "0.1.0")).toBeUndefined();
   });
 });

@@ -84,6 +84,8 @@ pnpm sync-versions                                              # re-insert it f
 
 The flag is narrow: it only relaxes the `is_current` check. The script still refuses outright if **anything references the version** — signatures, comments, proposed edits, endorsements, attestations, or a child version — because a version people have signed or discussed is not a draft and no flag should make it one. "Current, but referenced by nothing" is precisely a frozen draft.
 
+It also refuses when the current version **could not be put back**: it must be listed in `versions.json` history *and* all three of its files (`v<x>.md`, `v<x>.agents.md`, `v<x>.spec.json`) must be on disk, since `sync-versions` reads all three. Otherwise the "no current version" state below would be permanent rather than momentary. This check applies only to the *current* row — a stale non-current leftover that is absent from disk is exactly what this tool is for, and stays deletable.
+
 Between the delete and the re-sync the database has **no current version** and pages that read it will not render, so run `pnpm sync-versions` straight afterwards. The script prints a warning to that effect when the row it deleted was current.
 
 It connects via `DATABASE_URL` from `.env.local`, which per the section above points at the `dev` branch; check that before running it.

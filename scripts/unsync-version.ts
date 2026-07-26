@@ -18,6 +18,10 @@
  * with no current version until you re-sync, so run `pnpm sync-versions`
  * immediately afterwards.
  *
+ * --allow-current is honoured only when the version could actually come back:
+ * listed in `versions.json` history AND all three of its files present. If not,
+ * the delete is refused, because "no current version" would be permanent.
+ *
  * Prints a dry run by default — pass --yes to actually delete.
  *
  * Usage:
@@ -33,6 +37,11 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config({ path: ".env" });
 
+// Static, unlike `@/lib/db` below: the dynamic imports in this file exist only
+// so dotenv populates process.env before the db module evaluates its
+// DATABASE_URL guard. This module reads no env.
+import { versionRestorability } from "@/lib/content/versions-index";
+
 async function main(): Promise<void> {
   const versionString = process.argv[2];
   const confirmed = process.argv.includes("--yes");
@@ -44,39 +53,20 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  // Deleting the CURRENT row is only recoverable if `sync-versions` will put it
-  // back, and sync-versions seeds from versions.json's history. A version that
-  // is in the database but not on disk (history entry removed, or a row created
-  // some other way) would be deleted permanently, leaving the site with no
-  // current version — not the temporary state the README describes.
-  if (allowCurrent) {
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const indexPath = path.join(
-      process.cwd(),
-      "content",
-      "bill-of-rights",
-      "versions.json",
-    );
-    const index = JSON.parse(fs.readFileSync(indexPath, "utf-8")) as {
-      history: Array<{ version: string }>;
-    };
-    if (!index.history.some((h) => h.version === versionString)) {
-      console.error(
-        `Refused: ${versionString} is not in content/bill-of-rights/versions.json history,\n` +
-          "so nothing on disk would restore it — `pnpm sync-versions` would not re-insert it\n" +
-          "and the database would be left with no current version.",
-      );
-      process.exit(1);
-    }
-  }
-
   const { db } = await import("@/lib/db");
   const { unsyncVersion } = await import("@/lib/db/unsync-version");
 
+  // Deleting the CURRENT row is only recoverable if `sync-versions` will put it
+  // back, so unsyncVersion consults this before honouring --allow-current. It
+  // is checked there, against the row's real `is_current`, rather than here
+  // against the flag: a NON-current stale leftover absent from disk is exactly
+  // the cleanup this tool exists for, and gating on the flag would make it
+  // undeletable for anyone following the README — which tells operators they
+  // will almost always need --allow-current.
   const report = await unsyncVersion(db, versionString, {
     dryRun: !confirmed,
     allowCurrent,
+    isRestorable: versionRestorability,
   });
 
   if (!report.found) {

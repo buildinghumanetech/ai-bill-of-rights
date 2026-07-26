@@ -5,8 +5,10 @@ config({ path: ".env" });
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-
-const CONTENT_ROOT = path.join(process.cwd(), "content/bill-of-rights");
+import {
+  CONTENT_ROOT,
+  readVersionsIndex,
+} from "@/lib/content/versions-index";
 
 function readFile(name: string): string {
   return fs.readFileSync(path.join(CONTENT_ROOT, name), "utf-8");
@@ -20,11 +22,6 @@ function gitCommit(): string | null {
   }
 }
 
-interface VersionsJson {
-  current: string;
-  history: Array<{ version: string; published_at: string }>;
-}
-
 async function main(): Promise<void> {
   // Dynamic import so dotenv has populated process.env before the db module
   // evaluates its DATABASE_URL guard.
@@ -32,8 +29,7 @@ async function main(): Promise<void> {
   const { syncVersions } = await import("@/lib/db/sync");
   type VersionInput = Parameters<typeof syncVersions>[1][number];
 
-  const indexPath = path.join(CONTENT_ROOT, "versions.json");
-  const index: VersionsJson = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+  const index = readVersionsIndex();
   const sha = gitCommit();
 
   const inputs: VersionInput[] = index.history.map((entry) => ({

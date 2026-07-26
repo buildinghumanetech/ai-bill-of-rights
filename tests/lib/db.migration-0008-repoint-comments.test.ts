@@ -236,27 +236,35 @@ describe("0008 repoint comments to the new current version", () => {
     // leftover has ROWS and a NULLABLE "id" (CTAS carries no primary key and no
     // NOT NULL). Seeding them empty would miss both: ADD PRIMARY KEY against a
     // populated, nullable column is the statement operators will actually run,
-    // and the ON CONFLICT DO NOTHING interaction that preserves the leftover's
-    // original mapping only has anything to do when rows are present.
+    // and the ON CONFLICT DO NOTHING interaction only has anything to do when
+    // rows are present.
+    //
+    // What is under test here is narrow: the pre-existing row is LEFT UNTOUCHED,
+    // whatever it holds. (That its mapping is the pre-update one, so the move
+    // can be reversed, is a separate property, covered by "records the original
+    // mapping so the move can be reversed" below.)
     const { db, currentId } = await seedPublishedUpgrade();
     const oldId = await versionId(db, "0.0.1");
-    // Seed the leftover with a mapping DISTINGUISHABLE from what this run would
-    // record. The migration's snap_ CTEs insert pre-update values, i.e. oldId —
-    // so seeding with oldId would leave the row pointing at oldId whether the
-    // conflict clause is DO NOTHING, DO UPDATE, or absent, and the assertion
-    // could not fail. `currentId` is a value only a pre-existing snapshot could
-    // hold, so DO NOTHING and overwrite now differ observably.
+    // An UNRELATED sentinel, belonging to no version row. It has to differ from
+    // what this run would write — the snap_ CTEs insert pre-update values, i.e.
+    // oldId, so seeding with oldId would leave the row identical under DO
+    // NOTHING, DO UPDATE, or no conflict clause at all, and the assertion could
+    // not fail. It must equally not be `currentId`: that is the post-move
+    // mapping, so a leftover holding it is a rollback that would be a no-op —
+    // asserting the backup keeps pointing there reads as requiring the broken
+    // state. A value from neither side asserts only "untouched".
+    const SENTINEL = "00000000-0000-4000-8000-0000000000aa";
     await db.execute(
       sql.raw(`
         CREATE TABLE "comment_version_backup_0008" AS
-          SELECT "id", '${currentId}'::uuid AS "base_version_id" FROM "comments"
+          SELECT "id", '${SENTINEL}'::uuid AS "base_version_id" FROM "comments"
            WHERE "base_version_id" = '${oldId}';
         `),
     );
     await db.execute(
       sql.raw(`
         CREATE TABLE "proposed_edit_version_backup_0008" AS
-          SELECT "id", '${currentId}'::uuid AS "base_version_id" FROM "proposed_edits"
+          SELECT "id", '${SENTINEL}'::uuid AS "base_version_id" FROM "proposed_edits"
            WHERE "base_version_id" = '${oldId}';
         `),
     );
@@ -285,9 +293,11 @@ describe("0008 repoint comments to the new current version", () => {
     // and not overwritten — both tables, since the DO block repairs both.
     expect(await backupCount(db)).toBe(1);
     expect(await editBackupCount(db)).toBe(1);
-    expect(await backupMappingCount(db, "comment_version_backup_0008", currentId)).toBe(1);
     expect(
-      await backupMappingCount(db, "proposed_edit_version_backup_0008", currentId),
+      await backupMappingCount(db, "comment_version_backup_0008", SENTINEL),
+    ).toBe(1);
+    expect(
+      await backupMappingCount(db, "proposed_edit_version_backup_0008", SENTINEL),
     ).toBe(1);
   });
 

@@ -14,6 +14,7 @@ import {
   endorsements,
   attestations,
 } from "./schema";
+import type { Restorability } from "@/lib/content/versions-index";
 
 /**
  * Both the production neon client and the pglite test db extend PgDatabase.
@@ -36,19 +37,33 @@ export type UnsyncRefusalCode =
   | "not_found"
   | "referenced"
   | "current"
+  | "not_restorable"
   | "dry_run";
 
-export interface UnsyncReport {
+interface UnsyncReportBase {
   version: string;
   found: boolean;
   isCurrent: boolean;
   /** Rows pointing at this version, by table. Any non-zero blocks deletion. */
   dependents: Record<string, number>;
-  deleted: boolean;
-  /** Why the delete was refused, when it was. Display only — see the code. */
-  refusedBecause?: string;
-  refusedCode?: UnsyncRefusalCode;
 }
+
+/**
+ * A discriminated union rather than one shape with optional fields, so that a
+ * refusal without a code is a COMPILE error. The whole point of `refusedCode`
+ * is that callers never branch on display text; if a future refusal path could
+ * set only `refusedBecause` and still type-check, it would reach the CLI's
+ * fall-through and print `Refused: <text>` at exit 1 — reintroducing exactly
+ * the silent control-flow failure the code was added to eliminate.
+ */
+export type UnsyncReport =
+  | (UnsyncReportBase & { deleted: true })
+  | (UnsyncReportBase & {
+      deleted: false;
+      /** Why the delete was refused. Display only — branch on the code. */
+      refusedBecause: string;
+      refusedCode: UnsyncRefusalCode;
+    });
 
 /**
  * Delete an UNUSED version row so the next `sync-versions` re-inserts it from
@@ -74,13 +89,23 @@ export interface UnsyncReport {
  * nothing" is precisely a frozen draft. Deleting it leaves the database with
  * no current version until the next `sync-versions` re-inserts it, which is
  * why the override is explicit rather than automatic.
+ *
+ * `allowCurrent` is only honoured when the version could actually come back.
+ * Pass `isRestorable` to say whether it could — the CLI wires in
+ * `versionRestorability`, which checks `versions.json` history AND the three
+ * files on disk. Injected rather than imported so this module stays free of
+ * `fs` and the predicate is testable on its own.
  */
 export async function unsyncVersion(
   // Same loose db type the rest of src/lib/db uses, so callers can pass either
   // the production client or a pglite test db.
   db: DbLike,
   versionString: string,
-  opts: { dryRun?: boolean; allowCurrent?: boolean } = {},
+  opts: {
+    dryRun?: boolean;
+    allowCurrent?: boolean;
+    isRestorable?: (version: string) => Restorability;
+  } = {},
 ): Promise<UnsyncReport> {
   // Defaults to a DRY RUN. This function deletes a row that pages render from,
   // and `allowCurrent` makes the current version reachable — so the obvious way
@@ -169,6 +194,25 @@ export async function unsyncVersion(
         "run `pnpm sync-versions` straight afterwards to re-insert it from disk",
       refusedCode: "current",
     };
+  }
+  // Only the CURRENT row needs to be restorable. Deleting a non-current row
+  // that is absent from disk is the stale-leftover cleanup this tool is for,
+  // and refusing it would leave the leftover undeletable forever. Deleting the
+  // current one when nothing would put it back is a different thing entirely:
+  // permanent, and it takes every page that reads the current version with it.
+  if (row.isCurrent && opts.isRestorable) {
+    const verdict = opts.isRestorable(versionString);
+    if (!verdict.restorable) {
+      return {
+        ...base,
+        deleted: false,
+        refusedBecause:
+          `${verdict.reason}. Deleting the current version would leave the ` +
+          "database with no current version permanently, not the temporary " +
+          "state --allow-current describes",
+        refusedCode: "not_restorable",
+      };
+    }
   }
   if (dryRun) {
     return {
