@@ -110,18 +110,26 @@ export function buildRootMetadata(): Metadata {
  * place.
  *
  * Routes that deliberately want the site-level card (`/`) should not use this.
+ *
+ * Pass a bare page title ("About", not "About — AI Bill of Rights"): the
+ * site-name suffix is appended here so the separator and the spelling of the
+ * name stay in one place and follow `SITE_NAME` through a rename. Set
+ * `appendSiteName: false` for a title that already names the site in prose.
  */
 export function buildPageMetadata({
-  title,
+  title: pageTitle,
   description,
   ogType = "website",
   imageUrl,
+  appendSiteName = true,
 }: {
   title: string;
   description: string;
   ogType?: "website" | "profile";
   imageUrl?: string;
+  appendSiteName?: boolean;
 }): Metadata {
+  const title = appendSiteName ? `${pageTitle} — ${SITE_NAME}` : pageTitle;
   const images = imageUrl
     ? [{ url: imageUrl, width: 1200, height: 630 }]
     : undefined;

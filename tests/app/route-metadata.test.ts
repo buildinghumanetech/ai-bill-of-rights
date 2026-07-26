@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
+import { describe, expect, it, vi } from "vitest";
+import { getResource, listResourceSlugs } from "@/lib/resources";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
 
 /**
  * Guards the shallow-merge hazard at the route level.
@@ -10,11 +11,18 @@ import { SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
  * route from going back to a bare `{ title, description }` until these tests.
  */
 
-type Og = { title?: string; description?: string; siteName?: string; type?: string };
-type Tw = { title?: string; card?: string };
+type Og = {
+  title?: string;
+  description?: string;
+  siteName?: string;
+  type?: string;
+  images?: unknown[];
+};
+type Tw = { title?: string; description?: string; card?: string };
 
 function expectOwnCard(meta: {
   title?: unknown;
+  description?: unknown;
   openGraph?: unknown;
   twitter?: unknown;
 }) {
@@ -24,10 +32,15 @@ function expectOwnCard(meta: {
   expect(og, "route defines no openGraph — it will inherit the homepage's").toBeDefined();
   expect(tw, "route defines no twitter block — it will inherit the homepage's").toBeDefined();
 
-  // The card must describe this page, not the site.
+  // The card must describe this page, not the site. Both halves matter: a
+  // hand-written block with a page title but the homepage blurb is the same
+  // wrong-card symptom.
   expect(og!.title).toBe(meta.title);
   expect(og!.title).not.toBe(SITE_TITLE);
   expect(tw!.title).toBe(meta.title);
+  expect(og!.description).toBe(meta.description);
+  expect(og!.description).not.toBe(SITE_DESCRIPTION);
+  expect(tw!.description).toBe(meta.description);
 
   // ...while still keeping the fields a child block would otherwise drop.
   expect(og!.siteName).toBe(SITE_NAME);
@@ -39,16 +52,25 @@ describe("/about metadata", () => {
   it("carries its own share card", async () => {
     const { metadata } = await import("@/app/about/page");
     expectOwnCard(metadata);
+    expect(metadata.title).toBe(`About — ${SITE_NAME}`);
   });
 });
 
 describe("/resources/[slug] metadata", () => {
   it("carries its own share card for a real resource", async () => {
+    // Derive the slug rather than hardcoding one: a hardcoded slug that gets
+    // renamed away would silently turn this into a second copy of the
+    // not-found test — still green, no longer covering the real-resource path.
+    const [slug] = listResourceSlugs();
+    expect(slug, "no resources to test against").toBeDefined();
+    const resource = getResource(slug)!;
+
     const { generateMetadata } = await import("@/app/resources/[slug]/page");
     const meta = await generateMetadata({
-      params: Promise.resolve({ slug: "coppa" }),
+      params: Promise.resolve({ slug }),
     });
     expectOwnCard(meta);
+    expect(meta.title).toBe(`${resource.title} — ${SITE_NAME}`);
   });
 
   it("carries its own share card for an unknown slug", async () => {
@@ -57,5 +79,43 @@ describe("/resources/[slug] metadata", () => {
       params: Promise.resolve({ slug: "does-not-exist" }),
     });
     expectOwnCard(meta);
+    expect(meta.title).toBe(`Resource not found — ${SITE_NAME}`);
+  });
+});
+
+describe("/signatories/[id] metadata", () => {
+  const getSignerById = vi.hoisted(() => vi.fn());
+  vi.mock("@/lib/db/queries", () => ({
+    getSignerById,
+    listSignaturesForSigner: vi.fn(),
+  }));
+
+  it("carries its own share card, with the OG image, for a real signer", async () => {
+    getSignerById.mockResolvedValue({ id: "abc", displayName: "Ada Lovelace" });
+
+    const { generateMetadata } = await import("@/app/signatories/[id]/page");
+    const meta = await generateMetadata({ params: Promise.resolve({ id: "abc" }) });
+
+    expectOwnCard(meta);
+    // The title names the site in prose, so the helper must not also append it.
+    expect(meta.title).toBe(`Ada Lovelace signed ${SITE_NAME}`);
+    const og = meta.openGraph as Og;
+    expect(og.type).toBe("profile");
+    // This is the route whose OG image is why metadataBase has to resolve.
+    expect(og.images).toEqual([
+      { url: "/api/og/signer/abc", width: 1200, height: 630 },
+    ]);
+    expect((meta.twitter as Tw).card).toBe("summary_large_image");
+  });
+
+  it("carries its own share card when the signer is missing", async () => {
+    getSignerById.mockResolvedValue(null);
+
+    const { generateMetadata } = await import("@/app/signatories/[id]/page");
+    const meta = await generateMetadata({ params: Promise.resolve({ id: "gone" }) });
+
+    expectOwnCard(meta);
+    expect(meta.title).toBe(`Signer not found — ${SITE_NAME}`);
+    expect((meta.openGraph as Og).images).toBeUndefined();
   });
 });

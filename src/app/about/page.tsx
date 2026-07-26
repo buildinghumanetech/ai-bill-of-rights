@@ -4,7 +4,7 @@ import ContactForm from "./ContactForm";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "About — AI Bill of Rights",
+  title: "About",
   description:
     "The AI Bill of Rights is a project of the Building Humane Technology community, founded by Erika Anderson.",
 });

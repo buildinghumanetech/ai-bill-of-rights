@@ -17,12 +17,12 @@ export async function generateMetadata({
   const r = getResource(slug);
   if (!r) {
     return buildPageMetadata({
-      title: "Resource not found — AI Bill of Rights",
+      title: "Resource not found",
       description: "That resource doesn't exist.",
     });
   }
   return buildPageMetadata({
-    title: `${r.title} — AI Bill of Rights`,
+    title: r.title,
     description: r.subtitle || r.title,
   });
 }

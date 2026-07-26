@@ -7,7 +7,7 @@ import {
   listSignaturesForSigner,
 } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
-import { buildPageMetadata } from "@/lib/site-metadata";
+import { SITE_NAME, buildPageMetadata } from "@/lib/site-metadata";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
 import { SelfieAvatar } from "@/components/SelfieAvatar";
@@ -25,13 +25,16 @@ export async function generateMetadata({
   const signer = await getSignerById(id);
   if (!signer) {
     return buildPageMetadata({
-      title: "Signer not found — AI Bill of Rights",
+      title: "Signer not found",
       description: "That signature doesn't exist or has been revoked.",
     });
   }
   return buildPageMetadata({
-    title: `${signer.displayName} signed the AI Bill of Rights`,
+    // Already names the site in prose, so no suffix — "… signed The AI Bill of
+    // Rights — The AI Bill of Rights" would read as a bug.
+    title: `${signer.displayName} signed ${SITE_NAME}`,
     description: `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`,
+    appendSiteName: false,
     ogType: "profile",
     imageUrl: `/api/og/signer/${id}`,
   });

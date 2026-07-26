@@ -186,11 +186,33 @@ describe("buildPageMetadata", () => {
     const og = meta.openGraph as { title?: string; description?: string };
     const tw = meta.twitter as { title?: string; description?: string };
     for (const value of [meta.title, og.title, tw.title]) {
-      expect(value).toBe("About");
+      expect(value).toBe(`About — ${SITE_NAME}`);
+      // The page title leads; the site name trails it as context, and the
+      // homepage's tagline stays off subpages entirely.
+      expect(String(value).startsWith("About")).toBe(true);
       expect(value).not.toContain(SITE_TAGLINE);
     }
     expect(og.description).toBe("Who we are");
     expect(tw.description).toBe("Who we are");
+  });
+
+  it("appends the site name from SITE_NAME so a rename carries through", () => {
+    // Call sites used to hand-write "— AI Bill of Rights", which already
+    // disagreed with SITE_NAME ("The AI Bill of Rights") and would have been
+    // missed by a rename.
+    const meta = buildPageMetadata({ title: "Page", description: "D" });
+    expect(meta.title).toBe(`Page — ${SITE_NAME}`);
+  });
+
+  it("leaves the title alone when it already names the site in prose", () => {
+    const meta = buildPageMetadata({
+      title: `Ada signed ${SITE_NAME}`,
+      description: "D",
+      appendSiteName: false,
+    });
+    expect(meta.title).toBe(`Ada signed ${SITE_NAME}`);
+    // No doubled site name.
+    expect(String(meta.title).match(new RegExp(SITE_NAME, "g"))).toHaveLength(1);
   });
 
   it("upgrades to a large image card only when an image is supplied", () => {
