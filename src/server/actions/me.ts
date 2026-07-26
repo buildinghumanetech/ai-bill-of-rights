@@ -95,23 +95,40 @@ export async function reaffirmMySignature(
   }
   const signer = signerRows[0];
 
-  // Cheap to call and reachable by any authenticated user, so bound it even
-  // though reaffirmSignature makes a repeat a no-op.
+  // Bounds SIGNATURES created, which is the thing this action writes. Counting
+  // consent_records here would be theatre: reaffirmSignature short-circuits
+  // before writing one, and the unique index permits at most one signature —
+  // hence one consent record — per (signer, version), so that counter would sit
+  // at 1 no matter how often the action were called.
+  //
+  // Repeat calls that write nothing are deliberately NOT limited. They are
+  // reads, no more expensive than any other server action, and rejecting a
+  // no-op that reports the state the caller already asked for would only make
+  // the UI worse.
   try {
     await enforceRateLimit(db, {
       bucket: "reaffirm",
       signerId: signer.id,
       windowSec: 3600,
-      max: 10,
-      countSql: `SELECT count(*)::int AS n FROM "consent_records"
+      max: 5,
+      countSql: `SELECT count(*)::int AS n FROM "signatures"
                   WHERE "signer_id" = $1
-                    AND "consented_at" > now() - interval '1 hour'`,
+                    AND "signed_at" > now() - interval '1 hour'`,
     });
-  } catch {
-    return {
-      success: false,
-      error: "Too many attempts. Please try again later.",
-    };
+  } catch (err) {
+    // enforceRateLimit throws its own "Rate limit exceeded" for a real
+    // rejection. Anything else is a DB or SQL failure, and reporting that as
+    // "too many attempts" would send the user away to retry something that is
+    // not their fault and will not fix itself.
+    const msg = err instanceof Error ? err.message : "";
+    if (/rate limit exceeded/i.test(msg)) {
+      return {
+        success: false,
+        error: "Too many attempts. Please try again later.",
+      };
+    }
+    console.error("[reaffirm] rate-limit check failed:", err);
+    return { success: false, error: "We couldn't record your signature." };
   }
 
   const h = await headers();

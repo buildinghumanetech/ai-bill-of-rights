@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import {
@@ -226,7 +226,7 @@ describe("resolveSignatureStatus", () => {
     );
   });
 
-  it("reports signed-newer when the requested version predates what they signed", async () => {
+  it("reports signed-other when the requested version is superseded", async () => {
     // Viewing an archive page after signing the current version. There is
     // nothing to re-affirm, and "what's been added since you signed" would be
     // backwards.
@@ -243,14 +243,211 @@ describe("resolveSignatureStatus", () => {
 
     const status = await resolveSignatureStatus(db, signer, "0.0.1");
 
-    expect(status.state).toBe("signed-newer");
-    if (status.state !== "signed-newer") throw new Error("unreachable");
+    expect(status.state).toBe("signed-other");
+    if (status.state !== "signed-other") throw new Error("unreachable");
     expect(status.version).toBe("0.1.0");
     expect(status.requestedVersion).toBe("0.0.1");
   });
+
+  it("reports signed-other for an archived version NEWER than the one signed", async () => {
+    // The gap between the two guards: 0.0.2 is newer than the signed 0.0.1 but
+    // is archived, so reaffirmSignature would refuse it. Returning
+    // signed-earlier here renders an "Add my name to v0.0.2" button that can
+    // only ever fail.
+    const db = await createTestDb();
+    await syncVersions(db, [
+      {
+        version: "0.0.1",
+        publishedAt: new Date("2026-01-01T00:00:00Z"),
+        markdown: markdownFor("0.0.1"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: false,
+        gitCommitSha: null,
+      },
+      {
+        version: "0.0.2",
+        publishedAt: new Date("2026-05-01T00:00:00Z"),
+        markdown: markdownFor("0.0.2"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: false,
+        gitCommitSha: null,
+      },
+      {
+        version: "0.1.0",
+        publishedAt: new Date("2026-07-24T00:00:00Z"),
+        markdown: markdownFor("0.1.0"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: true,
+        gitCommitSha: null,
+      },
+    ]);
+    const signer = await seedSigner(db, "u-gap");
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString: "0.0.1",
+      consentTextHash: "9".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    expect((await resolveSignatureStatus(db, signer, "0.0.2")).state).toBe(
+      "signed-other",
+    );
+    // ...while the CURRENT version still offers the re-affirm.
+    expect((await resolveSignatureStatus(db, signer, "0.1.0")).state).toBe(
+      "signed-earlier",
+    );
+  });
 });
 
+/**
+ * A signer who has already signed something — the precondition for
+ * re-affirming. Defaults to v0.0.1, the ordinary "signed before the new version
+ * was published" case.
+ */
+async function seedPriorSigner(
+  db: TestDb,
+  clerkUserId: string,
+  versionString = "0.0.1",
+) {
+  const signer = await seedSigner(db, clerkUserId);
+  await recordSignature(db, {
+    signerId: signer.id,
+    versionString,
+    consentTextHash: "a".repeat(64),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    capturedFields: {} as any,
+  });
+  return signer;
+}
+
 describe("reaffirmSignature", () => {
+  it("refuses a signer who has never signed anything", async () => {
+    // Comment-only accounts get a signers row with zero signatures. Without
+    // this guard an authenticated commenter calling the action directly would
+    // become a public signatory, skipping the consent page entirely.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const commenter = await seedSigner(db, "u-comment-only");
+
+    const res = await reaffirmSignature(db, {
+      signerId: commenter.id,
+      versionString: "0.1.0",
+      consentTextHash: "c".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(
+      await db
+        .select()
+        .from(signatures)
+        .where(eq(signatures.signerId, commenter.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(consentRecords)
+        .where(eq(consentRecords.signerId, commenter.id)),
+    ).toHaveLength(0);
+  });
+
+  it("deletes the consent record it wrote when the signature insert fails", async () => {
+    // The consent row is written first and neon-http has no transactions, so
+    // an error after it leaves an orphan unless we clean up by hand. Simulates
+    // the documented race: a conflicting signature appears between the
+    // already-signed read and the insert.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedPriorSigner(db, "u-race");
+    const [target] = await db
+      .select()
+      .from(versions)
+      .where(eq(versions.version, "0.1.0"))
+      .limit(1);
+
+    let injected = false;
+    const racingDb = {
+      ...db,
+      select: db.select.bind(db),
+      delete: db.delete.bind(db),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      insert(table: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const builder: any = (db as any).insert(table);
+        if (table === consentRecords && !injected) {
+          const origValues = builder.values.bind(builder);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          builder.values = (...vargs: any[]) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const vb: any = origValues(...vargs);
+            const origReturning = vb.returning.bind(vb);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            vb.returning = async (...rargs: any[]) => {
+              const rows = await origReturning(...rargs);
+              injected = true;
+              // The racing writer wins, with its OWN consent record — so the
+              // one this call just wrote is referenced by nothing and must be
+              // cleaned up, which is the whole point of the test.
+              const [racerConsent] = await db
+                .insert(consentRecords)
+                .values({
+                  signerId: signer.id,
+                  consentTextHash: "e".repeat(64),
+                  capturedFields: {},
+                })
+                .returning({ id: consentRecords.id });
+              await db.insert(signatures).values({
+                signerId: signer.id,
+                versionId: target.id,
+                versionHashAtSigning: target.markdownHash,
+                consentRecordId: racerConsent.id,
+              });
+              return rows;
+            };
+            return vb;
+          };
+        }
+        return builder;
+      },
+    } as unknown as Parameters<typeof reaffirmSignature>[0];
+
+    const consentBefore = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+
+    const res = await reaffirmSignature(racingDb, {
+      signerId: signer.id,
+      versionString: "0.1.0",
+      consentTextHash: "d".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    // The row the racer created is the end state the caller wanted.
+    expect(res).toEqual({ ok: true, created: false });
+    const sigs = await db
+      .select()
+      .from(signatures)
+      .where(eq(signatures.signerId, signer.id));
+    expect(sigs).toHaveLength(2); // 0.0.1 + the raced 0.1.0
+
+    // Exactly ONE consent record was added — the racer's, which its signature
+    // references. The one reaffirmSignature wrote before losing the race is
+    // referenced by nothing and must have been deleted. +2 here means the leak
+    // simply moved from the repeat path to the error path.
+    const consentAfter = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+    expect(consentAfter.length).toBe(consentBefore.length + 1);
+  });
+
   it("adds a signature on the current version without touching the earlier one", async () => {
     const db = await createTestDb();
     await seedVersions(db);
@@ -293,7 +490,7 @@ describe("reaffirmSignature", () => {
     // This, not the consent hash, is what binds the signature to the new text.
     const db = await createTestDb();
     await seedVersions(db);
-    const signer = await seedSigner(db, "u-hash");
+    const signer = await seedPriorSigner(db, "u-hash");
 
     await reaffirmSignature(db, {
       signerId: signer.id,
@@ -308,11 +505,26 @@ describe("reaffirmSignature", () => {
       .from(versions)
       .where(eq(versions.version, "0.1.0"))
       .limit(1);
+    // Scoped to the 0.1.0 row specifically: the signer also owns a 0.0.1
+    // signature, and selecting by signer alone would assert against whichever
+    // row came back first.
     const [sig] = await db
       .select()
       .from(signatures)
-      .where(eq(signatures.signerId, signer.id));
+      .where(
+        and(
+          eq(signatures.signerId, signer.id),
+          eq(signatures.versionId, version.id),
+        ),
+      );
     expect(sig.versionHashAtSigning).toBe(version.markdownHash);
+    // ...and it is genuinely the NEW text's hash, not the one they signed before.
+    const [old] = await db
+      .select()
+      .from(versions)
+      .where(eq(versions.version, "0.0.1"))
+      .limit(1);
+    expect(sig.versionHashAtSigning).not.toBe(old.markdownHash);
   });
 
   it("is a genuine no-op on a repeat, leaving no orphan consent record", async () => {
@@ -322,7 +534,7 @@ describe("reaffirmSignature", () => {
     // loop would write unbounded rows.
     const db = await createTestDb();
     await seedVersions(db);
-    const signer = await seedSigner(db, "u-repeat");
+    const signer = await seedPriorSigner(db, "u-repeat");
 
     const first = await reaffirmSignature(db, {
       signerId: signer.id,
@@ -353,11 +565,13 @@ describe("reaffirmSignature", () => {
       .from(consentRecords)
       .where(eq(consentRecords.signerId, signer.id));
     expect(consentAfterRepeats).toHaveLength(consentAfterFirst.length);
+    // Two signatures total and no more: the 0.0.1 they arrived with, plus the
+    // single 0.1.0 the first call created. Three repeats added nothing.
     const sigs = await db
       .select()
       .from(signatures)
       .where(eq(signatures.signerId, signer.id));
-    expect(sigs).toHaveLength(1);
+    expect(sigs).toHaveLength(2);
   });
 
   it("refuses a version that is not current, and writes nothing", async () => {
@@ -366,7 +580,11 @@ describe("reaffirmSignature", () => {
     // something any surface offers.
     const db = await createTestDb();
     await seedVersions(db);
-    const signer = await seedSigner(db, "u-archived");
+    // Signed the CURRENT version, then asks to affirm the archived one. Seeded
+    // this way round on purpose: if the guard were removed, the already-signed
+    // short-circuit would not catch it and a real row would be written against
+    // 0.0.1 — so the write assertions below are load-bearing, not decorative.
+    const signer = await seedPriorSigner(db, "u-archived", "0.1.0");
 
     const res = await reaffirmSignature(db, {
       signerId: signer.id,
@@ -377,24 +595,25 @@ describe("reaffirmSignature", () => {
     });
 
     expect(res.ok).toBe(false);
+    // The one signature + consent record they arrived with, and nothing added.
     expect(
       await db
         .select()
         .from(signatures)
         .where(eq(signatures.signerId, signer.id)),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     expect(
       await db
         .select()
         .from(consentRecords)
         .where(eq(consentRecords.signerId, signer.id)),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it("refuses an unknown version", async () => {
     const db = await createTestDb();
     await seedVersions(db);
-    const signer = await seedSigner(db, "u-unknown");
+    const signer = await seedPriorSigner(db, "u-unknown");
 
     const res = await reaffirmSignature(db, {
       signerId: signer.id,

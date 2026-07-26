@@ -54,14 +54,18 @@ export interface SignedEarlierStatus {
 }
 
 /**
- * They signed a version NEWER than the one being asked about — the archive
- * case, e.g. viewing /v/0.0.1 after signing 0.1.0. Distinct from
- * `signed-earlier` because there is nothing to re-affirm: offering to sign a
- * superseded version is not a thing any surface should do, and copy about
- * "what's been added since you signed" would be backwards.
+ * They have signed, but a different version, and the one being asked about is
+ * NOT open for signing — either it is superseded by what they signed (viewing
+ * /v/0.0.1 after signing 0.1.0) or it is simply an archived version nobody can
+ * sign any more.
+ *
+ * Distinct from `signed-earlier` because there is nothing to offer: a re-affirm
+ * button here would call `reaffirmSignature`, which refuses any non-current
+ * version, so it could only ever fail. Copy about "what's been added since you
+ * signed" would also be wrong or backwards.
  */
-export interface SignedNewerStatus {
-  state: "signed-newer";
+export interface SignedOtherStatus {
+  state: "signed-other";
   displayName: string;
   verificationMethod: "email" | "sms";
   signedAt: string;
@@ -73,7 +77,7 @@ export type SignerSignatureStatus =
   | { state: "not-signed" }
   | SignedStatus
   | SignedEarlierStatus
-  | SignedNewerStatus;
+  | SignedOtherStatus;
 
 interface SignerLike {
   id: string;
@@ -102,7 +106,6 @@ export async function resolveSignatureStatus(
     .select({
       signedAt: signatures.signedAt,
       version: versions.version,
-      publishedAt: versions.publishedAt,
     })
     .from(signatures)
     .innerJoin(versions, eq(versions.id, signatures.versionId))
@@ -137,21 +140,20 @@ export async function resolveSignatureStatus(
     requestedVersion: versionString,
   };
 
-  // Did they sign something NEWER than what was asked about? Compare by
-  // publish date rather than parsing the version string — publishedAt is what
-  // orders versions everywhere else, and semver-ish string comparison would
-  // get "0.10.0" vs "0.9.0" wrong.
+  // `signed-earlier` means "there is something here to re-affirm", so it hinges
+  // on whether the requested version is OPEN FOR SIGNING — i.e. is_current —
+  // not merely on whether it is newer than what they signed. An archived
+  // intermediate version (signed 0.0.1, asking about a published-and-archived
+  // 0.0.2) is newer AND unsignable: `reaffirmSignature` refuses every
+  // non-current version, so offering the button there guarantees a failure.
   const requested = await db
-    .select({ publishedAt: versions.publishedAt })
+    .select({ isCurrent: versions.isCurrent })
     .from(versions)
     .where(eq(versions.version, versionString))
     .limit(1);
-  if (requested.length > 0) {
-    const requestedAt = new Date(requested[0].publishedAt as Date).getTime();
-    const signedVersionAt = new Date(latest.publishedAt as Date).getTime();
-    if (signedVersionAt > requestedAt) {
-      return { ...common, state: "signed-newer" };
-    }
+  const requestedIsOpen = requested.length > 0 && Boolean(requested[0].isCurrent);
+  if (!requestedIsOpen) {
+    return { ...common, state: "signed-other" };
   }
 
   return {

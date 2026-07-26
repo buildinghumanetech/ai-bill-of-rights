@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { TablesRelationalConfig } from "drizzle-orm/relations";
 import { consentRecords, signatures, versions } from "./schema";
@@ -22,20 +22,25 @@ export type ReaffirmResult =
  * "re-affirm" path used when someone who signed an earlier version wants their
  * name on the new one.
  *
- * Three guards that the naive version lacked, all of which matter because this
- * is reachable by any authenticated user with a version string of their
- * choosing:
+ * Guards, all of which matter because this is reachable by any authenticated
+ * user with a version string of their choosing:
  *
- * 1. **Only the current version may be affirmed.** Otherwise a caller could
+ * 1. **The signer must already have signed something.** This is a RE-affirm,
+ *    not a first signature. Comment-only accounts get a `signers` row with
+ *    zero signatures (`createSignerFromModal`), so without this check an
+ *    authenticated commenter calling the action directly would become a public
+ *    signatory of the bill — skipping the consent page and the `consent ===
+ *    "yes"` gate that `submitSignAction` requires. First-time signing has its
+ *    own flow; this is not a back door into it.
+ * 2. **Only the current version may be affirmed.** Otherwise a caller could
  *    attach signature rows to any archived version row, which no UI offers and
  *    which would corrupt the per-version signer lists.
- * 2. **An existing signature short-circuits.** `recordSignature` inserts the
+ * 3. **An existing signature short-circuits.** `recordSignature` inserts the
  *    consent record BEFORE the signature, so relying on the unique-constraint
  *    violation to detect a repeat means every repeat call leaves an orphan
  *    `consent_records` row behind. `consent_records` has no unique constraint,
  *    so a loop would write unbounded rows. Checking first makes the repeat a
  *    genuine no-op.
- * 3. **Writes are the caller's to rate limit** — see the action wrapper.
  *
  * Returns `created: false` when the person had already signed this version,
  * which is success from their point of view: the end state they asked for
@@ -62,17 +67,23 @@ export async function reaffirmSignature(
     return { ok: false, error: "That version is no longer open for signing." };
   }
 
-  const already = await db
-    .select({ id: signatures.id })
+  // One read serves both the prior-signature requirement and the
+  // already-signed-this-version short-circuit.
+  const own = await db
+    .select({ id: signatures.id, versionId: signatures.versionId })
     .from(signatures)
-    .where(
-      and(
-        eq(signatures.signerId, input.signerId),
-        eq(signatures.versionId, versionRow.id),
-      ),
-    )
-    .limit(1);
-  if (already.length > 0) {
+    .where(eq(signatures.signerId, input.signerId));
+
+  if (own.length === 0) {
+    // A comment-only account, or anyone who has never signed. Re-affirming
+    // presupposes something to re-affirm; first-time signing goes through the
+    // consent flow, not here.
+    return {
+      ok: false,
+      error: "Sign the Bill of Rights first — there is nothing to re-affirm.",
+    };
+  }
+  if (own.some((s) => s.versionId === versionRow.id)) {
     return { ok: true, created: false };
   }
 
@@ -93,8 +104,20 @@ export async function reaffirmSignature(
       consentRecordId: record.id,
     });
   } catch (err) {
-    // Lost a race with a concurrent submit (double-click, two tabs). The row
-    // exists either way, so this is still the end state the person wanted.
+    // The consent record is already written and neon-http has no transactions,
+    // so nothing rolls it back for us. Clean it up by hand on EVERY error path,
+    // not just the race — otherwise the orphan-consent-record leak this
+    // function exists to close simply moves from the repeat path to the error
+    // path. Best effort: if the delete itself fails, the original error is the
+    // one worth reporting.
+    try {
+      await db.delete(consentRecords).where(eq(consentRecords.id, record.id));
+    } catch {
+      /* leave the orphan rather than mask the real failure */
+    }
+    // Lost a race with a concurrent submit (double-click, two tabs). The
+    // signature row exists either way, so this is still the end state the
+    // person wanted.
     const msg = err instanceof Error ? err.message : "";
     if (/duplicate key|unique/i.test(msg)) return { ok: true, created: false };
     throw err;

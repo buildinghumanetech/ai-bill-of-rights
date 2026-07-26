@@ -669,14 +669,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
           </div>
         )}
 
-        {/*
-          "signed-newer" renders here too: they signed a version newer than the
-          one asked about, so there is nothing to re-affirm — offering to sign a
-          superseded version is not something any surface should do.
-        */}
-        {step === "form" &&
-          (signatureStatus?.state === "signed" ||
-            signatureStatus?.state === "signed-newer") && (
+        {step === "form" && signatureStatus?.state === "signed" && (
           <div>
             <h2
               id="sign-modal-title"
@@ -752,6 +745,61 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/*
+          They signed a different version and THIS one is not open for signing —
+          superseded, or simply archived. Its own branch rather than folded into
+          "signed", because that copy says "you've already signed *this*" and
+          shows the version they signed rather than the one being viewed, and
+          because it offers "Remove my signature" — which calls removeMySignature
+          and hard-deletes the signer row and EVERY signature. Someone on an
+          archive page would reasonably read that as removing just this one.
+        */}
+        {step === "form" && signatureStatus?.state === "signed-other" && (
+          <div>
+            <h2
+              id="sign-modal-title"
+              className="text-2xl font-semibold tracking-tight text-zinc-950"
+            >
+              You&apos;ve signed the AI Bill of Rights as:
+            </h2>
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+              <div className="text-xl font-semibold">
+                {signatureStatus.displayName}
+              </div>
+              <div className="mt-1 text-sm">
+                Verified by{" "}
+                {signatureStatus.verificationMethod === "sms"
+                  ? "Phone"
+                  : "Email"}{" "}
+                — v{signatureStatus.version} on{" "}
+                {formatSignedDate(signatureStatus.signedAt)}
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm text-zinc-600">
+              You&apos;re looking at v{signatureStatus.requestedVersion}, which
+              is no longer open for signing. Your signature on v
+              {signatureStatus.version} stands.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <a
+                href="/account"
+                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+              >
+                Manage my signature
+              </a>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 
