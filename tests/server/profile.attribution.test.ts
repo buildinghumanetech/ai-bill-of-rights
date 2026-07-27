@@ -175,6 +175,117 @@ describe("upsertSignerProfile attribution", () => {
   });
 });
 
+describe("upsertSignerProfile — reporting what it actually persisted", () => {
+  /**
+   * The return value is the only way a caller can learn whether the ref it
+   * passed in survived. `recordSignatureFromModal` reports the analytics
+   * `referred` flag off it, so "what we stored" and "what we told analytics"
+   * have to be the same fact. Each of these asserts the returned value AND the
+   * row, so the two can never drift apart unnoticed.
+   */
+
+  it("returns the referrer it stamped on INSERT", async () => {
+    const db = await createTestDb();
+    const inviterId = await seedSigner(db, "user_inviter_ret");
+
+    const result = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_invitee_ret",
+      referredBySignerId: inviterId,
+    });
+
+    expect(result.referredBySignerId).toBe(inviterId);
+    expect((await readSigner(db, "user_invitee_ret")).referredBySignerId).toBe(
+      inviterId,
+    );
+  });
+
+  it("returns null for a ref pointing at a signer who no longer exists", async () => {
+    // THE case this reporting exists for. The ref looked real to the visitor's
+    // browser, but the referrer deleted their account, so nothing was stored —
+    // and the caller must be told that, or it reports a referral conversion
+    // that `countReferralsBySigner` can never account for.
+    const db = await createTestDb();
+
+    const result = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_dangling_ret",
+      referredBySignerId: NONEXISTENT,
+    });
+
+    expect(result.referredBySignerId).toBeNull();
+    expect(
+      (await readSigner(db, "user_dangling_ret")).referredBySignerId,
+    ).toBeNull();
+  });
+
+  it("returns null for a malformed ref", async () => {
+    const db = await createTestDb();
+    const result = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_junk_ret",
+      referredBySignerId: "not-a-uuid",
+    });
+    expect(result.referredBySignerId).toBeNull();
+  });
+
+  it("returns null for an organic signer with no ref at all", async () => {
+    const db = await createTestDb();
+    const result = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_organic_ret",
+    });
+    expect(result.referredBySignerId).toBeNull();
+  });
+
+  it("returns the attribution already on the row on the UPDATE branch", async () => {
+    // The update branch never writes attribution, so it must report the
+    // original — not the ref this call happened to carry, and not null.
+    const db = await createTestDb();
+    const firstInviter = await seedSigner(db, "user_inviter_upd_1");
+    const secondInviter = await seedSigner(db, "user_inviter_upd_2");
+
+    await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_edits_ret",
+      referredBySignerId: firstInviter,
+    });
+
+    const withDifferentRef = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_edits_ret",
+      displayName: "Renamed Signer",
+      referredBySignerId: secondInviter,
+    });
+    expect(withDifferentRef.referredBySignerId).toBe(firstInviter);
+
+    const withNoRef = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_edits_ret",
+    });
+    expect(withNoRef.referredBySignerId).toBe(firstInviter);
+  });
+
+  it("reports null on the UPDATE branch for a signer who was never attributed", async () => {
+    // A ref arriving on a later visit must not be reported as though it stuck:
+    // the update branch dropped it on the floor.
+    const db = await createTestDb();
+    const inviterId = await seedSigner(db, "user_inviter_late");
+
+    await upsertSignerProfile(db, { ...BASE, clerkUserId: "user_late_ref" });
+    const result = await upsertSignerProfile(db, {
+      ...BASE,
+      clerkUserId: "user_late_ref",
+      referredBySignerId: inviterId,
+    });
+
+    expect(result.referredBySignerId).toBeNull();
+    expect(
+      (await readSigner(db, "user_late_ref")).referredBySignerId,
+    ).toBeNull();
+  });
+});
+
 describe("resolveReferrerId", () => {
   it("rejects every shape that isn't a UUID without touching the database", async () => {
     const db = await createTestDb();

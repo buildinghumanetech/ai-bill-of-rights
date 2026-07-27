@@ -11,12 +11,20 @@
  * They also pin the other half of the loop: the `via` channel cookie the proxy
  * stamped on arrival is read back at signing time, and a broken cookie jar
  * degrades to "unattributed" instead of costing us the signature.
+ *
+ * And they pin the split between the two reported fields. `referred` is read
+ * back off what `upsertSignerProfile` persisted, never off the cookie, so it
+ * can be reconciled against `countReferralsBySigner`; `channel` stays on the
+ * cookie, because the arrival surface is real regardless of whether the ref
+ * survived. `referred:false, channel:"linkedin"` is a valid event.
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const SIGNER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 const REFERRER_ID = "c06cbb39-bcb6-4b3c-bd22-e0154a4c7322";
+/** A perfectly well-formed ref whose signer row is gone. */
+const DELETED_REFERRER_ID = "3f1c2b7a-5d64-4a91-9c33-7b0e2a8d4f16";
 
 const cookieStore = new Map<string, string>();
 let cookiesThrows = false;
@@ -45,7 +53,29 @@ vi.mock("@clerk/nextjs/server", () => ({
   }),
 }));
 
-const upsertSignerProfile = vi.fn(async () => ({ id: SIGNER_ID }));
+/**
+ * Signer ids that still have a row. The real `upsertSignerProfile` runs the
+ * cookie's ref through `resolveReferrerId`, which DROPS it when the referrer's
+ * row is gone, and returns what it actually persisted. The mock reproduces
+ * both branches, because the point of these tests is what the action reports
+ * when the cookie and the database disagree.
+ */
+const liveReferrers = new Set<string>([REFERRER_ID]);
+/** Non-null to simulate the UPDATE branch: attribution already on the row. */
+let attributionAlreadyOnRow: string | null = null;
+
+const upsertSignerProfile = vi.fn(
+  async (_db: unknown, input: { referredBySignerId?: string | null }) => {
+    if (attributionAlreadyOnRow !== null) {
+      return { id: SIGNER_ID, referredBySignerId: attributionAlreadyOnRow };
+    }
+    const ref = input?.referredBySignerId ?? null;
+    return {
+      id: SIGNER_ID,
+      referredBySignerId: ref !== null && liveReferrers.has(ref) ? ref : null,
+    };
+  },
+);
 vi.mock("@/server/actions/profile", () => ({
   upsertSignerProfile: (...args: unknown[]) =>
     (upsertSignerProfile as unknown as (...a: unknown[]) => unknown)(...args),
@@ -94,6 +124,9 @@ beforeEach(() => {
   sentEmails.length = 0;
   cookieStore.clear();
   cookiesThrows = false;
+  liveReferrers.clear();
+  liveReferrers.add(REFERRER_ID);
+  attributionAlreadyOnRow = null;
   upsertSignerProfile.mockClear();
 });
 
@@ -144,6 +177,54 @@ describe("recordSignatureFromModal — reading the attribution cookies", () => {
     const res = await recordSignatureFromModal(INPUT);
 
     expect(res.success).toBe(true);
+    expect(res.channel).toBeNull();
+  });
+
+  it("reports referred:false when the ref named a signer who has since deleted their account", async () => {
+    // The bug this test exists for. The cookie looks perfect, so the old code
+    // reported `referred:true` — but `upsertSignerProfile` dropped the ref
+    // rather than trip the foreign key, and `signers.referred_by_signer_id`
+    // is null. Reporting true here mints a referral conversion that
+    // `countReferralsBySigner` can never account for, and because both
+    // numbers look plausible nobody ever notices the gap.
+    cookieStore.set(REF_COOKIE, DELETED_REFERRER_ID);
+    cookieStore.set(REF_CHANNEL_COOKIE, "linkedin");
+
+    const res = await recordSignatureFromModal(INPUT);
+
+    expect(res.success).toBe(true);
+    expect(res.referred).toBe(false);
+    // The ref still went to the write — dropping it is the writer's job, not
+    // the caller's — it just didn't survive.
+    expect(upsertSignerProfile).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ referredBySignerId: DELETED_REFERRER_ID }),
+    );
+  });
+
+  it("keeps reporting the channel even when the ref did not survive", async () => {
+    // `channel` is deliberately independent of `referred`: it answers "which
+    // surface did this visitor arrive from", which is still true and still
+    // worth knowing when the referrer's row is gone.
+    cookieStore.set(REF_COOKIE, DELETED_REFERRER_ID);
+    cookieStore.set(REF_CHANNEL_COOKIE, "linkedin");
+
+    const res = await recordSignatureFromModal(INPUT);
+
+    expect(res.referred).toBe(false);
+    expect(res.channel).toBe("linkedin");
+  });
+
+  it("reports referred:true off the stored attribution even with no ref cookie", async () => {
+    // A returning signer editing their profile: attribution was written on
+    // their first visit and the update branch reports it back. The cookie is
+    // long gone, but the database row still says they were referred.
+    attributionAlreadyOnRow = REFERRER_ID;
+
+    const res = await recordSignatureFromModal(INPUT);
+
+    expect(res.success).toBe(true);
+    expect(res.referred).toBe(true);
     expect(res.channel).toBeNull();
   });
 
