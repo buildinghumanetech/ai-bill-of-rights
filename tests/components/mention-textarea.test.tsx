@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { act, useState } from "react";
 import { MentionTextarea } from "@/components/MentionTextarea";
-import type { ResolvedMention } from "@/lib/comments/resolved-mentions";
+import { mentionText, type ResolvedMention } from "@/lib/comments/resolved-mentions";
 
 const SIGNERS = [
   { id: "sig-alice", displayName: "Alice Nguyen" },
@@ -162,6 +162,62 @@ describe("MentionTextarea write-time resolution", () => {
     expect(lastCall(onResolved)).toEqual([
       { signerId: "sig-erika", displayName: "Erika Anderson" },
     ]);
+  });
+
+  it("leaves the caret after the inserted mention", () => {
+    // `selectSuggestion` derives the caret from the length of what it actually
+    // inserted rather than from `displayName.length + 1`, so that it survives
+    // `mentionText` ever normalising the name. Nothing pinned that arithmetic at
+    // all, which made the whole point of deriving it unverifiable.
+    //
+    // What this does and does not catch, measured: replacing the computation with
+    // `newValue.length` fails it. It CANNOT tell `inserted.length` from
+    // `displayName.length + 1` today, because `mentionText` is the identity and
+    // the two are equal — that distinction only becomes observable if the trim
+    // lands. So this pins the caret landing on the mention rather than at the end
+    // of the text, which is the regression a reader would actually notice.
+    //
+    // The write happens inside a requestAnimationFrame callback. Queue the
+    // callbacks rather than running them inline: the frame has to land AFTER
+    // React commits the new value, which is the entire reason the production code
+    // defers it. Running it inline sets the caret on the old value and jsdom then
+    // resets it to the end when the new value is committed — which is exactly
+    // what a caret-losing regression looks like, so the ordering matters here.
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((cb: FrameRequestCallback) => {
+        frames.push(cb);
+        return frames.length;
+      });
+    try {
+      render(<Harness onResolved={vi.fn()} />);
+
+      // Mid-text, with the caret inside the mention — `detectMentionQuery` reads
+      // `selectionStart`, and text after the caret is what makes the caret
+      // assertion mean something: it must land on the mention, not on the end of
+      // the value.
+      fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: "hey @Ali and more", selectionStart: 8 },
+      });
+      fireEvent.mouseDown(screen.getByRole("option", { name: "@Alice Nguyen" }));
+      // `fireEvent` has flushed the commit by now, so this is the real ordering.
+      expect(frames).toHaveLength(1);
+      act(() => {
+        frames.forEach((cb) => cb(0));
+      });
+
+      const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
+      const inserted = mentionText("Alice Nguyen");
+      expect(ta.value).toBe("hey @Alice Nguyen  and more");
+      // Just past the mention and the space that follows it — where the author's
+      // next keystroke goes, which is well short of `value.length`.
+      expect(ta.selectionStart).toBe(ta.value.indexOf(inserted) + inserted.length + 1);
+      expect(ta.selectionStart).toBeLessThan(ta.value.length);
+      expect(ta.selectionStart).toBe(ta.selectionEnd);
+    } finally {
+      raf.mockRestore();
+    }
   });
 
   it("clears its picks when the parent resets the body", () => {
