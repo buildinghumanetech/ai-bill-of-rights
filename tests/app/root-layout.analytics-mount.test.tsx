@@ -32,9 +32,25 @@ vi.mock("@/app/LiveSignersProvider", () => ({
 }));
 vi.mock("@/app/LiveSignerBanner", () => ({ default: () => null }));
 
-// The marker. If the layout stops rendering SiteAnalytics, this never appears.
-vi.mock("@/lib/analytics/SiteAnalytics", () => ({
-  SiteAnalytics: () => <div data-site-analytics="mounted" />,
+/**
+ * The marker goes on the VENDOR, not on `SiteAnalytics`.
+ *
+ * Mocking `@/lib/analytics/SiteAnalytics` would mock the very thing under
+ * test: it would pin only that layout.tsx renders *a module by that name*, and
+ * deleting `<Analytics />` from inside the real `SiteAnalytics` — the line that
+ * actually makes `track()` non-inert — would leave both assertions green with
+ * the whole funnel silently discarded. That is the same failure this file
+ * exists to prevent, one module further down.
+ *
+ * So the real `SiteAnalytics` renders, and `<Analytics />` from
+ * `@vercel/analytics/next` is what leaves the marker. Both mutations —
+ * removing the layout's `<SiteAnalytics />`, and removing `<Analytics />`
+ * inside it — now fail the same assertion. `ShareLandingBeacon` returns null
+ * and its effect does not run under `renderToStaticMarkup`, so the real
+ * component renders cleanly here.
+ */
+vi.mock("@vercel/analytics/next", () => ({
+  Analytics: () => <div data-vercel-analytics="mounted" />,
 }));
 
 import RootLayout from "@/app/layout";
@@ -45,12 +61,12 @@ async function renderLayout(): Promise<string> {
 }
 
 describe("root layout analytics mount", () => {
-  it("mounts <SiteAnalytics /> so track() is not a silent no-op", async () => {
-    expect(await renderLayout()).toContain('data-site-analytics="mounted"');
+  it("mounts the vendor analytics script so track() is not a silent no-op", async () => {
+    expect(await renderLayout()).toContain('data-vercel-analytics="mounted"');
   });
 
   it("mounts it exactly once", async () => {
     const html = await renderLayout();
-    expect(html.match(/data-site-analytics="mounted"/g)).toHaveLength(1);
+    expect(html.match(/data-vercel-analytics="mounted"/g)).toHaveLength(1);
   });
 });

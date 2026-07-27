@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { signConfirmation } from "@/lib/email/templates";
-import { REF_PARAM, CHANNEL_PARAM } from "@/lib/share/urls";
+import { signConfirmation, signInvitation } from "@/lib/email/templates";
+import {
+  REF_PARAM,
+  CHANNEL_PARAM,
+  homeShareUrl,
+  signerShareUrl,
+} from "@/lib/share/urls";
 
 /**
  * The confirmation email is the single highest-volume share surface on the
@@ -129,5 +134,60 @@ describe("signConfirmation share attribution", () => {
     // The channel still rides along — an un-refed share is still a channel we
     // want to be able to compare.
     expect(target).toContain(`${CHANNEL_PARAM}=x`);
+  });
+});
+
+/**
+ * The invitation email — the highest-INTENT share surface on the site, and
+ * until recently the only one carrying no attribution at all.
+ *
+ * The mirror of "still refs the three share buttons" above: BOTH links here go
+ * to a third party (the invitee), so both must carry `ref` + `via=invite`.
+ * There is no self-directed link to exempt, so a bare URL anywhere in the body
+ * is a leak rather than a deliberate carve-out.
+ *
+ * The tagging itself is done at the call site, in `sendInvitationsAction` —
+ * these cases pin that the TEMPLATE ships both tagged URLs through un-mangled
+ * and leaves no naked copy beside them. That the action actually tags them is
+ * pinned against the real action in tests/server/invite.share-attribution.
+ */
+describe("signInvitation share attribution", () => {
+  const INVITER_ID = "c06cbb39-bcb6-4b3c-bd22-e0154a4c7322";
+  const ORIGIN = "https://ai-for-people.org";
+
+  const tpl = signInvitation({
+    inviterName: "Ada Lovelace",
+    inviterPageUrl: signerShareUrl(ORIGIN, INVITER_ID, "invite"),
+    siteUrl: homeShareUrl(ORIGIN, INVITER_ID, "invite"),
+  });
+
+  /** Every absolute site URL in the body, in order of appearance. */
+  const links = [...tpl.text.matchAll(/https:\/\/ai-for-people\.org\S*/g)].map(
+    (m) => m[0],
+  );
+
+  it("renders both links, each carrying ref and via=invite", () => {
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toContain(`${REF_PARAM}=${INVITER_ID}`);
+      expect(link).toContain(`${CHANNEL_PARAM}=invite`);
+    }
+  });
+
+  it("keeps the inviter's signature page and the homepage as distinct links", () => {
+    expect(links.some((l) => l.includes(`/signatories/${INVITER_ID}?`))).toBe(
+      true,
+    );
+    expect(links.some((l) => !l.includes("/signatories/"))).toBe(true);
+  });
+
+  it("leaves no untagged bare signer-page URL in the body", () => {
+    // Escape the URL first, THEN append the lookahead — escaping the whole
+    // pattern would neuter `(?![?%])` and the assertion would pass on anything.
+    const page = `${ORIGIN}/signatories/${INVITER_ID}`.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&",
+    );
+    expect(new RegExp(`${page}(?![?%])`).test(tpl.text)).toBe(false);
   });
 });

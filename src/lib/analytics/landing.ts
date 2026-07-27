@@ -32,13 +32,12 @@ export function shouldReportLanding(
   search: string | URLSearchParams,
   path?: string,
 ): ShareLanding | null {
-  let params: URLSearchParams;
-  try {
-    params =
-      typeof search === "string" ? new URLSearchParams(search) : search;
-  } catch {
-    return null;
-  }
+  // No try/catch: `new URLSearchParams(string)` does not throw for any string
+  // input — junk is simply parsed into junk pairs, which `parseRef`/
+  // `parseChannel` then reject. A catch here could never run, and a guard that
+  // cannot fire reads as though a real failure mode is being handled.
+  const params =
+    typeof search === "string" ? new URLSearchParams(search) : search;
 
   const ref = parseRef(params);
   const channel = parseChannel(params);
