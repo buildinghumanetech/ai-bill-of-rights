@@ -8,10 +8,12 @@ import type { Metadata } from "next";
  * until you reach the articles, so the tagline has to travel with it wherever
  * the *site* title stands alone with no surrounding context — the tab, the
  * search result, the link-preview card. That is what `SITE_TITLE` is for; keep
- * the two attached there. Note this is not only the homepage: every route that
- * has not yet defined its own metadata inherits the root's and renders
- * `SITE_TITLE` too (`/signers`, `/why`, `/proposed`, `/attestations`,
- * `/sign/*`, `/v/[version]` as of this writing).
+ * the two attached there. Note this is not only the homepage: *every route
+ * other than `/about`, `/resources/[slug]`, and `/signatories/[id]`* — the only
+ * three that define their own metadata — inherits the root's and renders
+ * `SITE_TITLE` in the tab and in search. That set is the missing-own-card
+ * backlog, and it includes `/bill-of-rights` and `/signatories`, the document
+ * itself and the signer directory: the two most shareable pages on the site.
  *
  * Subpage titles are the other case and deliberately do not carry the tagline:
  * "About — The AI Bill of Rights — A People's Demand for Human-Centered AI"
@@ -139,11 +141,20 @@ export function buildPageMetadata({
   imageUrl?: string;
   appendSiteName?: boolean;
 }): Metadata {
-  if (!appendSiteName && !pageTitle.includes(SITE_NAME)) {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    !appendSiteName &&
+    !pageTitle.toLowerCase().includes(SITE_NAME.toLowerCase())
+  ) {
     // The opt-out exists for titles that already name the site in prose. Used
     // on a bare title it ships a card naming neither the site nor the tagline
     // — the exact failure this module exists to prevent. Enforced here rather
     // than only in tests, which cover just the routes someone remembered to add.
+    //
+    // Dev-only, unlike `getSiteUrl`'s warn: that one fires once at module scope
+    // and reports a misconfiguration that changes rendered output. This reports
+    // a copy problem only a developer can fix, and `/signatories/[id]` is
+    // force-dynamic — in production it would log once per request, forever.
     console.warn(
       `[site-metadata] appendSiteName:false on ${JSON.stringify(pageTitle)}, which does not contain ${JSON.stringify(SITE_NAME)}. Use the opt-out only for titles that already name the site.`,
     );

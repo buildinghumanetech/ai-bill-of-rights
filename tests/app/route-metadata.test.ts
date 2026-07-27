@@ -20,22 +20,31 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
 // `queries.ts` resolves its db lazily, so a real export would not fail at
 // import — it would fail at call time with "DATABASE_URL is not set", or worse,
 // succeed against whatever Neon database the developer's .env points at.
-// Metadata tests must never touch a network, so un-stubbed queries throw a
-// message that names the missing stub instead.
+//
+// Un-stubbed exports therefore reject with a message naming the missing stub.
+// They reject rather than throw synchronously so they mirror the real async
+// signatures: a `generateMetadata` that wraps its query in a try/catch to
+// degrade to a not-found card would otherwise swallow a sync throw and return
+// the fallback with `expectOwnCard` still green. Pure helpers that never touch
+// the db (`findCommentInTree`, `flattenTree`) pass through unchanged, so a
+// failure never blames the database for code with no database access.
 const getSignerById = vi.hoisted(() => vi.fn());
+const PURE_HELPERS = ["findCommentInTree", "flattenTree"];
 vi.mock("@/lib/db/queries", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/db/queries")>();
   return Object.fromEntries(
-    Object.keys(actual).map((name) => [
-      name,
-      name === "getSignerById"
-        ? getSignerById
-        : () => {
-            throw new Error(
-              `${name}() is not stubbed in route-metadata.test.ts — add a stub; these tests must not reach the database.`,
-            );
-          },
-    ]),
+    Object.entries(actual).map(([name, impl]) => {
+      if (name === "getSignerById") return [name, getSignerById];
+      if (PURE_HELPERS.includes(name)) return [name, impl];
+      return [
+        name,
+        async () => {
+          throw new Error(
+            `${name}() is not stubbed in route-metadata.test.ts — add a stub for it.`,
+          );
+        },
+      ];
+    }),
   );
 });
 
