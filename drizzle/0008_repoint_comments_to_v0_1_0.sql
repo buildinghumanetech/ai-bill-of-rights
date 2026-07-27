@@ -41,6 +41,21 @@
 --       If a future version inserts mid-article again, this is the case to
 --       handle — and it is invisible unless someone diffs sentence counts.
 --
+--   (d) RENAMED "Connects to" pills. Comments can be anchored to a pill, not
+--       only to a sentence: HomepageArticles builds the anchor as
+--       `article-N-connect-<slug>`. v0.1.0 renames the HumaneBench pages to the
+--       benchmark's own eight principle names (humanebench.ai/principles), so
+--       those slugs change and the anchors change with them. Remapped below,
+--       one branch per rename.
+--
+--       NOT remapped, deliberately: pills that were REMOVED or SWAPPED for a
+--       different reference are editorial decisions, not renames. Comments on
+--       `article-6-connect-humanebench-principle-empowerment` and
+--       `article-10-connect-humanebench-principle-dignity` are left pointing at
+--       pills that no longer render, because silently reattaching them to an
+--       unrelated principle would misrepresent what someone said. They are
+--       recoverable from the backup if that turns out to be the wrong call.
+--
 -- TRADEOFF (decided deliberately): re-pointing loses the record of which
 -- version's text each comment was written against. The backup tables below
 -- preserve the original mapping AND the original anchor so the move is
@@ -161,6 +176,18 @@ WITH "tgt" AS (
      SET "base_version_id" = (SELECT "id" FROM "tgt"),
          "anchor_id" = CASE
            WHEN "anchor_id" = 'article-7-s-5' THEN 'article-7-s-6'
+           WHEN "anchor_id" = 'article-1-connect-humanebench-principle-dignity'
+             THEN 'article-1-connect-humanebench-principle-protect-dignity-and-safety'
+           WHEN "anchor_id" = 'article-3-connect-humanebench-principle-honesty'
+             THEN 'article-3-connect-humanebench-principle-be-transparent-and-honest'
+           WHEN "anchor_id" = 'article-4-connect-humanebench-principle-non-manipulation'
+             THEN 'article-4-connect-humanebench-principle-enable-meaningful-choices'
+           WHEN "anchor_id" = 'article-5-connect-humanebench-principle-transparency'
+             THEN 'article-5-connect-humanebench-principle-be-transparent-and-honest'
+           WHEN "anchor_id" = 'article-7-connect-humanebench-principle-dignity'
+             THEN 'article-7-connect-humanebench-principle-protect-dignity-and-safety'
+           WHEN "anchor_id" = 'article-9-connect-humanebench-respect-user-attention'
+             THEN 'article-9-connect-humanebench-principle-respect-user-attention'
            ELSE "anchor_id"
          END
    WHERE "base_version_id" = (SELECT "id" FROM "src")
@@ -171,6 +198,18 @@ UPDATE "proposed_edits"
    SET "base_version_id" = (SELECT "id" FROM "tgt"),
        "target_anchor_id" = CASE
          WHEN "target_anchor_id" = 'article-7-s-5' THEN 'article-7-s-6'
+         WHEN "target_anchor_id" = 'article-1-connect-humanebench-principle-dignity'
+           THEN 'article-1-connect-humanebench-principle-protect-dignity-and-safety'
+         WHEN "target_anchor_id" = 'article-3-connect-humanebench-principle-honesty'
+           THEN 'article-3-connect-humanebench-principle-be-transparent-and-honest'
+         WHEN "target_anchor_id" = 'article-4-connect-humanebench-principle-non-manipulation'
+           THEN 'article-4-connect-humanebench-principle-enable-meaningful-choices'
+         WHEN "target_anchor_id" = 'article-5-connect-humanebench-principle-transparency'
+           THEN 'article-5-connect-humanebench-principle-be-transparent-and-honest'
+         WHEN "target_anchor_id" = 'article-7-connect-humanebench-principle-dignity'
+           THEN 'article-7-connect-humanebench-principle-protect-dignity-and-safety'
+         WHEN "target_anchor_id" = 'article-9-connect-humanebench-respect-user-attention'
+           THEN 'article-9-connect-humanebench-principle-respect-user-attention'
          ELSE "target_anchor_id"
        END
  WHERE "base_version_id" = (SELECT "id" FROM "src")

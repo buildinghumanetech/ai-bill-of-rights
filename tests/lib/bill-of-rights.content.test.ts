@@ -416,6 +416,47 @@ describe("resource pages", () => {
     expect(slugs.length).toBeGreaterThan(0);
   });
 
+  it("has a page behind every 'Connects to' pill on the homepage", () => {
+    // Each pill links to /resources/<slug>. A slug with no file is a 404 the
+    // moment someone clicks it, and nothing else in the build catches it —
+    // the pill list is a hand-maintained array in a separate file from the
+    // content it points at.
+    const known = new Set(slugs);
+    const broken = homepageArticles.flatMap((article) =>
+      (article.connects ?? [])
+        .filter((pill) => !known.has(pill.slug))
+        .map((pill) => `article ${article.number} → ${pill.slug}`),
+    );
+    expect(broken).toEqual([]);
+  });
+
+  it("keeps every HumaneBench pill on a real HumaneBench principle", () => {
+    // The eight Humane Technology Principles are the benchmark's own terms
+    // (humanebench.ai/principles). A pill that invents a name for one — or
+    // keeps an old internal shorthand — misattributes the benchmark. Slugs
+    // are checked rather than labels because the slug is the page identity.
+    const OFFICIAL = new Set([
+      "humanebench-principle-respect-user-attention",
+      "humanebench-principle-enable-meaningful-choices",
+      "humanebench-principle-enhance-human-capabilities",
+      "humanebench-principle-protect-dignity-and-safety",
+      "humanebench-principle-foster-healthy-relationships",
+      "humanebench-principle-prioritize-long-term-wellbeing",
+      "humanebench-principle-be-transparent-and-honest",
+      "humanebench-principle-design-for-equity-and-inclusion",
+    ]);
+    const offenders = homepageArticles.flatMap((article) =>
+      (article.connects ?? [])
+        .filter(
+          (pill) =>
+            pill.slug.startsWith("humanebench-principle-") &&
+            !OFFICIAL.has(pill.slug),
+        )
+        .map((pill) => `article ${article.number} → ${pill.slug}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it("contains no markdown syntax the renderer cannot handle", () => {
     for (const slug of slugs) {
       const resource = getResource(slug);

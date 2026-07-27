@@ -45,7 +45,7 @@ export const articles: Article[] = [
     connects: [
       {
         title: "HumaneBench Principle — Protect Dignity and Safety",
-        slug: "humanebench-principle-dignity",
+        slug: "humanebench-principle-protect-dignity-and-safety",
       },
       { title: "GDPR Article 7", slug: "gdpr-article-7" },
       {
@@ -79,7 +79,7 @@ export const articles: Article[] = [
     connects: [
       {
         title: "HumaneBench Principle — Be Transparent and Honest",
-        slug: "humanebench-principle-honesty",
+        slug: "humanebench-principle-be-transparent-and-honest",
       },
       {
         title: "California BOT Disclosure Act (SB 1001)",
@@ -99,7 +99,7 @@ export const articles: Article[] = [
     connects: [
       {
         title: "HumaneBench Principle — Enable Meaningful Choices",
-        slug: "humanebench-principle-non-manipulation",
+        slug: "humanebench-principle-enable-meaningful-choices",
       },
       {
         title: "EU AI Act prohibited practices",
@@ -117,7 +117,7 @@ export const articles: Article[] = [
 connects: [
       {
         title: "HumaneBench Principle — Be Transparent and Honest",
-        slug: "humanebench-principle-transparency",
+        slug: "humanebench-principle-be-transparent-and-honest",
       },
       {
         title: "White House AI Bill of Rights — Notice and Explanation (2022)",
@@ -157,7 +157,7 @@ connects: [
     connects: [
       {
         title: "HumaneBench Principle — Protect Dignity and Safety",
-        slug: "humanebench-principle-dignity",
+        slug: "humanebench-principle-protect-dignity-and-safety",
       },
       { title: "COPPA", slug: "coppa" },
       {
@@ -182,7 +182,7 @@ connects: [
     connects: [
       {
         title: "HumaneBench Principle — Prioritize Long-term Wellbeing",
-        slug: "humanebench-principle-long-term-wellbeing",
+        slug: "humanebench-principle-prioritize-long-term-wellbeing",
       },
       {
         title: "HumaneBench as measurement infrastructure",
@@ -211,7 +211,7 @@ connects: [
       },
       {
         title: "HumaneBench Principle — Respect User Attention",
-        slug: "humanebench-respect-user-attention",
+        slug: "humanebench-principle-respect-user-attention",
       },
       {
         title: "EU AI Act prohibited practices (subliminal manipulation)",
@@ -227,7 +227,7 @@ connects: [
 connects: [
       {
         title: "HumaneBench Principle — Design for Equity and Inclusion",
-        slug: "humanebench-principle-equity-inclusion",
+        slug: "humanebench-principle-design-for-equity-and-inclusion",
       },
       {
         title: "White House AI Bill of Rights — Algorithmic Discrimination Protections (2022)",
@@ -251,7 +251,7 @@ connects: [
 connects: [
       {
         title: "HumaneBench Principle — Protect Dignity and Safety",
-        slug: "humanebench-principle-dignity",
+        slug: "humanebench-principle-protect-dignity-and-safety",
       },
       {
         title: "White House AI Bill of Rights — Safe and Effective Systems (2022)",

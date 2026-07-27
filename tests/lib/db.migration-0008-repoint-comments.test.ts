@@ -339,6 +339,36 @@ describe("0008 repoint comments to the new current version", () => {
     });
   });
 
+  it("remaps renamed Connects-to pill anchors, and leaves removed pills alone", async () => {
+    // Comments can be anchored to a pill, not just a sentence:
+    // `article-N-connect-<slug>`. v0.1.0 renames the HumaneBench pages to the
+    // benchmark's own principle names, so those anchors move with them.
+    const { db, currentId } = await seedPublishedUpgrade();
+    await seedCommentOnVersion(
+      db,
+      "0.0.1",
+      "on-a-renamed-pill",
+      "article-4-connect-humanebench-principle-non-manipulation",
+    );
+    // A pill Erika REMOVED rather than renamed. Reattaching this to some other
+    // principle would misrepresent what the person said, so it must be left
+    // exactly as it is — recoverable from the backup, not silently rewritten.
+    await seedCommentOnVersion(
+      db,
+      "0.0.1",
+      "on-a-removed-pill",
+      "article-6-connect-humanebench-principle-empowerment",
+    );
+
+    await applyMigration(db);
+
+    expect(await countCommentsByAnchor(db, currentId)).toEqual({
+      "article-1-s-1": 1,
+      "article-4-connect-humanebench-principle-enable-meaningful-choices": 1,
+      "article-6-connect-humanebench-principle-empowerment": 1,
+    });
+  });
+
   it("does not walk the anchor further on a re-run", async () => {
     // The remap is idempotent only because it is scoped to rows still on
     // 0.0.1, which the same statement moves to 0.1.0. If that coupling ever
