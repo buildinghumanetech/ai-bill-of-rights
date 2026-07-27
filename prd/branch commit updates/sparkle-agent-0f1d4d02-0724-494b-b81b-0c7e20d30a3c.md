@@ -1,5 +1,89 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-27 08:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Merged the final batch of three worker branches (the thirteenth, and last, of
+this virality push), taking the branch to 71 test files / 637 tests from the
+67/588 baseline. The batch closed the three findings roborev raised against the
+previous merge: the actions guard test was rewritten from a directory-scoped
+25-case check into an 83-case repo-wide sweep, `<ShareSignature />` stopped
+dropping the signer's own statement, and a statement removal that removes
+nothing is now a genuine no-op. I re-ran the four guard-test mutations myself
+rather than taking the worker's word, and all four go red.
+
+### Detail of changes made:
+
+- Merged, in order and each verified clean: `sparkle/agent-456e6255-...` (guard
+  test hardening + `src/lib/db/lazy.ts` + required-`db` convention),
+  `sparkle/agent-170884e7-...` (ShareSignature through `buildShareText`), and
+  `sparkle/agent-37ac6af5-...` (no-op removal). Git auto-merged
+  `src/server/actions/why-i-signed.ts` and `src/app/account/AccountClient.tsx`,
+  which two branches both touched; no conflicts, and the full suite is the
+  evidence that the auto-merge was semantically right too.
+- `tests/server/actions.guarded.test.ts` (25 -> 83 cases) now globs
+  `src/**/*.{ts,tsx}` and selects on the directive prologue rather than on the
+  `src/server/actions/` directory, so a new `"use server"` file anywhere is
+  swept automatically. It also fails re-export forms outright (`export { x }
+  from`, `export *`, `export default`, const aliases) — a re-export forwards a
+  binding verbatim and therefore *cannot* carry an auth check, which is the
+  single most likely way someone "fixes" a broken import and silently reopens
+  the `deleteSigner` hole. A companion assertion pins the inverse: no module
+  under `src/server/<domain>/` may carry the directive at all.
+- I mutation-verified that test myself on the merged branch. All four went red
+  with the intended message and the branch restored to 83/83 green: `"use
+  server"` added to `src/server/signers/delete.ts`; `export { deleteSigner }
+  from "@/server/signers/delete"` in `revoke.ts`; `export *` likewise; and an
+  unguarded export carrying a docstring that mentions `auth()` (the false-verdict
+  case the new comment/string stripper exists to prevent).
+- `src/components/ShareSignature.tsx` no longer hardcodes its share pitch; it
+  calls `buildShareText({ channel, whyISigned })` with the statement threaded
+  from `src/app/signatories/[id]/page.tsx`. Three consequences fixed at once:
+  the copy matches SignModal and the confirmation email, the X variant finally
+  goes through `truncateToWeight`, and the signer's statement stops being
+  dropped from the surface a signer is most likely to share from.
+- `src/lib/why-i-signed.server.ts` returns `changed: false` before the UPDATE
+  when a removal is requested against an already-NULL row, and
+  `saveWhyISigned` guards both `revalidatePath` calls on that flag — so a
+  repeat removal costs neither a write nor a cache invalidation.
+
+### Potential concerns to address:
+
+- ROBOREV 103, CONFIRMED BY ME, NOT YET FIXED: `hasRootGuard` slices the body
+  after the `auth()` binding and then asks only whether a rejecting *shape*
+  appears anywhere in the remainder. Ordering is never checked. I verified this
+  is a genuine false-pass — an export that calls `deleteSigner(getDb(), id)`
+  and only then does `if (!userId) return` passes 83/83. No current action sits
+  in that hole (every real one rejects on the immediately following line), so
+  it is latent, not live. Fix: require the rejection to precede the first
+  non-guard call, or to be followed by `return`/`throw`/`redirect`.
+- ROBOREV 103, ALSO CONFIRMED: the required-`db` detector is
+  `/^\s*(db|dbClient)\s*:[^=\n]*=[^\n]*$/gm` — line-anchored, so a signature
+  short enough for Prettier to keep on one line evades it entirely, and it only
+  matches the literal names `db`/`dbClient`. Match inside the parameter list
+  instead.
+- ROBOREV 103, ALSO CONFIRMED: the `src/lib/db/lazy.ts` docstring's stated
+  rationale is false. `src/lib/db/index.ts:21` exports `db` as a Proxy whose
+  `get` trap calls `getDb()`, so nothing throws at module-evaluation time and
+  `DATABASE_URL` is only read on first property access. The `require()`
+  indirection may be unnecessary. Worth correcting precisely because this
+  commit was largely about retiring false docstring claims.
+- ROBOREV 101: `whyISigned` is optional on `<ShareSignature />`, so a future
+  render that omits it silently falls back to the generic text — the exact
+  regression just fixed, with no type error. Make it `whyISigned: string | null`.
+- ROBOREV 102: the no-op guard uses strict `=== null` while the sibling
+  function in the same file defends with `?? null`. If the production driver
+  ever yields `undefined` for a SQL NULL where pglite yields `null`, the guard
+  never fires and the suite stays green, because the failure is invisible from
+  the stored value. Loose `== null` still excludes the legacy `""` row.
+- The attestation verify page still publishes on any GET. Unchanged here and
+  pre-existing; the docstrings that falsely claimed otherwise were corrected,
+  and they now name the POST-confirm button as the fix.
+
+---
+
 ## Progress Update as of 2026-07-26 22:45 Pacific
 *(Most recent updates at top)*
 
