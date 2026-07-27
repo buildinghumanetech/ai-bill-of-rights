@@ -20,21 +20,13 @@ import {
   resolveSelfieReports,
   submitSelfie,
 } from "@/server/selfies/core";
+import { getDb } from "@/lib/db/lazy";
 
 // The selfie writes themselves live in `@/server/selfies/core`, a plain
 // module, because everything exported from this file is a POST-reachable
 // Server Function and each of those functions takes the acting (or
 // *reviewing*) signer id as a plain argument. Here every one of them is
 // handed an id established by `auth()` or `requireAdminId()`.
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = require("@/lib/db").db;
-  }
-  return _db;
-}
 
 async function requireAdminId(): Promise<string> {
   const ctx = await getCurrentAdmin();

@@ -5,12 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { signers } from "@/lib/db/schema";
 import { deleteSigner } from "@/server/signers/delete";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * Self-service account deletion. The cascade itself lives in

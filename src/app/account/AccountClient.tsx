@@ -315,11 +315,20 @@ export default function AccountClient({
         >
           Sign out
         </button>
+        {/*
+          This is the main entry point to the full account cascade in
+          src/server/signers/delete.ts — signatures, profile, comments,
+          proposed edits, other people's comments on those edits, votes,
+          endorsements and photo blobs. The label has to name that, not just
+          the signatures and the profile, or people arrive at
+          /account/revoke expecting something far narrower than what the
+          page then describes. Keep it in step with that page's list.
+        */}
         <Link
           href="/account/revoke"
           className="text-sm font-medium text-red-700 underline-offset-4 hover:underline"
         >
-          Remove all my signatures and delete my profile →
+          Delete my account — signatures, comments, proposals and photos →
         </Link>
       </section>
     </>

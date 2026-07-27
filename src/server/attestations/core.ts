@@ -5,24 +5,30 @@
  * `approveAttestation` and `hideAttestation` are moderator decisions with no
  * auth check of their own, so exporting them from a `"use server"` file let a
  * direct POST publish or bury any org's attestation by id. `createAttestation`
- * and `verifyAttestationToken` are public-by-design, but both take a leading
- * `dbClient: any` argument that no browser should be able to supply.
+ * and `verifyAttestationToken` are public-by-design, but every function here
+ * takes a leading `db` argument that no browser should be able to supply.
+ * It is required, not optional-with-a-production-fallback — see
+ * `src/lib/db/lazy.ts` for why that distinction matters.
  *
  * `verifyAttestationToken` is authorised by the unguessable token in the
  * emailed link, not by a session, which is why it is safe for the public
  * verify page (a server component) to import it from here directly.
+ *
+ * NOT click-gated. The token authorises ANY request that carries it, and
+ * `src/app/attestations/verify/[token]/page.tsx` is a `force-dynamic` server
+ * component that calls this during render — so a plain GET publishes. A
+ * mail-gateway link scanner, an email client prefetching links, or a proxy
+ * warming the URL will publish the organisation's public claim with no human
+ * involved. The only thing standing between the email and publication is
+ * possession of the token. If that ever needs to become a real human
+ * decision, the verify page has to render a confirm button that POSTs
+ * instead of verifying during render.
  */
 
 import { eq } from "drizzle-orm";
 import { attestations, versions } from "@/lib/db/schema";
 import { needsManualReview } from "@/lib/attestations/allowlist";
 import { generateVerificationToken } from "@/lib/attestations/token";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
 
 export interface CreateAttestationInput {
   orgName: string;
@@ -33,14 +39,13 @@ export interface CreateAttestationInput {
 }
 
 export async function createAttestation(
-  dbClient: any = null,
+  db: any,
   input: CreateAttestationInput,
 ): Promise<{
   id: string;
   verificationToken: string;
   needsManualReview: boolean;
 }> {
-  const db = dbClient ?? getDb();
   const v = await db
     .select()
     .from(versions)
@@ -71,10 +76,9 @@ export async function createAttestation(
 }
 
 export async function verifyAttestationToken(
-  dbClient: any = null,
+  db: any,
   token: string,
 ): Promise<{ id: string; published: boolean; needsManualReview: boolean }> {
-  const db = dbClient ?? getDb();
   const rows = await db
     .select()
     .from(attestations)
@@ -101,10 +105,9 @@ export async function verifyAttestationToken(
 
 /** Admin-only. The caller must have established that — there is no check here. */
 export async function approveAttestation(
-  dbClient: any = null,
+  db: any,
   attestationId: string,
 ): Promise<void> {
-  const db = dbClient ?? getDb();
   await db
     .update(attestations)
     .set({
@@ -117,11 +120,10 @@ export async function approveAttestation(
 
 /** Admin-only. The caller must have established that — there is no check here. */
 export async function hideAttestation(
-  dbClient: any = null,
+  db: any,
   attestationId: string,
   _reason: string,
 ): Promise<void> {
-  const db = dbClient ?? getDb();
   await db
     .update(attestations)
     .set({

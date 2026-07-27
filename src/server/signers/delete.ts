@@ -3,17 +3,23 @@
  *
  * A `"use server"` directive marks EVERY export of its file as a Server
  * Function, and Server Functions are reachable by direct POST — not just
- * through the UI. `deleteSigner` takes `(dbClient = null, signerId)` and
- * resolves the production db when `dbClient` is null, and signer ids are
+ * through the UI. `deleteSigner` used to take `(dbClient = null, signerId)`
+ * and resolve the production db when `dbClient` was null, and signer ids are
  * public by design (`?ref=` in every share link, the path segment of every
  * `/signatories/<id>` page). Living in a `"use server"` file therefore made it
- * an unauthenticated "destroy any account by id" endpoint.
+ * an unauthenticated "destroy any account by id" endpoint, and
+ * `deleteSigner(null, "<signer-uuid>")` was the whole exploit.
  *
  * It lives here, in a plain module, so the only thing a browser can reach is
  * the authenticated wrapper in `src/server/actions/revoke.ts` (and the admin
  * wrapper in `src/server/actions/admin.ts`). Auth belongs in those wrappers,
  * not here: this function is also called by tests and by other server code
  * with an explicit `db`, none of which has a Clerk session.
+ *
+ * `db` is a REQUIRED first argument. The optional-with-production-fallback
+ * form is what made the argument list itself dangerous; now that nothing can
+ * POST here, the fallback buys nothing and hides which database an
+ * irreversible cascade lands in. Callers say. See `src/lib/db/lazy.ts`.
  */
 
 import { eq, sql } from "drizzle-orm";
@@ -26,12 +32,6 @@ import {
 } from "@/lib/db/schema";
 import { deleteSelfieBlobsByUrls } from "@/lib/storage/blob";
 import type { SelfieBlobBackend } from "@/lib/storage/blob";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
 
 /**
  * Run a delete against a table that MAY not exist (Phase 3 leftovers). If the
@@ -114,12 +114,10 @@ function doomedCommentIds(signerId: string) {
  * Vercel Blob backend is used.
  */
 export async function deleteSigner(
-  dbClient: any = null,
+  db: any,
   signerId: string,
   blobBackend?: SelfieBlobBackend,
 ): Promise<void> {
-  const db = dbClient ?? getDb();
-
   // 1) Best-effort delete the signer's selfie blobs before destroying rows.
   const signerSelfies = await db
     .select({

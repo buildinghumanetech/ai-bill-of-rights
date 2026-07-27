@@ -3,15 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { upsertSignerProfile } from "@/server/profile/upsert";
-
-// Lazily resolve the production db so that importing this module in tests does
-// not trigger the DATABASE_URL guard inside src/lib/db/index.ts at
-// module-evaluation time.
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * The write itself lives in `@/server/profile/upsert`, a plain module,

@@ -14,14 +14,6 @@ import { eq } from "drizzle-orm";
 import { consentRecords, signatures, versions } from "@/lib/db/schema";
 import type { CapturedFields } from "@/lib/fingerprint/extract";
 
-// Use the lazy getDb() pattern established in src/lib/db/queries.ts to keep
-// tests from instantiating the Neon client.
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
-
 export interface RecordSignatureInput {
   signerId: string;
   versionString: string;
@@ -30,10 +22,9 @@ export interface RecordSignatureInput {
 }
 
 export async function recordSignature(
-  dbClient: any = null,
+  db: any,
   input: RecordSignatureInput,
 ): Promise<{ signatureId: string }> {
-  const db = dbClient ?? getDb();
   const versionRows = await db
     .select()
     .from(versions)

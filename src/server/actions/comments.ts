@@ -16,12 +16,7 @@ import { listSignersForMention } from "@/lib/db/queries";
 import { parseMentions } from "@/lib/comments/mentions";
 import { mentionEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * The create/edit/delete writes live in `@/server/comments/core`, a plain

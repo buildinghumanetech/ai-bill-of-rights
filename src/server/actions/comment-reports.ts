@@ -8,12 +8,7 @@ import {
   reportComment,
   toggleReportComment,
 } from "@/server/comments/reports";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * The report writes live in `@/server/comments/reports`, a plain module,

@@ -76,6 +76,15 @@ const upsertSignerProfile = vi.fn(
     };
   },
 );
+/**
+ * The action now resolves the production client itself and passes it in — the
+ * data-layer writes take `db` as a required argument rather than falling back
+ * to production on `null`. Stub the resolver so these tests never touch a
+ * real client, and assert the action forwards it.
+ */
+const { FAKE_DB } = vi.hoisted(() => ({ FAKE_DB: { __fakeDb: true } }));
+vi.mock("@/lib/db/lazy", () => ({ getDb: () => FAKE_DB }));
+
 vi.mock("@/server/profile/upsert", () => ({
   upsertSignerProfile: (...args: unknown[]) =>
     (upsertSignerProfile as unknown as (...a: unknown[]) => unknown)(...args),
@@ -157,7 +166,7 @@ describe("recordSignatureFromModal — reading the attribution cookies", () => {
     expect(res.channel).toBe("linkedin");
     // …and the ref still reaches the database write, as it always did.
     expect(upsertSignerProfile).toHaveBeenCalledWith(
-      undefined,
+      FAKE_DB,
       expect.objectContaining({ referredBySignerId: REFERRER_ID }),
     );
   });
@@ -197,7 +206,7 @@ describe("recordSignatureFromModal — reading the attribution cookies", () => {
     // The ref still went to the write — dropping it is the writer's job, not
     // the caller's — it just didn't survive.
     expect(upsertSignerProfile).toHaveBeenCalledWith(
-      undefined,
+      FAKE_DB,
       expect.objectContaining({ referredBySignerId: DELETED_REFERRER_ID }),
     );
   });
@@ -239,7 +248,7 @@ describe("recordSignatureFromModal — reading the attribution cookies", () => {
     expect(res.channel).toBeNull();
     expect(res.referred).toBe(false);
     expect(upsertSignerProfile).toHaveBeenCalledWith(
-      undefined,
+      FAKE_DB,
       expect.objectContaining({ referredBySignerId: null }),
     );
   });

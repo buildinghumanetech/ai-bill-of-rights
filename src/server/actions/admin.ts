@@ -17,15 +17,7 @@ import {
   insertNonSigner,
   type AdminAddNonSignerResult,
 } from "@/server/admin/non-signers";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = require("@/lib/db").db;
-  }
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 async function requireAdminOrBootstrap() {
   const ctx = await getCurrentAdmin();

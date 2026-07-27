@@ -3,19 +3,17 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { consentRecords, signers } from "@/lib/db/schema";
 import { createAttestation } from "@/server/attestations/core";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * PUBLIC BY DESIGN — this is the "we comply" form on /attestations, open to
  * anyone, and there is no account to sign in to. The claim is not published on
- * submission: `createAttestation` mints an unguessable token, the token goes
- * out by email, and only clicking that link publishes anything. The token is
- * the credential.
+ * submission: `createAttestation` mints an unguessable token and the token
+ * goes out by email. The token is the credential — and it authorises ANY
+ * request that carries it, not only a human clicking the link. The verify
+ * page is a `force-dynamic` server component that publishes during render, so
+ * a link scanner or a prefetching mail client publishes the claim too. See
+ * `verifyAttestationToken` in `@/server/attestations/core`.
  *
  * Everything else that used to live in this file — including the moderator
  * approve/hide decisions, which had no auth check at all — now lives in
@@ -36,7 +34,7 @@ export async function submitAttestationAction(formData: FormData): Promise<{
   if (orgName.length === 0 || productName.length === 0 || contactEmail.length === 0) {
     throw new Error("orgName, productName, and contactEmail are required");
   }
-  const result = await createAttestation(null, {
+  const result = await createAttestation(getDb(), {
     orgName,
     productName,
     productUrl,

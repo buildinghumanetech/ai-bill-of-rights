@@ -6,12 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 import { comments, signers } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { voteOnComment } from "@/server/comments/votes";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * The toggle itself lives in `@/server/comments/votes`, a plain module,

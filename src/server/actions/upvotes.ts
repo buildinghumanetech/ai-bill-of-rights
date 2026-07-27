@@ -5,12 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { signers } from "@/lib/db/schema";
 import { toggleCommentUpvote } from "@/server/comments/upvotes";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * The toggle itself lives in `@/server/comments/upvotes`, a plain module,

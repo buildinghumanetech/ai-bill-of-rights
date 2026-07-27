@@ -4,15 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { signatures, signers, versions } from "@/lib/db/schema";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = require("@/lib/db").db;
-  }
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 async function getMySigner() {
   const { userId } = await auth();

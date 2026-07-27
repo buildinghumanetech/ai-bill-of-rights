@@ -4,18 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { exceedsWhyISignedCap } from "@/lib/why-i-signed";
 import { saveWhyISignedForClerkUser } from "@/lib/why-i-signed.server";
-
-// Lazily resolve the production db so importing this module in tests does not
-// trip the DATABASE_URL guard in src/lib/db/index.ts at module-eval time.
-// (Same pattern as src/server/actions/profile.ts.)
-let _db: any | null = null;
-function getDb() {
-  if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = (require("@/lib/db") as { db: any }).db;
-  }
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 export interface SaveWhyISignedResult {
   success: boolean;

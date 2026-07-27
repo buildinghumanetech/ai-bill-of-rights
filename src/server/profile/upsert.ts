@@ -15,15 +15,6 @@ import { eq } from "drizzle-orm";
 import { signers } from "@/lib/db/schema";
 import { resolveReferrerId } from "@/lib/referral/attribution";
 
-// Lazily resolve the production db so that importing this module in tests
-// (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
-// inside src/lib/db/index.ts at module-evaluation time.
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
-
 export type NotificationPreference = "major" | "minor" | "none";
 
 export interface ProfileInput {
@@ -57,7 +48,7 @@ export interface UpsertSignerProfileResult {
 }
 
 export async function upsertSignerProfile(
-  db: any = getDb(),
+  db: any,
   input: ProfileInput,
 ): Promise<UpsertSignerProfileResult> {
   const existing = await db

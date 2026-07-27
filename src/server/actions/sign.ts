@@ -9,14 +9,7 @@ import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
 import { recordSignature } from "@/server/signatures/record";
-
-// Use the lazy getDb() pattern established in src/lib/db/queries.ts to keep
-// tests from instantiating the Neon client.
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
  * The insert itself lives in `@/server/signatures/record`, a plain module,

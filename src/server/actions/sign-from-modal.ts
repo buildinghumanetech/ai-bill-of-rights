@@ -10,6 +10,7 @@ import {
 } from "@/lib/referral/cookie";
 import { upsertSignerProfile } from "@/server/profile/upsert";
 import { recordSignature } from "@/server/signatures/record";
+import { getDb } from "@/lib/db/lazy";
 import {
   renderConsentText,
   CURRENT_CONSENT_VERSION,
@@ -211,7 +212,7 @@ export async function recordSignatureFromModal(
     // never from here — see the doc on SignFromModalResult.
     const attribution = await readReferralAttribution();
 
-    const profile = await upsertSignerProfile(undefined, {
+    const profile = await upsertSignerProfile(getDb(), {
       clerkUserId: userId,
       displayName,
       affiliation: null,
@@ -241,7 +242,7 @@ export async function recordSignatureFromModal(
       raw_last_name: input.lastName.trim(),
     };
     try {
-      await recordSignature(undefined, {
+      await recordSignature(getDb(), {
         signerId: profile.id,
         versionString: input.versionString,
         consentTextHash,
@@ -425,7 +426,7 @@ export async function createSignerFromModal(
       };
     }
 
-    const profile = await upsertSignerProfile(undefined, {
+    const profile = await upsertSignerProfile(prodDb, {
       clerkUserId: userId,
       displayName,
       affiliation: null,
