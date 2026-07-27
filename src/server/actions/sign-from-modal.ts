@@ -116,6 +116,22 @@ export interface SignFromModalResult {
    * cookies are httpOnly, so the browser cannot work either out for itself,
    * and without them "which surface converts" stays unanswerable.
    *
+   * These two answer deliberately different questions, and they can disagree:
+   *
+   * `referred` means "the database recorded a referrer for this signer" —
+   * i.e. `signers.referred_by_signer_id` is non-null. It is NOT "the visitor
+   * arrived carrying a ref cookie". A ref that named a since-deleted signer is
+   * dropped at write time, and this reports `false` for it, because the whole
+   * point of the flag is that analytics conversions must reconcile against
+   * `countReferralsBySigner`. A `true` here is a row you can go and find.
+   *
+   * `channel` is independent of that: it is the `?via=` surface the visitor
+   * arrived from, straight off the cookie, and it stays reportable even when
+   * the ref did not survive. Share links can carry a `via` with no usable ref
+   * at all, and "which surface converts" is a real question that shouldn't go
+   * dark just because the referrer deleted their account. So expect — and do
+   * not treat as a bug — events with `referred:false, channel:"linkedin"`.
+   *
    * Never a signer id: `referred` is a boolean on purpose. Who referred whom
    * is a database question (`countReferralsBySigner`), not an analytics one.
    */
@@ -188,8 +204,11 @@ export async function recordSignatureFromModal(
     const verificationMethod: "email" | "sms" =
       input.method === "email" ? "email" : "sms";
 
-    // Resolved once, up front: the same pair feeds the database write and the
-    // analytics event the client fires, so they can never disagree.
+    // What the cookie claims. This is an INPUT to the database write, not the
+    // outcome of it: `upsertSignerProfile` runs the ref through
+    // `resolveReferrerId` and will drop it if the referrer's row is gone. The
+    // analytics `referred` flag below is therefore read back off the write,
+    // never from here — see the doc on SignFromModalResult.
     const attribution = await readReferralAttribution();
 
     const profile = await upsertSignerProfile(undefined, {
@@ -290,7 +309,8 @@ export async function recordSignatureFromModal(
       success: true,
       signerId: profile.id,
       displayName,
-      referred: attribution.ref !== null,
+      // The persisted attribution, not the cookie's claim about it.
+      referred: profile.referredBySignerId !== null,
       channel: attribution.channel,
     };
   } catch (err) {

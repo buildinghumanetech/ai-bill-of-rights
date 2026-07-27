@@ -31,10 +31,26 @@ export interface ProfileInput {
   referredBySignerId?: string | null;
 }
 
+export interface UpsertSignerProfileResult {
+  id: string;
+  /**
+   * The attribution that is actually on the row now — NOT the ref the caller
+   * passed in. On INSERT the raw ref has been through `resolveReferrerId` and
+   * may have been dropped (dangling id, malformed value, lookup failure); on
+   * UPDATE this is whatever was written when the signer first arrived, since
+   * that branch never rewrites attribution.
+   *
+   * Callers that report attribution to analytics MUST read it from here rather
+   * than from the cookie, or they will report referrals the database does not
+   * have and no reconciliation will ever line up.
+   */
+  referredBySignerId: string | null;
+}
+
 export async function upsertSignerProfile(
   db: any = getDb(),
   input: ProfileInput,
-): Promise<{ id: string }> {
+): Promise<UpsertSignerProfileResult> {
   const existing = await db
     .select()
     .from(signers)
@@ -57,11 +73,20 @@ export async function upsertSignerProfile(
         notificationPreference,
       })
       .where(eq(signers.clerkUserId, input.clerkUserId));
-    return { id: existing[0].id };
+    // Report back the attribution already on the row, not the ref that was
+    // handed to us and deliberately ignored above — the caller needs to know
+    // what is stored, not what it asked for.
+    return {
+      id: existing[0].id,
+      referredBySignerId: existing[0].referredBySignerId ?? null,
+    };
   }
 
-  // Validated against the signers table (and against self-referral) so a
-  // stale or hostile ref can't fail the insert. Returns null on any doubt.
+  // Validated against the signers table so a stale or hostile ref can't fail
+  // the insert; returns null on any doubt. `resolveReferrerId` also drops a
+  // self-referral, but that branch cannot fire from here — we only reach this
+  // code when no signer row exists for this Clerk user, so the fetched row can
+  // never be theirs. See the docstring in src/lib/referral/attribution.ts.
   const referredBySignerId = await resolveReferrerId(db, {
     ref: input.referredBySignerId,
     clerkUserId: input.clerkUserId,
@@ -80,7 +105,7 @@ export async function upsertSignerProfile(
       verifiedAt: new Date(),
     })
     .returning({ id: signers.id });
-  return { id: row.id };
+  return { id: row.id, referredBySignerId };
 }
 
 export async function submitProfileAction(formData: FormData): Promise<void> {
