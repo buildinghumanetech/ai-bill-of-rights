@@ -1,26 +1,9 @@
 import { ImageResponse } from "next/og";
 import { getSignerById, getSignatureNumber } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
-import { normalizeWhyISigned } from "@/lib/why-i-signed";
+import { QUOTE_WIDTH, signerCardQuote } from "@/lib/og/signer-quote";
 
 export const runtime = "nodejs";
-
-/**
- * Pick a quote size that fills the panel without overflowing it.
- *
- * ImageResponse/satori has no text-overflow safety net — text that doesn't fit
- * simply spills past the canvas — so the size is chosen from the character
- * count rather than measured. The panel is QUOTE_WIDTH wide and roughly 250px
- * tall; these pairings were checked by rendering at 1, ~60, ~120 and 200 chars.
- */
-function quoteStyle(length: number): { fontSize: number; lineHeight: number } {
-  if (length <= 60) return { fontSize: 32, lineHeight: 1.32 };
-  if (length <= 110) return { fontSize: 27, lineHeight: 1.34 };
-  if (length <= 160) return { fontSize: 23, lineHeight: 1.36 };
-  return { fontSize: 20, lineHeight: 1.38 };
-}
-
-const QUOTE_WIDTH = 456;
 
 export async function GET(
   _req: Request,
@@ -42,17 +25,18 @@ export async function GET(
       ? [signer.affiliation, signer.locationText].filter(Boolean).join(" · ")
       : null;
 
-  // Re-clamp on the way out: rows written before the cap existed (or by any
-  // future writer that skips the action) must not be able to blow the layout.
-  const quote = normalizeWhyISigned(signer.whyISigned);
+  // Sanitising, clamping and sizing all happen in signerCardQuote — see the
+  // note there about why they are not inline in this route.
+  const {
+    text: quote,
+    fontSize: quoteFontSize,
+    lineHeight: quoteLineHeight,
+  } = signerCardQuote(signer.whyISigned);
   // With a quote the card is a two-column body, so the avatar and name give up
   // some room. Without one, the original single-row layout is kept intact —
   // shrinking it would just leave a differently-shaped hole.
   const avatarSize = quote ? 176 : 200;
   const nameSize = quote ? 40 : 48;
-  const { fontSize: quoteFontSize, lineHeight: quoteLineHeight } = quoteStyle(
-    quote?.length ?? 0,
-  );
 
   return new ImageResponse(
     (
