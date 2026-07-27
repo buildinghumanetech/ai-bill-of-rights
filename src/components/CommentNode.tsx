@@ -183,6 +183,30 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
     });
   }
 
+  /**
+   * Clear every piece of reply-draft state.
+   *
+   * There are three ways a reply draft ends — submit, the Cancel button, and
+   * collapsing via the action-row toggle — and they used to clear three different
+   * subsets: the toggle left `replyActAsSignerId`, Cancel left `replyMentions`.
+   * One function called from all three sites, so they cannot drift apart again.
+   *
+   * A measured note on `setReplyMentions([])`: it is defense in depth, not
+   * observable behaviour. Collapsing unmounts `MentionTextarea`, and a remounted
+   * one immediately reports an empty set, so removing this line breaks no test —
+   * I checked. It stays because relying on a child's mount side-effect to clear a
+   * value the server notifies on is a worse guarantee than clearing it here, and
+   * the day the composer stops unmounting is not the day you want to discover
+   * that. `setReplyBody("")` on these paths IS observable and is pinned by
+   * tests/components/comment-node.mentions.test.tsx.
+   */
+  function resetReplyDraft() {
+    setReplyBody("");
+    setReplyMentions([]);
+    setReplyActAsSignerId("");
+    setReplyError(null);
+  }
+
   function handleReplySubmit(e: React.FormEvent) {
     e.preventDefault();
     setReplyError(null);
@@ -209,9 +233,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
         setReplyError(res.error ?? "Couldn't save reply.");
         return;
       }
-      setReplyBody("");
-      setReplyMentions([]);
-      setReplyActAsSignerId("");
+      resetReplyDraft();
       setShowReply(false);
       router.refresh();
     });
@@ -431,14 +453,8 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                 // Collapsing unmounts the composer, which loses its picks.
                 // Clear the draft too so reopening can't show mention text that
                 // would no longer notify anyone.
-                setShowReply((v) => {
-                  if (v) {
-                    setReplyBody("");
-                    setReplyMentions([]);
-                    setReplyError(null);
-                  }
-                  return !v;
-                });
+                if (showReply) resetReplyDraft();
+                setShowReply(!showReply);
               }}
               className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
             >
@@ -486,9 +502,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                   type="button"
                   onClick={() => {
                     setShowReply(false);
-                    setReplyBody("");
-                    setReplyError(null);
-                    setReplyActAsSignerId("");
+                    resetReplyDraft();
                   }}
                   className="rounded-full px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100"
                 >
