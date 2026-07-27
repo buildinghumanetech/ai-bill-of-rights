@@ -127,22 +127,31 @@ pnpm tsx scripts/apply-migration.ts drizzle/0008_repoint_comments_to_v0_1_0.sql
 Reverting `current` in `versions.json` puts the site back on 0.0.1, but comments moved by 0008 would then be scoped to the wrong version and disappear again. 0008 snapshots the original mapping into `comment_version_backup_0008` and `proposed_edit_version_backup_0008` **in the same statement that performs the move** — so the backup always reflects exactly what was moved, and a run that moves nothing records nothing. That makes the move reversible:
 
 ```sql
+BEGIN;
+
 UPDATE "comments" AS c
    SET "base_version_id" = b."base_version_id",
-       "anchor_id" = b."anchor_id"
+       "anchor_id" = COALESCE(b."anchor_id", c."anchor_id")
   FROM "comment_version_backup_0008" AS b
  WHERE c."id" = b."id";
 
 UPDATE "proposed_edits" AS p
    SET "base_version_id" = b."base_version_id",
-       "target_anchor_id" = b."anchor_id"
+       "target_anchor_id" = COALESCE(b."anchor_id", p."target_anchor_id")
   FROM "proposed_edit_version_backup_0008" AS b
  WHERE p."id" = b."id";
+
+COMMIT;
 ```
+
+**The `COALESCE` is load-bearing, and so is the transaction.** An earlier form of 0008 created the backup tables without an `anchor_id` column at all; step `1b` adds it, but there is nothing to backfill it from, so in any database that ran that form the backed-up anchor is `NULL`. A plain `SET "anchor_id" = b."anchor_id"` would then write `NULL` over a live anchor — orphaning the comment, since a row is supposed to have exactly one of `anchor_id` / `proposal_id` — and the second statement would go on to violate `NOT NULL` on `proposed_edits.target_anchor_id`. Without `BEGIN`/`COMMIT` the comments damage has already committed by the time that error surfaces. Run these two together, in one session, or not at all.
 
 The anchor must be restored alongside the version, because 0008 remaps anchors as part of the move: `article-07-s-5` → `article-07-s-6` (the COPPA insertion), plus five renamed HumaneBench pill slugs. Restoring only `base_version_id` would put the comments back on v0.0.1 while leaving them pointing one sentence past where they were written, or at pill slugs that do not exist on v0.0.1.
 
-⚠️ 0008's last two statements repair stale pill anchors on rows that were **already** scoped to v0.1.0 — comments written on the /proposed tab before the rename, and any environment where an earlier form of 0008 had already run. Those rows are not in the backup tables, so the rollback above does not reverse them. They are a handful of draft-tab comments at most; if you need the original slug for one, it is in the git history of `src/app/HomepageArticles.tsx`.
+⚠️ 0008's last two statements repair stale pill anchors on rows that were **already** scoped to v0.1.0. Those rows fall into two groups, and the rollback treats them differently:
+
+- **Comments written on the /proposed tab against the v0.1.0 draft** were authored on the target version, so they were never moved and are **not** in the backup tables. The rollback does not reverse their anchor. They are a handful at most; the original slug is in the git history of `src/app/HomepageArticles.tsx`.
+- **Rows in an environment where an earlier form of 0008 already ran** reached v0.1.0 *by being moved*, so they **are** in the backup and the rollback does touch them — which is exactly why the `COALESCE` above matters.
 
 This restores only the rows that were carried forward — comments genuinely written against v0.1.0 are not in the backup and are left where they are. The backups are populated inside the same statement that performs the move, so they always match what was actually moved, including on a re-run.
 

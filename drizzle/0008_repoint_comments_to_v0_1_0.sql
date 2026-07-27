@@ -55,6 +55,14 @@
 --       someone said. It is recoverable from the backup if that is the wrong
 --       call.
 --
+--       Note the PAGE and the PILL part ways here, and next.config.ts looks
+--       like it contradicts this comment but does not. The page was renamed
+--       (Empowerment -> Enhance Human Capabilities) and so gets a redirect,
+--       because an old /resources/ URL that used to work should keep working.
+--       The pill was removed from Article 6 outright, which is a different
+--       fact about a different thing — hence a live redirect for the URL and
+--       no anchor remap for the comment.
+--
 -- ARTICLE NUMBERS ARE ZERO-PADDED. Every anchor literal below uses `article-01`
 -- … `article-09`, NOT `article-1`. The app builds anchors from
 -- `article.number` (src/app/HomepageArticles.tsx:539,604), and that field has
@@ -239,6 +247,16 @@ UPDATE "proposed_edits"
 --    old slugs are gone from the app, so a row carrying one is orphaned by
 --    definition and there is nothing for a re-run to match a second time.
 --
+--    THE RENAME SET HERE IS WIDER THAN THE ONE ABOVE, and deliberately so.
+--    The src->tgt move derives its set from `main` vs HEAD, because only a
+--    pill that shipped on main can carry a v0.0.1 comment. That is the WRONG
+--    test for this statement: the rows it targets were authored against the
+--    v0.1.0 DRAFT, so they can be anchored to pills that only ever existed on
+--    this branch. Four such renames landed between 293640f (the state the
+--    preview served while /proposed was live) and 343918d — articles 07, 08,
+--    10 and 11 — and none of them appear in the `main` diff. So this set is
+--    `main` vs HEAD UNION 293640f vs HEAD.
+--
 --    article-06-connect-…-empowerment is again absent on purpose — see (d).
 UPDATE "comments"
    SET "anchor_id" = CASE
@@ -250,8 +268,16 @@ UPDATE "comments"
            THEN 'article-04-connect-humanebench-principle-enable-meaningful-choices'
          WHEN "anchor_id" = 'article-05-connect-humanebench-principle-transparency'
            THEN 'article-05-connect-humanebench-principle-be-transparent-and-honest'
+         WHEN "anchor_id" = 'article-07-connect-humanebench-principle-dignity'
+           THEN 'article-07-connect-humanebench-principle-protect-dignity-and-safety'
+         WHEN "anchor_id" = 'article-08-connect-humanebench-principle-long-term-wellbeing'
+           THEN 'article-08-connect-humanebench-principle-prioritize-long-term-wellbeing'
          WHEN "anchor_id" = 'article-09-connect-humanebench-respect-user-attention'
            THEN 'article-09-connect-humanebench-principle-respect-user-attention'
+         WHEN "anchor_id" = 'article-10-connect-humanebench-principle-equity-inclusion'
+           THEN 'article-10-connect-humanebench-principle-design-for-equity-and-inclusion'
+         WHEN "anchor_id" = 'article-11-connect-humanebench-principle-dignity'
+           THEN 'article-11-connect-humanebench-principle-protect-dignity-and-safety'
          ELSE "anchor_id"
        END
  WHERE "base_version_id" IN (
@@ -262,7 +288,11 @@ UPDATE "comments"
          'article-03-connect-humanebench-principle-honesty',
          'article-04-connect-humanebench-principle-non-manipulation',
          'article-05-connect-humanebench-principle-transparency',
-         'article-09-connect-humanebench-respect-user-attention'
+         'article-07-connect-humanebench-principle-dignity',
+         'article-08-connect-humanebench-principle-long-term-wellbeing',
+         'article-09-connect-humanebench-respect-user-attention',
+         'article-10-connect-humanebench-principle-equity-inclusion',
+         'article-11-connect-humanebench-principle-dignity'
        );
 --> statement-breakpoint
 UPDATE "proposed_edits"
@@ -275,8 +305,16 @@ UPDATE "proposed_edits"
            THEN 'article-04-connect-humanebench-principle-enable-meaningful-choices'
          WHEN "target_anchor_id" = 'article-05-connect-humanebench-principle-transparency'
            THEN 'article-05-connect-humanebench-principle-be-transparent-and-honest'
+         WHEN "target_anchor_id" = 'article-07-connect-humanebench-principle-dignity'
+           THEN 'article-07-connect-humanebench-principle-protect-dignity-and-safety'
+         WHEN "target_anchor_id" = 'article-08-connect-humanebench-principle-long-term-wellbeing'
+           THEN 'article-08-connect-humanebench-principle-prioritize-long-term-wellbeing'
          WHEN "target_anchor_id" = 'article-09-connect-humanebench-respect-user-attention'
            THEN 'article-09-connect-humanebench-principle-respect-user-attention'
+         WHEN "target_anchor_id" = 'article-10-connect-humanebench-principle-equity-inclusion'
+           THEN 'article-10-connect-humanebench-principle-design-for-equity-and-inclusion'
+         WHEN "target_anchor_id" = 'article-11-connect-humanebench-principle-dignity'
+           THEN 'article-11-connect-humanebench-principle-protect-dignity-and-safety'
          ELSE "target_anchor_id"
        END
  WHERE "base_version_id" IN (
@@ -287,5 +325,9 @@ UPDATE "proposed_edits"
          'article-03-connect-humanebench-principle-honesty',
          'article-04-connect-humanebench-principle-non-manipulation',
          'article-05-connect-humanebench-principle-transparency',
-         'article-09-connect-humanebench-respect-user-attention'
+         'article-07-connect-humanebench-principle-dignity',
+         'article-08-connect-humanebench-principle-long-term-wellbeing',
+         'article-09-connect-humanebench-respect-user-attention',
+         'article-10-connect-humanebench-principle-equity-inclusion',
+         'article-11-connect-humanebench-principle-dignity'
        );

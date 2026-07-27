@@ -210,7 +210,8 @@ async function rollback(db: TestDb) {
   await db.execute(
     sql.raw(`
       UPDATE "comments" AS c
-         SET "base_version_id" = b."base_version_id"
+         SET "base_version_id" = b."base_version_id",
+             "anchor_id" = COALESCE(b."anchor_id", c."anchor_id")
         FROM "comment_version_backup_0008" AS b
        WHERE c."id" = b."id"
     `),
@@ -218,7 +219,8 @@ async function rollback(db: TestDb) {
   await db.execute(
     sql.raw(`
       UPDATE "proposed_edits" AS p
-         SET "base_version_id" = b."base_version_id"
+         SET "base_version_id" = b."base_version_id",
+             "target_anchor_id" = COALESCE(b."anchor_id", p."target_anchor_id")
         FROM "proposed_edit_version_backup_0008" AS b
        WHERE p."id" = b."id"
     `),
@@ -435,7 +437,7 @@ describe("0008 repoint comments to the new current version", () => {
     // Comments written on the /proposed tab against the v0.1.0 draft — before
     // the pills were renamed — are already on the target version, so the
     // src->tgt move cannot reach them. Same for any environment where an
-    // earlier form of this migration already ran. Statement 3 exists for both.
+    // earlier form of this migration already ran. Statements 5-6 exist for both.
     const { db, currentId } = await seedPublishedUpgrade();
     await seedCommentOnVersion(
       db,
@@ -443,13 +445,110 @@ describe("0008 repoint comments to the new current version", () => {
       "drafted-before-the-rename",
       pillAnchor(5, "humanebench-principle-transparency"),
     );
+    // A BRANCH-ONLY rename: article 10 did not exist on `main` at all, so this
+    // slug is absent from the main-vs-HEAD diff the src->tgt move is built
+    // from. It is reachable ONLY through the repair statements, and seeding
+    // just the article-05 case above cannot detect its omission — which is
+    // exactly how all four branch-only renames were missed the first time.
+    await seedCommentOnVersion(
+      db,
+      "0.1.0",
+      "drafted-on-a-branch-only-pill",
+      pillAnchor(10, "humanebench-principle-equity-inclusion"),
+    );
 
     await applyMigration(db);
 
     expect(await countCommentsByAnchor(db, currentId)).toEqual({
       [sentenceAnchor(1, 1)]: 1,
       [pillAnchor(5, "humanebench-principle-be-transparent-and-honest")]: 1,
+      [pillAnchor(10, "humanebench-principle-design-for-equity-and-inclusion")]:
+        1,
     });
+  });
+
+  it("covers every pill slug that changed, from either starting point", () => {
+    // The scan above only validates article NUMBERS. It cannot catch a rename
+    // with no branch at all, which is the error this migration shipped twice:
+    // first four branch-only renames omitted, then a branch written for a pill
+    // that never existed. This asserts coverage of the rename SET itself.
+    //
+    // Two starting points matter, and using only the first is what caused the
+    // omission: `main` is where v0.0.1 comments come from, but /proposed
+    // comments were written against the v0.1.0 draft as it stood at 293640f.
+    // Snapshots rather than `git show` so the test needs no repo history.
+    const HISTORICAL_PILL_ANCHORS = [
+      // on `main` (v0.0.1) and renamed since
+      "article-01-connect-humanebench-principle-dignity",
+      "article-03-connect-humanebench-principle-honesty",
+      "article-04-connect-humanebench-principle-non-manipulation",
+      "article-05-connect-humanebench-principle-transparency",
+      "article-06-connect-humanebench-principle-empowerment",
+      "article-09-connect-humanebench-respect-user-attention",
+      // introduced on this branch at 293640f, renamed at 343918d
+      "article-07-connect-humanebench-principle-dignity",
+      "article-08-connect-humanebench-principle-long-term-wellbeing",
+      "article-10-connect-humanebench-principle-equity-inclusion",
+      "article-11-connect-humanebench-principle-dignity",
+    ];
+    // Article 6's HumaneBench pill was REMOVED, not renamed — there is no
+    // successor to move a comment to, so leaving it stale is the correct
+    // behaviour and it must NOT appear in the SQL.
+    const DELIBERATELY_NOT_REMAPPED = new Set([
+      "article-06-connect-humanebench-principle-empowerment",
+    ]);
+
+    const live = new Set(
+      articles.flatMap((a) =>
+        (a.connects ?? []).map((p) => `article-${a.number}-connect-${p.slug}`),
+      ),
+    );
+    const sqlText = fs.readFileSync(MIGRATION, "utf-8");
+
+    const uncovered = HISTORICAL_PILL_ANCHORS.filter(
+      (anchor) =>
+        !live.has(anchor) &&
+        !DELIBERATELY_NOT_REMAPPED.has(anchor) &&
+        !sqlText.includes(`'${anchor}'`),
+    );
+    expect(
+      uncovered,
+      `pill slug(s) renamed with no remap branch — comments on them will orphan: ${uncovered.join(", ")}`,
+    ).toEqual([]);
+
+    for (const anchor of DELIBERATELY_NOT_REMAPPED) {
+      expect(
+        sqlText.includes(`'${anchor}'`),
+        `${anchor} was removed, not renamed — it must not be remapped`,
+      ).toBe(false);
+    }
+  });
+
+  it("does not orphan a comment when the backup has no anchor to restore", async () => {
+    // An earlier form of 0008 created the backup tables with no anchor_id
+    // column; step 1b adds it with nothing to backfill from, so those rows
+    // carry NULL. The published rollback must not write that NULL over a live
+    // anchor — a comment with neither an anchor nor a proposal is orphaned,
+    // and the proposed_edits half would then violate NOT NULL.
+    const { db, currentId, editId } = await seedPublishedUpgrade();
+    await applyMigration(db);
+    await db.execute(
+      sql.raw(`UPDATE "comment_version_backup_0008" SET "anchor_id" = NULL`),
+    );
+    await db.execute(
+      sql.raw(
+        `UPDATE "proposed_edit_version_backup_0008" SET "anchor_id" = NULL`,
+      ),
+    );
+
+    await expect(rollback(db)).resolves.not.toThrow();
+
+    const [row] = await db
+      .select({ anchorId: comments.anchorId })
+      .from(comments)
+      .limit(1);
+    expect(row.anchorId).not.toBeNull();
+    expect(await editVersionOf(db, editId)).not.toBe(currentId);
   });
 
   it("does not walk the anchor further on a re-run", async () => {
@@ -487,7 +586,7 @@ describe("0008 repoint comments to the new current version", () => {
       (rows as unknown as { rows?: { anchor_id: string }[] }).rows ??
       (rows as unknown as { anchor_id: string }[])
     ).map((r) => r.anchor_id);
-    expect(anchors).toEqual([sentenceAnchor(1, 1), sentenceAnchor(7, 5)].sort());
+    expect(anchors).toEqual([sentenceAnchor(1, 1), sentenceAnchor(7, 5)]);
   });
 
   it("moves proposed edits along with comments", async () => {
