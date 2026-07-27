@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendResolvedMentions,
   mentionText,
   pruneResolvedMentions,
+  readSubmittedMentions,
   resolveSubmittedMentions,
   type ResolvedMention,
 } from "@/lib/comments/resolved-mentions";
@@ -31,13 +33,19 @@ describe("pruneResolvedMentions", () => {
     expect(pruneResolvedMentions("thanks for the review", [pick(ALICE)])).toEqual([]);
   });
 
-  it("drops a pick the author edited into a different name", () => {
-    // Picked Alice, then hand-edited the text. We no longer know who is meant,
-    // so nobody is notified — the failure is silence, never a wrong recipient.
+  it("drops a pick when the inserted name is gone", () => {
+    // Hand-edited so the inserted text no longer appears. We no longer know who
+    // is meant, so nobody is notified — silence, never a wrong recipient.
+    expect(pruneResolvedMentions("thanks @Alicia Nguyen", [pick(ALICE)])).toEqual([]);
+  });
+
+  it("keeps a pick when the edited text still contains the inserted name", () => {
+    // The documented over-keep: appending to the name leaves "@Alice Nguyen"
+    // present, so Alice stays resolved. See the module header — this can only
+    // over-keep someone the author did pick, never invent one they didn't.
     expect(pruneResolvedMentions("thanks @Alice Nguyenn", [pick(ALICE)])).toEqual([
       pick(ALICE),
     ]);
-    expect(pruneResolvedMentions("thanks @Alicia Nguyen", [pick(ALICE)])).toEqual([]);
   });
 
   it("keeps multiple distinct picks", () => {
@@ -80,6 +88,39 @@ describe("pruneResolvedMentions", () => {
 
   it("returns an empty list when nothing was picked", () => {
     expect(pruneResolvedMentions("hey @Alice Nguyen", [])).toEqual([]);
+  });
+});
+
+describe("the wire contract", () => {
+  it("round-trips resolved mentions through FormData", () => {
+    const fd = new FormData();
+    appendResolvedMentions(fd, [pick(ALICE), pick(ERIK)]);
+    expect(readSubmittedMentions(fd)).toEqual({
+      fromComposer: true,
+      signerIds: [ALICE.id, ERIK.id],
+    });
+  });
+
+  it("marks the source even with no mentions, so 'none' is distinguishable", () => {
+    // "Resolved and found none" must not look like "carried no resolution" —
+    // the first notifies nobody, the second is a warning about a broken client.
+    const fd = new FormData();
+    appendResolvedMentions(fd, []);
+    expect(readSubmittedMentions(fd)).toEqual({ fromComposer: true, signerIds: [] });
+  });
+
+  it("reports fromComposer: false for a submission with no marker", () => {
+    expect(readSubmittedMentions(new FormData())).toEqual({
+      fromComposer: false,
+      signerIds: [],
+    });
+  });
+
+  it("ignores empty id values", () => {
+    const fd = new FormData();
+    appendResolvedMentions(fd, []);
+    fd.append("mentionSignerIds", "");
+    expect(readSubmittedMentions(fd).signerIds).toEqual([]);
   });
 });
 

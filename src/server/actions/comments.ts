@@ -7,7 +7,6 @@ import { comments, signers, commentMentions } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { listSignersForMention } from "@/lib/db/queries";
-import { parseMentions } from "@/lib/comments/mentions";
 import {
   readSubmittedMentions,
   resolveSubmittedMentions,
@@ -141,16 +140,25 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   // Fire mention emails asynchronously — don't let email failures block the response
   void (async () => {
     try {
+      // Notifications come only from write-time resolution: the composer knows
+      // exactly which signer the author picked. There is deliberately no prose-
+      // parsing fallback — inferring a recipient from free text repeatedly
+      // emailed the wrong person (see the header of resolved-mentions.ts), and a
+      // fallback selected by the *client* would just be an opt-out from the
+      // containment guarantee, since omitting the marker is trivial.
+      if (!submittedMentions.fromComposer) {
+        console.warn(
+          "[mention] Submission carried no resolved mentions — notifying nobody",
+          { commentId: insertedCommentId },
+        );
+        return;
+      }
       const knownSigners = await listSignersForMention(db);
-      // Prefer write-time resolution: the composer knows exactly which signer the
-      // author picked, so we notify those ids rather than re-deriving recipients
-      // from the prose. `parseMentions` remains only as a fallback for a client
-      // that did no resolution (a form posted without JS), because inferring a
-      // recipient from free text has repeatedly emailed the wrong person — see
-      // the header of src/lib/comments/resolved-mentions.ts.
-      const mentions = submittedMentions.fromComposer
-        ? resolveSubmittedMentions(body, submittedMentions.signerIds, knownSigners)
-        : parseMentions(body, knownSigners);
+      const mentions = resolveSubmittedMentions(
+        body,
+        submittedMentions.signerIds,
+        knownSigners,
+      );
       // Filter self-mentions
       const others = mentions.filter((m) => m.signerId !== effectiveSignerId);
       if (others.length === 0) return;

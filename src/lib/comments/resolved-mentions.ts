@@ -17,7 +17,8 @@
  * - `pruneResolvedMentions` runs in the composer. The author can edit or delete
  *   text after picking a name, so a pick only survives while the exact text we
  *   inserted for it is still present.
- * - `resolveSubmittedMentions` runs on the server. Ids arrive from the browser
+ * - `resolveSubmittedMentions` runs on the server, and is the *only* source of
+ *   mention notifications. Ids arrive from the browser
  *   and therefore cannot be trusted: it drops ids that aren't real signers, and
  *   drops any signer whose `@DisplayName` does not literally appear in the body.
  *   Without that second check a crafted request could notify any signer with any
@@ -96,17 +97,6 @@ export function pruneResolvedMentions(
 }
 
 /**
- * Server-side: turn submitted ids into the signers to notify.
- *
- * An id must (a) belong to a real, mentionable signer and (b) have its
- * `@DisplayName` present in the stored body. (b) is what makes a forged request
- * useless: to notify a signer you must put their name in the comment, which is
- * exactly the visible, auditable thing a mention is supposed to be.
- *
- * Note this reads the display name from `knownSigners`, never from the client —
- * a request can choose *which* signer to check, not what text to check for.
- */
-/**
  * The form fields carrying resolution across the wire. Kept here, next to the
  * functions that read and write them, so a composer and the server action cannot
  * drift apart on a field name.
@@ -118,10 +108,9 @@ export const MENTION_SOURCE_COMPOSER = "composer";
 /**
  * Composer-side: attach the resolved ids to a submission.
  *
- * The source marker is set even when there are no mentions, because "this client
- * resolved mentions and found none" and "this client doesn't do resolution" must
- * be distinguishable — the first means notify nobody, the second falls back to
- * parsing the prose.
+ * The marker is set even when there are no mentions, so the server can tell "this
+ * client resolved and found none" from "this submission carried no resolution at
+ * all" — the latter is logged as a warning, since every real composer sets it.
  */
 export function appendResolvedMentions(
   fd: FormData,
@@ -134,8 +123,10 @@ export function appendResolvedMentions(
 /**
  * Server-side counterpart to `appendResolvedMentions`.
  *
- * `fromComposer: false` means no client-side resolution happened (a form posted
- * without JS, or an older client), and the caller should fall back to parsing.
+ * `fromComposer: false` means the submission carried no resolution. There is no
+ * prose-parsing fallback: a fallback the client selects by simply omitting a
+ * field would be an opt-out from every guarantee below, so the caller notifies
+ * nobody instead.
  */
 export function readSubmittedMentions(fd: FormData): {
   fromComposer: boolean;
@@ -150,6 +141,17 @@ export function readSubmittedMentions(fd: FormData): {
   return { fromComposer, signerIds };
 }
 
+/**
+ * Server-side: turn submitted ids into the signers to notify.
+ *
+ * An id must (a) belong to a real, mentionable signer and (b) have its
+ * `@DisplayName` present in the stored body. (b) is what makes a forged request
+ * useless: to notify a signer you must put their name in the comment, which is
+ * exactly the visible, auditable thing a mention is supposed to be.
+ *
+ * Note this reads the display name from `knownSigners`, never from the client —
+ * a request can choose *which* signer to check, not what text to check for.
+ */
 export function resolveSubmittedMentions(
   body: string,
   submittedSignerIds: readonly string[],

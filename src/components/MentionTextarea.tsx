@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   pruneResolvedMentions,
   type ResolvedMention,
@@ -88,16 +88,28 @@ export function MentionTextarea({
     setSelectedIdx(0);
   }, [suggestions.length, mentionQuery?.query]);
 
-  // Derive the live set during render rather than syncing it in an effect: the
-  // answer is a pure function of the current body and the picks so far, so there
-  // is no state to keep in step. This also covers the parent clearing `value`
-  // after a successful submit — nothing is left to notify.
-  const live = pruneResolvedMentions(value, picked);
-  // Signer ids are uuids, so joining on a comma yields a unique key per set.
-  const resolvedKey = live.map((m) => m.signerId).join(",");
-  // Hold the array identity stable for as long as the *set* is unchanged, so the
-  // notify effect below fires on a real change and not on every keystroke.
-  const resolved = useMemo(() => live, [resolvedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A pick belongs to the body it was made in. When the parent replaces `value`
+  // wholesale — `setBody("")` after a successful submit, while this component
+  // stays mounted — the picks are for a comment that has already been sent, so
+  // they must go. Without this, one later change event containing the old
+  // mention text (a paste of the previous comment, or ctrl-Z) would re-arm it.
+  // Comparing props to state during render is the sanctioned way to do this;
+  // `locallyEdited` is the last value *we* produced, so anything else is external.
+  const [syncedValue, setSyncedValue] = useState(value);
+  const [locallyEdited, setLocallyEdited] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
+    if (value !== locallyEdited) {
+      setLocallyEdited(value);
+      setPicked([]);
+    }
+  }
+
+  const resolved = pruneResolvedMentions(value, picked);
+  // Signer ids are uuids, so joining on a comma is a unique key per set. Keying
+  // the effect on this primitive means the parent hears about a real change and
+  // not about every keystroke that leaves the set alone.
+  const resolvedKey = resolved.map((m) => m.signerId).join(",");
 
   // The callback is read through a ref so an inline arrow prop can't retrigger
   // the effect (parent setState -> new callback identity -> effect -> setState).
@@ -106,8 +118,12 @@ export function MentionTextarea({
     notifyRef.current = onResolvedMentionsChange;
   });
   useEffect(() => {
-    notifyRef.current?.(resolved);
-  }, [resolved]);
+    // Recomputed rather than closed over so the effect depends on `resolvedKey`
+    // alone. Deliberately not memoising `resolved` for identity: React may drop a
+    // useMemo cache, which would refire this on an unchanged set.
+    notifyRef.current?.(pruneResolvedMentions(value, picked));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedKey]);
 
   function detectMentionQuery(text: string, caretPos: number): MentionQuery | null {
     // Walk backwards from caret to find the last `@` that has no space between it and the caret
@@ -126,6 +142,7 @@ export function MentionTextarea({
     const caret = e.target.selectionStart ?? newValue.length;
     const q = detectMentionQuery(newValue, caret);
     setMentionQuery(q);
+    setLocallyEdited(newValue);
     // Forget picks the author has edited away, so deleting a mention and then
     // retyping the same name by hand does not silently re-arm the notification.
     setPicked((prev) => pruneResolvedMentions(newValue, prev));
@@ -138,6 +155,7 @@ export function MentionTextarea({
     const newValue = `${before}@${signer.displayName} ${after}`;
     onChange(newValue);
     setMentionQuery(null);
+    setLocallyEdited(newValue);
     // Record the resolved id at the moment of the pick. This is the whole point:
     // we know exactly who was meant here, and never have to guess it back out of
     // the text afterwards.
