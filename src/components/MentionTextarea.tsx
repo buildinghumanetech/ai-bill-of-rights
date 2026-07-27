@@ -168,8 +168,11 @@ export function MentionTextarea({
     //
     // The trailing space is deliberately NOT part of `mentionText`: it is a
     // typing affordance for the composer, not part of what anything matches on.
+    // It is also conditional — picking mid-text, where `after` already starts
+    // with a space, would otherwise leave a visible double space behind.
     const inserted = mentionText(signer.displayName);
-    const newValue = `${before}${inserted} ${after}`;
+    const sep = after.startsWith(" ") ? "" : " ";
+    const newValue = `${before}${inserted}${sep}${after}`;
     onChange(newValue);
     setMentionQuery(null);
     setLocallyEdited(newValue);
@@ -187,7 +190,9 @@ export function MentionTextarea({
     const ta = taRef.current;
     if (ta) {
       // Derived from what was actually inserted, so it stays correct if
-      // `mentionText` ever normalises the name. +1 for the trailing space.
+      // `mentionText` ever normalises the name. The +1 steps past the single
+      // space that now follows the mention — whether `sep` supplied it or the
+      // text after the caret already had one.
       const newCaret = before.length + inserted.length + 1;
       ta.focus();
       requestAnimationFrame(() => {
@@ -254,7 +259,13 @@ export function MentionTextarea({
                   same string the notification resolves on. If that ever
                   normalises the name, promising "@Padded Name " while
                   delivering on "@Padded Name" would be a lie of exactly the
-                  kind this line exists to prevent. */}
+                  kind this line exists to prevent.
+
+                  UNVERIFIABLE BY CONSTRUCTION, stated rather than hidden: while
+                  `mentionText` is the identity, no assertion can tell this from
+                  an inline `@{m.displayName}`, so reverting this site — or the
+                  suggestion button below — would be caught by nothing until the
+                  trim lands. Both are load-bearing only from that point on. */}
               <span className="font-medium text-zinc-700">
                 {mentionText(m.displayName)}
               </span>

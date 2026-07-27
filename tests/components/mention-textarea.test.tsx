@@ -200,16 +200,23 @@ describe("MentionTextarea write-time resolution", () => {
       fireEvent.change(screen.getByRole("textbox"), {
         target: { value: "hey @Ali and more", selectionStart: 8 },
       });
+      const before = frames.length;
       fireEvent.mouseDown(screen.getByRole("option", { name: "@Alice Nguyen" }));
       // `fireEvent` has flushed the commit by now, so this is the real ordering.
-      expect(frames).toHaveLength(1);
+      // Assert the delta rather than the total: anything else in the tree
+      // scheduling a frame during this commit has nothing to do with the caret,
+      // and should not fail this test with a message pointing at rAF.
+      expect(frames.length).toBeGreaterThan(before);
       act(() => {
         frames.forEach((cb) => cb(0));
       });
 
       const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
       const inserted = mentionText("Alice Nguyen");
-      expect(ta.value).toBe("hey @Alice Nguyen  and more");
+      // One space after the mention, not two: `after` already began with one, so
+      // `selectSuggestion` adds none. Picking at the end of the text is the other
+      // case, covered by the tests above.
+      expect(ta.value).toBe("hey @Alice Nguyen and more");
       // Just past the mention and the space that follows it — where the author's
       // next keystroke goes, which is well short of `value.length`.
       expect(ta.selectionStart).toBe(ta.value.indexOf(inserted) + inserted.length + 1);
