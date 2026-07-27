@@ -127,9 +127,19 @@ export default async function SignerProfile({
             a full 200-character statement fits in four lines uncut, so the
             clamp never bites there. The clamp is visual only — the full text
             stays in the DOM for crawlers and screen readers.
+
+            No literal quotation marks: a closing `&rdquo;` inside a clamped
+            element is exactly the character the clamp eats, so a statement
+            long enough to clamp rendered an opening curly quote, an ellipsis,
+            and nothing to close it — on the phone widths the clamp exists for.
+            Hanging the marks off pseudo-elements would only move the problem
+            (a closing mark pinned outside the clamp reads as belonging to the
+            ellipsis, not to the sentence). The blue border-left plus the
+            attribution below already say "pull quote", so the marks were
+            redundant, and dropping them keeps the statement copy-pasteable.
           */}
           <blockquote className="line-clamp-4 text-lg leading-snug text-zinc-900 sm:text-2xl">
-            &ldquo;{whyISigned}&rdquo;
+            {whyISigned}
           </blockquote>
           <figcaption className="mt-3 text-sm text-zinc-500">
             — {signer.displayName}, on why they signed

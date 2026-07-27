@@ -18,11 +18,15 @@ import { articles, splitSentences } from "@/app/HomepageArticles";
  * Delegates to `splitSentences` rather than looking for the first `". "`:
  * that naive form cuts an article body containing "e.g. ", "U.S." or "vs."
  * mid-clause, and misses a first sentence that ends in `?` or `!` (returning
- * the whole paragraph instead of a one-liner). Returns the body unchanged if
- * it has no recognisable sentence break.
+ * the whole paragraph instead of a one-liner).
+ *
+ * A body with no recognisable sentence break comes back from `splitSentences`
+ * as a single element, so it is returned whole (trimmed). The only body that
+ * splits to `[]` is a blank one — `splitSentences` ends in `.filter(Boolean)`
+ * — so `""` is the whole of the empty case, not a stand-in for the body.
  */
 export function gist(body: string): string {
-  return splitSentences(body)[0] ?? body.trim();
+  return splitSentences(body)[0] ?? "";
 }
 
 interface Props {
