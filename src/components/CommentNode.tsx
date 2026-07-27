@@ -441,7 +441,13 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             </p>
           )}
 
-          {/* Action row — reply only; flag moved to header row */}
+          {/* Action row — reply only; flag moved to header row.
+
+              The toggle carries a `data-testid` because its label differs from
+              the composer's own Reply/Cancel buttons only in letter case, and
+              `getByRole`'s name matcher is case-sensitive. Selecting it by label
+              would mean a cosmetic re-casing of this copy silently breaks the
+              reply-mention tests with an error pointing nowhere near mentions. */}
           <div className="mt-1.5 flex items-center gap-3 flex-wrap">
             <button
               type="button"
@@ -456,6 +462,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                 if (showReply) resetReplyDraft();
                 setShowReply(!showReply);
               }}
+              data-testid="reply-toggle"
               className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
             >
               {showReply ? "cancel" : "reply"}

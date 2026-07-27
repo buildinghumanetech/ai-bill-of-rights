@@ -44,6 +44,14 @@ import type { ThreadedComment } from "@/lib/db/queries";
 const SIGNERS = [
   { id: "sig-alice", displayName: "Alice Nguyen" },
   { id: "sig-erik", displayName: "Erik" },
+  // A name with trailing whitespace. Ugly, but reachable from real signer data,
+  // and it is the only thing that makes the submit-time re-prune observable.
+  { id: "sig-padded", displayName: "Padded Name " },
+];
+
+const ADMIN_SIGNERS = [
+  { id: "sig-me", displayName: "Me" },
+  { id: "sig-alice", displayName: "Alice Nguyen" },
 ];
 
 const COMMENT: ThreadedComment = {
@@ -61,13 +69,13 @@ const COMMENT: ThreadedComment = {
   replies: [],
 };
 
-function renderNode() {
+function renderNode({ isAdmin = false } = {}) {
   return render(
     <CommentNode
       comment={COMMENT}
       viewerSignerId="sig-me"
-      isAdmin={false}
-      signersForAdmin={[]}
+      isAdmin={isAdmin}
+      signersForAdmin={isAdmin ? ADMIN_SIGNERS : []}
       signersForMention={SIGNERS}
       depth={0}
       baseVersionId="v1"
@@ -76,9 +84,16 @@ function renderNode() {
   );
 }
 
-/** The reply/cancel toggle in the action row. */
-function toggle(name: "reply" | "cancel") {
-  fireEvent.click(screen.getByRole("button", { name }));
+/**
+ * The reply/cancel toggle in the action row.
+ *
+ * Selected by testid, not label: it reads "reply"/"cancel" while the composer's
+ * own buttons read "Reply"/"Cancel", and `getByRole`'s name matcher is
+ * case-sensitive. Matching on case would make a cosmetic re-casing of the action
+ * row break these tests with an error that has nothing to do with mentions.
+ */
+function toggle() {
+  fireEvent.click(screen.getByTestId("reply-toggle"));
 }
 
 function type(text: string) {
@@ -109,7 +124,7 @@ afterEach(cleanup);
 describe("CommentNode reply mention wiring", () => {
   it("submits the picked signer id and the source marker", async () => {
     renderNode();
-    toggle("reply");
+    toggle();
 
     type("agreed @Ali");
     pick("@Alice Nguyen");
@@ -125,7 +140,7 @@ describe("CommentNode reply mention wiring", () => {
 
   it("submits the marker with no ids when the name was typed by hand", async () => {
     renderNode();
-    toggle("reply");
+    toggle();
 
     type("agreed @Alice Nguyen");
     await submitReply();
@@ -137,7 +152,7 @@ describe("CommentNode reply mention wiring", () => {
 
   it("does not submit an id for a mention deleted before sending", async () => {
     renderNode();
-    toggle("reply");
+    toggle();
 
     type("agreed @Ali");
     pick("@Alice Nguyen");
@@ -152,12 +167,12 @@ describe("CommentNode reply mention wiring", () => {
     // survived, reopening and retyping the same text would notify someone for a
     // reply they were never picked in.
     renderNode();
-    toggle("reply");
+    toggle();
 
     type("agreed @Ali");
     pick("@Alice Nguyen");
-    toggle("cancel");
-    toggle("reply");
+    toggle();
+    toggle();
 
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
 
@@ -171,12 +186,12 @@ describe("CommentNode reply mention wiring", () => {
     // Cancel is a separate reset path from the action-row toggle. It used to
     // clear the body but leave the picks, so this pins them together.
     renderNode();
-    toggle("reply");
+    toggle();
 
     type("agreed @Ali");
     pick("@Alice Nguyen");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    toggle("reply");
+    toggle();
 
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
 
@@ -188,7 +203,7 @@ describe("CommentNode reply mention wiring", () => {
 
   it("does not carry a pick over to the next reply after a successful send", async () => {
     renderNode();
-    toggle("reply");
+    toggle();
 
     type("agreed @Ali");
     pick("@Alice Nguyen");
@@ -196,10 +211,59 @@ describe("CommentNode reply mention wiring", () => {
     expect(submitted().getAll(MENTION_IDS_FIELD)).toEqual(["sig-alice"]);
 
     // Submitting collapses the form, so reopen and paste the old text back in.
-    toggle("reply");
+    toggle();
     type("agreed @Alice Nguyen");
     await submitReply();
 
     expect(submitted().getAll(MENTION_IDS_FIELD)).toEqual([]);
+  });
+
+  it("re-prunes against the trimmed body, not the composer's", async () => {
+    // `handleReplySubmit` submits `body.trim()` but resolves against the picks,
+    // so the two can disagree. A display name ending in whitespace is the case
+    // that makes it observable: the composer holds "agreed @Padded Name  " and
+    // the pick matches on "@Padded Name ", but the *submitted* body is trimmed to
+    // "agreed @Padded Name", where that needle is gone.
+    //
+    // Nobody is notified, which is the module's stated direction of failure —
+    // silence, never a wrong recipient. Without the submit-time re-prune this
+    // sends sig-padded for a body that no longer contains their mention text.
+    renderNode();
+    toggle();
+
+    type("agreed @Padded");
+    pick("@Padded Name");
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+      "agreed @Padded Name  ",
+    );
+
+    await submitReply();
+
+    const fd = submitted();
+    expect(fd.get("body")).toBe("agreed @Padded Name");
+    expect(fd.getAll(MENTION_IDS_FIELD)).toEqual([]);
+  });
+
+  it("submits the admin post-as signer, and drops it on collapse", async () => {
+    // Unifying the reset paths made the action-row toggle clear
+    // `replyActAsSignerId`, which it used to preserve. That is a real behaviour
+    // change for admins — collapse to re-read the thread, reopen, and you are
+    // posting as yourself again — so it gets pinned deliberately rather than
+    // left to be discovered.
+    renderNode({ isAdmin: true });
+    toggle();
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "sig-alice" } });
+    type("agreed @Ali");
+    pick("@Alice Nguyen");
+    await submitReply();
+
+    const fd = submitted();
+    expect(fd.get("actAsSignerId")).toBe("sig-alice");
+    expect(fd.getAll(MENTION_IDS_FIELD)).toEqual(["sig-alice"]);
+
+    // Reopen: the post-as selection is back to the default, not the stale pick.
+    toggle();
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("");
   });
 });
