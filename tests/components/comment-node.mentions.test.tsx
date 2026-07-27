@@ -254,8 +254,13 @@ describe("CommentNode reply mention wiring", () => {
     // The fix is to normalise at the insertion point so composer, submitted body
     // and server all agree on the needle — trimming inside `mentionText` would do
     // it in one place. Deliberately not done here: it changes who gets notified,
-    // and that call is not mine to make unilaterally. If you fix it, this
-    // assertion flips to expect ["sig-padded"] and the one below goes away.
+    // and that call is not mine to make unilaterally.
+    //
+    // What pins the defect is the PAIR: notify-list populated, submitted ids
+    // empty. Neither assertion says anything on its own. When the fix is taken,
+    // this one still passes unchanged — the trimmed needle "@Padded Name" is
+    // present in the untrimmed composer value too — and it is the
+    // MENTION_IDS_FIELD assertion below that flips to ["sig-padded"].
     expect(screen.getByTestId("mention-notify-list").textContent).toContain(
       "Padded Name",
     );
@@ -279,9 +284,17 @@ describe("CommentNode reply mention wiring", () => {
     const fd = submitted();
     expect(fd.get("actAsSignerId")).toBe("sig-alice");
     expect(fd.getAll(MENTION_IDS_FIELD)).toEqual(["sig-alice"]);
+
+    // And pin the SUBMIT path's reset of it. The collapse case below cannot: a
+    // successful submit already calls `resetReplyDraft()` + `setShowReply(false)`,
+    // so the toggle here is a reopen, not a collapse. Without this, nothing
+    // catches `handleReplySubmit` narrowing its reset and leaking "post as X"
+    // into the admin's next reply.
+    toggle();
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("");
   });
 
-  it("drops the admin post-as signer when the reply is collapsed", async () => {
+  it("drops the admin post-as signer when the reply is collapsed", () => {
     // Unifying the reset paths made the action-row toggle clear
     // `replyActAsSignerId`, which it used to preserve: an admin who picks
     // "post as X", collapses to re-read the thread, and reopens is posting as

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  mentionText,
   pruneResolvedMentions,
   type ResolvedMention,
 } from "@/lib/comments/resolved-mentions";
@@ -159,7 +160,13 @@ export function MentionTextarea({
     if (!mentionQuery) return;
     const before = value.slice(0, mentionQuery.atIndex);
     const after = value.slice(mentionQuery.atIndex + 1 + mentionQuery.query.length);
-    const newValue = `${before}@${signer.displayName} ${after}`;
+    // Insert through `mentionText` rather than formatting `@name` a second time
+    // here. The text this writes has to be byte-identical to the needle that
+    // `pruneResolvedMentions` (below) and `resolveSubmittedMentions` (server side)
+    // search for, or a pick resolves in the composer and then vanishes at submit.
+    // Two copies of the format is how that drifts; behaviour is unchanged today.
+    const inserted = mentionText(signer.displayName);
+    const newValue = `${before}${inserted} ${after}`;
     onChange(newValue);
     setMentionQuery(null);
     setLocallyEdited(newValue);
@@ -176,7 +183,9 @@ export function MentionTextarea({
     // Restore focus and place caret after the inserted mention
     const ta = taRef.current;
     if (ta) {
-      const newCaret = before.length + 1 + signer.displayName.length + 1; // +1 for @, +1 for trailing space
+      // Derived from what was actually inserted, so it stays correct if
+      // `mentionText` ever normalises the name. +1 for the trailing space.
+      const newCaret = before.length + inserted.length + 1;
       ta.focus();
       requestAnimationFrame(() => {
         ta.selectionStart = newCaret;
