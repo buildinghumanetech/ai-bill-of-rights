@@ -45,8 +45,9 @@ const MAX_SUGGESTIONS = 6;
  *
  * When the user types `@` we capture that position and filter the signers list
  * by prefix (case-insensitive) as they continue typing. Selecting a suggestion
- * replaces the `@partial` in the textarea with `@DisplayName ` (trailing space
- * so they can keep typing).
+ * replaces the `@partial` in the textarea with `@DisplayName`, followed by a
+ * space so they can keep typing — added only when the text after the caret does
+ * not already begin with one, so a mid-text pick does not double it.
  *
  * The popup is anchored below the textarea — simple v1, no per-caret positioning.
  * Keyboard: arrow-up / arrow-down navigate, Enter / Tab select, Escape dismiss.
@@ -168,8 +169,20 @@ export function MentionTextarea({
     //
     // The trailing space is deliberately NOT part of `mentionText`: it is a
     // typing affordance for the composer, not part of what anything matches on.
-    // It is also conditional — picking mid-text, where `after` already starts
-    // with a space, would otherwise leave a visible double space behind.
+    // It is also conditional, but only on the `after` side: picking mid-text
+    // where `after` already starts with a space would otherwise leave a visible
+    // double space behind.
+    //
+    // Bounded claim, because there are two other sources of an ugly gap and
+    // neither is handled here:
+    //   - `inserted` itself ending in a space, when `displayName` is padded. That
+    //     is the `"agreed @Padded Name  "` value pinned in
+    //     `tests/components/comment-node.mentions.test.tsx`, and it goes away with
+    //     the deferred `mentionText` trim rather than with a wider condition here.
+    //   - `after` starting with punctuation (`"hey @Ali, thanks"`), which still
+    //     yields `"@Alice Nguyen , thanks"`. Gating on a punctuation class would
+    //     fix it, but that is a typography decision rather than a defect fix, so
+    //     it is left alone deliberately.
     const inserted = mentionText(signer.displayName);
     const sep = after.startsWith(" ") ? "" : " ";
     const newValue = `${before}${inserted}${sep}${after}`;
