@@ -118,6 +118,7 @@ export default async function AccountPage({
         initialDisplayName={signer.displayName}
         initialAffiliation={signer.affiliation}
         initialLocationText={signer.locationText}
+        initialWhyISigned={signer.whyISigned}
         verificationMethod={signer.verificationMethod}
         signatures={sigs.map((s: { version: string; signedAt: Date }) => ({
           version: s.version,

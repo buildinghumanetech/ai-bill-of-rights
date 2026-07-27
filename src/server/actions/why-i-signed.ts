@@ -2,10 +2,8 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import {
-  exceedsWhyISignedCap,
-  updateWhyISignedForClerkUser,
-} from "@/lib/why-i-signed";
+import { exceedsWhyISignedCap } from "@/lib/why-i-signed";
+import { saveWhyISignedForClerkUser } from "@/lib/why-i-signed.server";
 
 // Lazily resolve the production db so importing this module in tests does not
 // trip the DATABASE_URL guard in src/lib/db/index.ts at module-eval time.
@@ -36,7 +34,9 @@ export interface SaveWhyISignedResult {
  * Length and sanitising are enforced here rather than trusting the modal's
  * counter, because this text renders into a public OG image and a public page.
  *
- * Passing an empty string clears the statement.
+ * Passing an empty string clears the statement — that is the "remove" path the
+ * account page uses, so a signer who regrets their words can take them down
+ * without needing anyone's help.
  */
 export async function saveWhyISigned(
   raw: string,
@@ -47,12 +47,11 @@ export async function saveWhyISigned(
   const truncated = exceedsWhyISignedCap(raw);
 
   try {
-    const updated = await updateWhyISignedForClerkUser(getDb(), userId, raw);
-    if (!updated) {
-      return { success: false, error: "No signature on this account." };
-    }
-    revalidatePath(`/signatories/${updated.signerId}`);
-    return { success: true, whyISigned: updated.whyISigned, truncated };
+    const outcome = await saveWhyISignedForClerkUser(getDb(), userId, raw);
+    if (!outcome.ok) return { success: false, error: outcome.error };
+    revalidatePath(`/signatories/${outcome.signerId}`);
+    revalidatePath("/account");
+    return { success: true, whyISigned: outcome.whyISigned, truncated };
   } catch (err) {
     console.error("[why-i-signed] save failed:", err);
     return { success: false, error: "Couldn't save that. Please try again." };

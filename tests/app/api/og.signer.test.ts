@@ -3,10 +3,18 @@
  * absent, tiny, and pinned at the 200-character cap. ImageResponse has no
  * text-overflow safety net, so the sizing in the route is deliberate — these
  * tests are the regression guard that it still produces a real PNG.
+ *
+ * NOTE ON WHAT THESE TESTS CAN AND CANNOT CATCH: satori emits a 1200x630
+ * canvas for ANY input, so `pngDimensions(...) === 1200x630` is a smoke test
+ * that the route renders at all — it is content-independent and would hold
+ * with the sanitiser deleted. The clamping itself is asserted on the string
+ * handed to the renderer, in tests/lib/og.signer-quote.test.ts. Do not add a
+ * clamping assertion here in terms of the PNG; it cannot fail.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
+import { signerCardQuote } from "@/lib/og/signer-quote";
 
 vi.mock("@/lib/db/queries", () => ({
   getSignerById: vi.fn(),
@@ -86,17 +94,18 @@ describe("GET /api/og/signer/[id]", () => {
     expect(pngDimensions(bytes)).toEqual({ width: 1200, height: 630 });
   });
 
-  it("clamps an over-long statement rather than rendering it whole", async () => {
+  it("hands the renderer a clamped quote for an over-long legacy row", async () => {
     // A row written before the cap existed must not be able to blow the
-    // layout: the route re-normalises on the way out.
-    mockSigner("x".repeat(1000));
+    // layout: the route re-normalises on the way out. Asserting on the STRING
+    // the route computes — not on the PNG — is what makes this able to fail.
+    const raw = "x".repeat(1000);
+    mockSigner(raw);
     const res = await render();
-
     expect(res.status).toBe(200);
-    expect(pngDimensions(new Uint8Array(await res.arrayBuffer()))).toEqual({
-      width: 1200,
-      height: 630,
-    });
+
+    const { text, fontSize } = signerCardQuote(raw);
+    expect(text).toHaveLength(MAX_WHY_I_SIGNED_LENGTH);
+    expect(fontSize).toBe(20);
   });
 
   it("404s for an unknown signer", async () => {
