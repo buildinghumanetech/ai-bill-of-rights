@@ -172,7 +172,7 @@ async function seedProposal(proposerSignerId: string, extra: Record<string, unkn
 
 /** Import fresh against this test's database. */
 async function importDeleteSigner() {
-  const { deleteSigner } = await import("@/server/actions/revoke");
+  const { deleteSigner } = await import("@/server/signers/delete");
   return deleteSigner;
 }
 

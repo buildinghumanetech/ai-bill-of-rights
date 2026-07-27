@@ -11,7 +11,7 @@ import {
 import {
   approveAttestation,
   hideAttestation,
-} from "@/server/actions/attestations";
+} from "@/server/attestations/core";
 import DeleteAttestationButton from "./DeleteAttestationButton";
 
 export const dynamic = "force-dynamic";

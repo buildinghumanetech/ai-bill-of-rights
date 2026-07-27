@@ -7,7 +7,7 @@ import {
   signers,
   versions,
 } from "@/lib/db/schema";
-import { toggleCommentUpvote } from "@/server/actions/upvotes";
+import { toggleCommentUpvote } from "@/server/comments/upvotes";
 
 const md = `---
 version: 1.0.0

@@ -8,8 +8,8 @@ import {
   readChannelCookieValue,
   readRefCookieValue,
 } from "@/lib/referral/cookie";
-import { upsertSignerProfile } from "./profile";
-import { recordSignature } from "./sign";
+import { upsertSignerProfile } from "@/server/profile/upsert";
+import { recordSignature } from "@/server/signatures/record";
 import {
   renderConsentText,
   CURRENT_CONSENT_VERSION,

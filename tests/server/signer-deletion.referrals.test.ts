@@ -144,7 +144,7 @@ async function expectSignerGone(signerId: string) {
 describe("deleting a signer who referred someone", () => {
   it("succeeds via the revoke path (deleteSigner)", async () => {
     const { inviterId, inviteeId } = await seedReferralPair();
-    const { deleteSigner } = await import("@/server/actions/revoke");
+    const { deleteSigner } = await import("@/server/signers/delete");
 
     await expect(deleteSigner(db, inviterId)).resolves.toBeUndefined();
 
@@ -182,7 +182,7 @@ describe("deleting a signer who referred someone", () => {
       seedSigner("user_b", inviterId),
       seedSigner("user_c", inviterId),
     ]);
-    const { deleteSigner } = await import("@/server/actions/revoke");
+    const { deleteSigner } = await import("@/server/signers/delete");
 
     await deleteSigner(db, inviterId);
 
@@ -197,7 +197,7 @@ describe("deleting a signer who referred someone", () => {
     const otherInviterId = await seedSigner("user_other_inviter");
     const inviteeId = await seedSigner("user_invitee", doomedId);
     const untouchedId = await seedSigner("user_untouched", otherInviterId);
-    const { deleteSigner } = await import("@/server/actions/revoke");
+    const { deleteSigner } = await import("@/server/signers/delete");
 
     await deleteSigner(db, doomedId);
 
@@ -212,7 +212,7 @@ describe("deleting a signer who referred someone", () => {
   it("still deletes a signer who was themselves referred", async () => {
     // The other direction: the child row going away must not need the parent.
     const { inviterId, inviteeId } = await seedReferralPair();
-    const { deleteSigner } = await import("@/server/actions/revoke");
+    const { deleteSigner } = await import("@/server/signers/delete");
 
     await deleteSigner(db, inviteeId);
 

@@ -12,7 +12,11 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
-import { deleteSigner } from "@/server/actions/revoke";
+import { deleteSigner } from "@/server/signers/delete";
+import {
+  insertNonSigner,
+  type AdminAddNonSignerResult,
+} from "@/server/admin/non-signers";
 
 let _db: any | null = null;
 function getDb() {
@@ -48,8 +52,8 @@ export async function bootstrapAdminAction(): Promise<void> {
 export async function deleteSignerAction(signerId: string): Promise<void> {
   await requireAdminOrBootstrap();
   const db = getDb();
-  // Delegate to the one cascade in revoke.ts. This action used to carry its
-  // own partial copy (reports, comment_upvotes, comments, signatures,
+  // Delegate to the one cascade in @/server/signers/delete. This action used
+  // to carry its own partial copy (reports, comment_upvotes, comments, signatures,
   // consent_records) which drifted out of date as tables were added: the
   // Delete button 500'd with SQLSTATE 23503 on anyone who had endorsed a
   // version, voted on a comment, proposed an edit or uploaded a selfie.
@@ -229,12 +233,6 @@ export interface AdminAddNonSignerInput {
   notificationPreference: "major" | "minor" | "none";
 }
 
-export interface AdminAddNonSignerResult {
-  success: boolean;
-  signerId?: string;
-  error?: string;
-}
-
 /**
  * Admin-only: manually create a signer row WITHOUT a signature. Use when an
  * admin wants to give someone a comment-only account (registered but didn't
@@ -273,66 +271,4 @@ export async function adminAddNonSignerAction(
   }
 
   return result;
-}
-
-/**
- * Pure data-layer function for creating a non-signer account. Exported so
- * tests can call it directly without mocking Clerk auth.
- */
-export async function insertNonSigner(
-  db: any,
-  input: {
-    displayName: string;
-    affiliation: string;
-    locationText: string;
-    verificationMethod: "email" | "sms";
-    contactValue?: string;
-    isAdmin: boolean;
-    notificationPreference: "major" | "minor" | "none";
-    adminSignerId: string | null;
-  },
-): Promise<AdminAddNonSignerResult> {
-  const displayName = input.displayName.trim();
-  if (!displayName) {
-    return { success: false, error: "Display name is required." };
-  }
-
-  const syntheticClerkId = `admin-added-non-signer-${randomUUID()}`;
-  const contactValue = (input.contactValue ?? "").trim();
-  const capturedFields = {
-    source: "admin_added_non_signer" as const,
-    admin_signer_id: input.adminSignerId,
-    added_at_utc: new Date().toISOString(),
-    contact_method: input.verificationMethod,
-    contact_value: contactValue || null,
-  };
-
-  const [signer] = await db
-    .insert(signers)
-    .values({
-      clerkUserId: syntheticClerkId,
-      displayName,
-      affiliation: input.affiliation.trim() || null,
-      locationText: input.locationText.trim() || null,
-      verificationMethod: input.verificationMethod,
-      isAdmin: input.isAdmin,
-      notificationPreference: input.notificationPreference,
-      verifiedAt: new Date(),
-    })
-    .returning({ id: signers.id });
-
-  // Build consent text hash (small, deterministic). No version part since
-  // there is no signature to associate with a version.
-  const consentText = `admin-added-non-signer|${displayName}|${input.verificationMethod}`;
-  const consentTextHash = sha256Hex(consentText);
-
-  await db
-    .insert(consentRecords)
-    .values({
-      signerId: signer.id,
-      consentTextHash,
-      capturedFields,
-    });
-
-  return { success: true, signerId: signer.id };
 }

@@ -1,14 +1,8 @@
 "use server";
 
 import { and, desc, eq, isNull } from "drizzle-orm";
-import {
-  attestations,
-  consentRecords,
-  signers,
-  versions,
-} from "@/lib/db/schema";
-import { needsManualReview } from "@/lib/attestations/allowlist";
-import { generateVerificationToken } from "@/lib/attestations/token";
+import { consentRecords, signers } from "@/lib/db/schema";
+import { createAttestation } from "@/server/attestations/core";
 
 let _db: any | null = null;
 function getDb() {
@@ -16,111 +10,19 @@ function getDb() {
   return _db;
 }
 
-export interface CreateAttestationInput {
-  orgName: string;
-  productName: string;
-  productUrl: string | null;
-  versionString: string;
-  contactEmail: string;
-}
-
-export async function createAttestation(
-  dbClient: any = null,
-  input: CreateAttestationInput,
-): Promise<{
-  id: string;
-  verificationToken: string;
-  needsManualReview: boolean;
-}> {
-  const db = dbClient ?? getDb();
-  const v = await db
-    .select()
-    .from(versions)
-    .where(eq(versions.version, input.versionString))
-    .limit(1);
-  if (v.length === 0) {
-    throw new Error(`Unknown version: ${input.versionString}`);
-  }
-  const verificationToken = generateVerificationToken();
-  const flagged = needsManualReview(input.orgName);
-  const [row] = await db
-    .insert(attestations)
-    .values({
-      orgName: input.orgName,
-      productName: input.productName,
-      productUrl: input.productUrl,
-      versionId: v[0].id,
-      contactEmail: input.contactEmail,
-      verificationToken,
-      needsManualReview: flagged,
-    })
-    .returning({ id: attestations.id });
-  return {
-    id: row.id,
-    verificationToken,
-    needsManualReview: flagged,
-  };
-}
-
-export async function verifyAttestationToken(
-  dbClient: any = null,
-  token: string,
-): Promise<{ id: string; published: boolean; needsManualReview: boolean }> {
-  const db = dbClient ?? getDb();
-  const rows = await db
-    .select()
-    .from(attestations)
-    .where(eq(attestations.verificationToken, token))
-    .limit(1);
-  if (rows.length === 0) {
-    throw new Error("Unknown verification token");
-  }
-  const row = rows[0];
-  const shouldPublish = !row.needsManualReview;
-  await db
-    .update(attestations)
-    .set({
-      emailVerifiedAt: new Date(),
-      published: shouldPublish,
-    })
-    .where(eq(attestations.id, row.id));
-  return {
-    id: row.id,
-    published: shouldPublish,
-    needsManualReview: row.needsManualReview,
-  };
-}
-
-export async function approveAttestation(
-  dbClient: any = null,
-  attestationId: string,
-): Promise<void> {
-  const db = dbClient ?? getDb();
-  await db
-    .update(attestations)
-    .set({
-      manuallyReviewedAt: new Date(),
-      manuallyApproved: true,
-      published: true,
-    })
-    .where(eq(attestations.id, attestationId));
-}
-
-export async function hideAttestation(
-  dbClient: any = null,
-  attestationId: string,
-  _reason: string,
-): Promise<void> {
-  const db = dbClient ?? getDb();
-  await db
-    .update(attestations)
-    .set({
-      hiddenAt: new Date(),
-      manuallyApproved: false,
-    })
-    .where(eq(attestations.id, attestationId));
-}
-
+/**
+ * PUBLIC BY DESIGN — this is the "we comply" form on /attestations, open to
+ * anyone, and there is no account to sign in to. The claim is not published on
+ * submission: `createAttestation` mints an unguessable token, the token goes
+ * out by email, and only clicking that link publishes anything. The token is
+ * the credential.
+ *
+ * Everything else that used to live in this file — including the moderator
+ * approve/hide decisions, which had no auth check at all — now lives in
+ * `@/server/attestations/core`, a plain module, so that the only thing a
+ * browser can POST to here is this one deliberately-open form handler.
+ * See the guard test in tests/server/actions.guarded.test.ts.
+ */
 export async function submitAttestationAction(formData: FormData): Promise<{
   ok: true;
   id: string;

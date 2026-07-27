@@ -1,4 +1,4 @@
-import { verifyAttestationToken } from "@/server/actions/attestations";
+import { verifyAttestationToken } from "@/server/attestations/core";
 
 export const dynamic = "force-dynamic";
 

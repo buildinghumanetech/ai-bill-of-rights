@@ -1,9 +1,13 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
-import { commentReports, signers } from "@/lib/db/schema";
+import { signers } from "@/lib/db/schema";
+import {
+  reportComment,
+  toggleReportComment,
+} from "@/server/comments/reports";
 
 let _db: any | null = null;
 function getDb() {
@@ -11,63 +15,11 @@ function getDb() {
   return _db;
 }
 
-/** Pure data-layer insert, exposed for tests. Idempotent via unique constraint. */
-export async function reportComment(
-  db: any,
-  input: { signerId: string; commentId: string },
-): Promise<{ state: "reported" | "already_reported" }> {
-  try {
-    await db.insert(commentReports).values({
-      commentId: input.commentId,
-      reporterSignerId: input.signerId,
-    });
-    return { state: "reported" };
-  } catch (err: any) {
-    if (String(err?.message ?? "").includes("comment_reports_comment_reporter_unique")) {
-      return { state: "already_reported" };
-    }
-    throw err;
-  }
-}
-
 /**
- * Toggle report for a comment: insert if not present, delete if already present.
- * Returns the resulting flag state.
+ * The report writes live in `@/server/comments/reports`, a plain module,
+ * because everything exported from this file is a POST-reachable Server
+ * Function and both take the reporting signer id as an argument.
  */
-export async function toggleReportComment(
-  db: any,
-  input: { signerId: string; commentId: string },
-): Promise<{ state: "flagged" | "unflagged" }> {
-  const existing = await db
-    .select({ id: commentReports.id })
-    .from(commentReports)
-    .where(
-      and(
-        eq(commentReports.commentId, input.commentId),
-        eq(commentReports.reporterSignerId, input.signerId),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .delete(commentReports)
-      .where(
-        and(
-          eq(commentReports.commentId, input.commentId),
-          eq(commentReports.reporterSignerId, input.signerId),
-        ),
-      );
-    return { state: "unflagged" };
-  }
-
-  await db.insert(commentReports).values({
-    commentId: input.commentId,
-    reporterSignerId: input.signerId,
-  });
-  return { state: "flagged" };
-}
-
 /** Legacy — kept for backward compat with admin code. */
 export async function reportCommentAction(commentId: string): Promise<{
   ok: boolean;

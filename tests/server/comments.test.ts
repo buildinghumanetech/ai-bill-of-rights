@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { comments, signers, versions, commentMentions } from "@/lib/db/schema";
-import { createComment, editComment, deleteComment } from "@/server/actions/comments";
+import { createComment, editComment, deleteComment } from "@/server/comments/core";
 import { parseMentions } from "@/lib/comments/mentions";
 import { eq } from "drizzle-orm";
 

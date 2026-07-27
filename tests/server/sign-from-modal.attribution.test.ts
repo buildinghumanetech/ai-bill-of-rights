@@ -76,12 +76,12 @@ const upsertSignerProfile = vi.fn(
     };
   },
 );
-vi.mock("@/server/actions/profile", () => ({
+vi.mock("@/server/profile/upsert", () => ({
   upsertSignerProfile: (...args: unknown[]) =>
     (upsertSignerProfile as unknown as (...a: unknown[]) => unknown)(...args),
 }));
 
-vi.mock("@/server/actions/sign", () => ({
+vi.mock("@/server/signatures/record", () => ({
   recordSignature: async () => ({ signatureId: "sig_1" }),
 }));
 

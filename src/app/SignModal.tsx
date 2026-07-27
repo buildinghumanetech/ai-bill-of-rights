@@ -797,11 +797,43 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
             {confirmingRemove ? (
               <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5">
+                {/*
+                  This button does NOT just remove a signature — it runs the
+                  full account cascade in src/server/signers/delete.ts. The
+                  copy has to name everything that cascade destroys, or people
+                  are consenting to something the dialog never described.
+                  If you widen the cascade, widen this list in the same commit.
+                */}
                 <p className="text-sm font-semibold text-red-900">
-                  Remove your signature from the AI Bill of Rights?
+                  Delete your account and everything in it?
                 </p>
                 <p className="mt-1 text-sm text-red-800">
-                  This deletes your signer record and is irreversible.
+                  This is irreversible. It permanently deletes:
+                </p>
+                <ul className="mt-2 list-disc pl-5 text-sm text-red-800">
+                  <li>
+                    Your signature, and your name, location and affiliation
+                    from the public signers list
+                  </li>
+                  <li>Your profile photo, including all backup copies</li>
+                  <li>
+                    Every comment you&apos;ve written, and every proposed edit
+                    you&apos;ve made
+                  </li>
+                  <li>
+                    Your votes, upvotes and endorsements, and your
+                    &ldquo;why I signed&rdquo; statement
+                  </li>
+                  <li>
+                    <strong className="font-semibold">
+                      Other people&apos;s comments on your proposals
+                    </strong>{" "}
+                    — their replies to your proposed edits go with the proposal
+                  </li>
+                </ul>
+                <p className="mt-2 text-sm text-red-800">
+                  Replies other people wrote to your comments are kept. Your
+                  email or phone is freed up, so you can sign again later.
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
@@ -810,7 +842,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     disabled={removing}
                     className="flex-1 rounded-full bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {removing ? "Removing…" : "Yes, remove"}
+                    {removing ? "Deleting…" : "Yes, delete everything"}
                   </button>
                   <button
                     type="button"
@@ -832,7 +864,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                   }}
                   className="w-full rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100"
                 >
-                  Remove my signature
+                  Delete my account
                 </button>
                 <button
                   type="button"
