@@ -216,6 +216,12 @@ describe("MentionTextarea write-time resolution", () => {
       // One space after the mention, not two: `after` already began with one, so
       // `selectSuggestion` adds none. Picking at the end of the text is the other
       // case, covered by the tests above.
+      //
+      // NOT covered, and deliberately so: `after` beginning with punctuation.
+      // "hey @Ali, thanks" still becomes "@Alice Nguyen , thanks", because the
+      // condition is a bare leading space rather than a punctuation class.
+      // Choosing that class is typography, not a defect fix — see the comment in
+      // `selectSuggestion`.
       expect(ta.value).toBe("hey @Alice Nguyen and more");
       // Just past the mention and the space that follows it — where the author's
       // next keystroke goes, which is well short of `value.length`.
