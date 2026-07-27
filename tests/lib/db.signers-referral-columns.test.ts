@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
 import { signers } from "@/lib/db/schema";
 
 /**
  * Pins the DB-level behaviour of the two columns added for the growth work.
  *
- * The test DDL in `tests/_helpers/pglite-db.ts` is hand-mirrored from
- * `schema.ts`, so nothing catches a *mismatch* between them unless something
- * actually exercises the columns. These tests are that something — in
- * particular they pin the self-FK on `referred_by_signer_id`, which is the
- * guard that stops a stale `?ref=` in a visitor's cookie from being written
- * as a dangling reference.
+ * `createTestDb()` builds its database from `src/lib/db/schema.ts` — the same
+ * file `drizzle-kit push` applies to Neon — so everything asserted here is
+ * asserted against what actually ships. In particular the self-FK on
+ * `referred_by_signer_id` is pinned twice over: once for the rejection that
+ * stops a stale `?ref=` in a visitor's cookie becoming a dangling reference,
+ * and once for the `ON DELETE SET NULL` that keeps account deletion working
+ * for people who referred someone.
  */
 
 async function insertSigner(
@@ -117,5 +118,56 @@ describe("signers.referredBySignerId", () => {
       .from(signers)
       .where(eq(signers.referredBySignerId, inviter.id));
     expect(referred).toHaveLength(2);
+  });
+});
+
+describe("signers.referred_by_signer_id foreign key", () => {
+  /**
+   * `ON DELETE SET NULL` here is load-bearing: without it Postgres refuses
+   * (SQLSTATE 23503) to delete any signer who ever referred someone, and all
+   * three deletion paths — self-service, revoke, admin delete — break for
+   * exactly the people who successfully shared the site.
+   *
+   * Asserted against the live catalog rather than drizzle's in-memory table
+   * metadata, because the catalog is what the database will actually obey.
+   */
+  it("is SET NULL on delete, and points at signers.id", async () => {
+    const db = await createTestDb();
+    const result = await db.execute(sql`
+      select
+        con.conname,
+        con.confdeltype,
+        tgt.relname as target_table,
+        att.attname  as target_column
+      from pg_constraint con
+      join pg_class rel on rel.oid = con.conrelid
+      join pg_namespace nsp on nsp.oid = rel.relnamespace
+      join pg_class tgt on tgt.oid = con.confrelid
+      join pg_attribute att
+        on att.attrelid = con.confrelid and att.attnum = con.confkey[1]
+      where con.contype = 'f'
+        and nsp.nspname = 'public'
+        and rel.relname = 'signers'
+        and con.conkey = array[(
+          select attnum from pg_attribute
+          where attrelid = rel.oid and attname = 'referred_by_signer_id'
+        )]::smallint[]
+    `);
+    const rows = result.rows as Array<{
+      confdeltype: string;
+      target_table: string;
+      target_column: string;
+    }>;
+
+    // Exactly one: two FKs on the column would mean a migration left a stale
+    // constraint behind, and "the first one we happened to find is correct"
+    // is not a guarantee worth having.
+    expect(rows).toHaveLength(1);
+    // 'n' = SET NULL. 'a' (NO ACTION, drizzle's default) is precisely the bug.
+    expect(rows[0].confdeltype).toBe("n");
+    // A regression that repointed the column at some other table would keep
+    // SET NULL and still be catastrophically wrong.
+    expect(rows[0].target_table).toBe("signers");
+    expect(rows[0].target_column).toBe("id");
   });
 });
