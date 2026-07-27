@@ -13,14 +13,31 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
 
 // File-wide, despite reading like it belongs to the /signatories/[id] block:
 // vi.mock is hoisted to the top of the module regardless of where it is
-// written, so nesting it inside a describe would only look scoped. The factory
-// spreads the real module so the other routes' tests, and any future case that
-// reaches a different query, keep working.
+// written, so nesting it inside a describe would only look scoped.
+//
+// The factory covers every export rather than the one or two this file uses,
+// but deliberately does NOT pass the rest through to the real implementations.
+// `queries.ts` resolves its db lazily, so a real export would not fail at
+// import — it would fail at call time with "DATABASE_URL is not set", or worse,
+// succeed against whatever Neon database the developer's .env points at.
+// Metadata tests must never touch a network, so un-stubbed queries throw a
+// message that names the missing stub instead.
 const getSignerById = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/db/queries", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/db/queries")>()),
-  getSignerById,
-}));
+vi.mock("@/lib/db/queries", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/queries")>();
+  return Object.fromEntries(
+    Object.keys(actual).map((name) => [
+      name,
+      name === "getSignerById"
+        ? getSignerById
+        : () => {
+            throw new Error(
+              `${name}() is not stubbed in route-metadata.test.ts — add a stub; these tests must not reach the database.`,
+            );
+          },
+    ]),
+  );
+});
 
 type Og = {
   title?: string;

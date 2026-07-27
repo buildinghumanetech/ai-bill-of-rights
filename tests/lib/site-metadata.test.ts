@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PRODUCTION_ORIGIN,
   SITE_DESCRIPTION,
@@ -216,6 +216,31 @@ describe("buildPageMetadata", () => {
     // containing "(", ".", or "?" would make an unescaped pattern throw or
     // match the wrong thing exactly when a rename happens.
     expect(String(meta.title).split(SITE_NAME).length - 1).toBe(1);
+  });
+
+  it("warns when the opt-out is used on a title that does not name the site", () => {
+    // The route-level test only covers routes someone remembered to add to it;
+    // the invariant belongs to the helper, so it is enforced here too.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      buildPageMetadata({
+        title: "Draft archived",
+        description: "D",
+        appendSiteName: false,
+      });
+      expect(warn).toHaveBeenCalledOnce();
+      expect(String(warn.mock.calls[0][0])).toContain("Draft archived");
+
+      warn.mockClear();
+      buildPageMetadata({
+        title: `Ada signed ${SITE_NAME}`,
+        description: "D",
+        appendSiteName: false,
+      });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("upgrades to a large image card only when an image is supplied", () => {

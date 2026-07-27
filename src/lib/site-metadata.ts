@@ -6,9 +6,12 @@ import type { Metadata } from "next";
  *
  * The name alone ("The AI Bill of Rights") reads as *rights belonging to AI*
  * until you reach the articles, so the tagline has to travel with it wherever
- * the *site* title stands alone with no surrounding context: the homepage tab,
- * its search result, its link-preview card. That is what `SITE_TITLE` is for —
- * keep the two attached there.
+ * the *site* title stands alone with no surrounding context — the tab, the
+ * search result, the link-preview card. That is what `SITE_TITLE` is for; keep
+ * the two attached there. Note this is not only the homepage: every route that
+ * has not yet defined its own metadata inherits the root's and renders
+ * `SITE_TITLE` too (`/signers`, `/why`, `/proposed`, `/attestations`,
+ * `/sign/*`, `/v/[version]` as of this writing).
  *
  * Subpage titles are the other case and deliberately do not carry the tagline:
  * "About — The AI Bill of Rights — A People's Demand for Human-Centered AI"
@@ -136,6 +139,15 @@ export function buildPageMetadata({
   imageUrl?: string;
   appendSiteName?: boolean;
 }): Metadata {
+  if (!appendSiteName && !pageTitle.includes(SITE_NAME)) {
+    // The opt-out exists for titles that already name the site in prose. Used
+    // on a bare title it ships a card naming neither the site nor the tagline
+    // — the exact failure this module exists to prevent. Enforced here rather
+    // than only in tests, which cover just the routes someone remembered to add.
+    console.warn(
+      `[site-metadata] appendSiteName:false on ${JSON.stringify(pageTitle)}, which does not contain ${JSON.stringify(SITE_NAME)}. Use the opt-out only for titles that already name the site.`,
+    );
+  }
   const title = appendSiteName ? `${pageTitle} — ${SITE_NAME}` : pageTitle;
   const images = imageUrl
     ? [{ url: imageUrl, width: 1200, height: 630 }]
