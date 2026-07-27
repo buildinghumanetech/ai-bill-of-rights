@@ -4,46 +4,61 @@ import { gist } from "@/components/CommitmentsSummary";
 
 /**
  * `gist()` is what `<CommitmentsSummary>` puts under each of the nine titles on
- * the signer landing page. The page test only asserts that the article *titles*
- * render, so without this file `gist()` could return "" — or the entire
- * paragraph — for every article and the suite would stay green.
+ * the signer landing page. This file covers the function; that it actually
+ * reaches the rendered HTML is pinned in `signatories.signer-page.test.tsx`
+ * ("renders each commitment's gist, not its whole body"). Both halves are
+ * needed — the function can be right and unwired, or wired and wrong.
  */
 
-/** The exact line each article must condense to. Pinned, not derived. */
-const EXPECTED: Record<string, string> = {
+/**
+ * Two canaries, pinned by hand — not all nine. Article 01 is several
+ * sentences (the split has to happen); article 05 is one long em-dashed
+ * sentence (it must not). Pinning the other seven only meant that a copy edit
+ * to a living document failed a `gist` test with no opinion about the copy,
+ * and the fix was a mechanical re-paste. Every article — including a tenth —
+ * is still covered by the derived assertions below.
+ */
+const PINNED: Record<string, string> = {
   "01":
     "No AI company may use your conversations, your images, or your behavioral data to train their models without your explicit, informed, revocable consent.",
-  "02":
-    "Everything an AI system learns about you must be exportable by you, in a readable format, at any time.",
-  "03": "No AI system may pretend to be human when you sincerely ask.",
-  "04":
-    "AI systems must not use psychological techniques — urgency, social pressure, manufactured intimacy, dependency loops, or persuasive dark patterns — to get you to buy, believe, or stay.",
   "05":
     "When an AI system makes a consequential decision about you — your loan, your medical care, your content visibility, your job application — you have the right to know why, in plain language, and how to appeal it.",
-  "06":
-    "In any situation involving significant consequence — health, legal, financial, crisis — you have the right to reach a human being.",
-  "07": "AI systems interacting with minors must meet a higher standard of care.",
-  "08":
-    "Frontier AI companies must publish independent, third-party assessments of their systems' impacts on user wellbeing — not self-reported metrics, not cherry-picked studies.",
-  "09":
-    "AI systems must be designed to serve what you actually came to do — not to extend your session, maximize your engagement, or redirect your focus toward the platform's interests.",
 };
 
 describe("gist", () => {
-  it("covers every article that ships, so a tenth cannot slip past untested", () => {
-    expect(articles.map((a) => a.number)).toEqual(Object.keys(EXPECTED));
+  it("pins canaries that are still articles that ship", () => {
+    const numbers = articles.map((a) => a.number);
+    for (const number of Object.keys(PINNED)) {
+      expect(numbers).toContain(number);
+    }
   });
 
   for (const article of articles) {
     describe(`article ${article.number} — ${article.title}`, () => {
-      it("condenses to its first sentence", () => {
-        expect(gist(article.body)).toBe(EXPECTED[article.number]);
-      });
+      const pinned = PINNED[article.number];
+      if (pinned) {
+        it("condenses to its pinned first sentence", () => {
+          expect(gist(article.body)).toBe(pinned);
+        });
+      }
 
       it("is a non-empty prefix of the body", () => {
         const line = gist(article.body);
         expect(line.length).toBeGreaterThan(0);
         expect(article.body.startsWith(line)).toBe(true);
+      });
+
+      it("drops the rest of a multi-sentence body and keeps a lone sentence whole", () => {
+        const body = article.body.trim();
+        // Deliberately not `splitSentences` — asking the splitter whether the
+        // body splits, then asserting that it split, would be circular. A
+        // sentence mark before the final character is an independent tell.
+        const hasInternalBreak = /[.!?]\s/.test(body.slice(0, -1));
+        if (hasInternalBreak) {
+          expect(gist(article.body).length).toBeLessThan(body.length);
+        } else {
+          expect(gist(article.body)).toBe(body);
+        }
       });
     });
   }

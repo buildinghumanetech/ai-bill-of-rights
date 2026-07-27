@@ -32,7 +32,13 @@ import { auth } from "@clerk/nextjs/server";
 import { getSignerById, listSignaturesForSigner } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { articles } from "@/app/HomepageArticles";
+import { gist } from "@/components/CommitmentsSummary";
 import SignerProfile from "@/app/signatories/[id]/page";
+
+/** React escapes apostrophes in text nodes; article copy is full of them. */
+function asHtml(text: string): string {
+  return text.replace(/'/g, "&#x27;");
+}
 
 const SIGNER_ID = "11111111-2222-4333-8444-555555555555";
 const OWNER_CLERK_ID = "user_owner";
@@ -131,8 +137,25 @@ describe("signer page as a landing page for a stranger", () => {
     expect(html).toContain("Add your name");
     expect(html).toContain("What they signed");
     for (const article of articles) {
-      expect(html).toContain(article.title.replace(/'/g, "&#x27;"));
+      expect(html).toContain(asHtml(article.title));
     }
+  });
+
+  // The titles alone do not prove the summary renders anything *under* them:
+  // deleting the `<p>{gist(article.body)}</p>` line, or swapping it for the
+  // whole `article.body`, leaves every other assertion in this file green.
+  // These two pin both halves — the gist reaches the HTML, and it is the
+  // condensed form rather than the full paragraph.
+  it("renders each commitment's gist, not its whole body, under the title", async () => {
+    mockSigner();
+    viewerIs(null);
+    const html = await renderPage();
+    for (const article of articles) {
+      expect(html).toContain(asHtml(gist(article.body)));
+    }
+    // Article 01's second sentence — present in the body, absent from the gist.
+    expect(articles[0].body).toContain("Opt-out is not consent.");
+    expect(html).not.toContain("Opt-out is not consent.");
   });
 
   it("puts the sign CTA above the signature record for a non-owner", async () => {
@@ -152,12 +175,15 @@ describe("signer page as a landing page for a stranger", () => {
   // second CTA existing at all. These assertions pin the button that sits
   // *below* the commitments list — the one there to catch a reader who has
   // just finished the nine articles — so deleting it turns the suite red.
+  // Counting `>Add your name</` matches the button's whole text node only:
+  // the heading renders as `Add your name to the <a`, so rewording that
+  // heading (copy this test has no opinion about) cannot fail this test.
   it("repeats the sign CTA below the commitments list for a non-owner", async () => {
     mockSigner();
     viewerIs(null);
     const html = await renderPage();
-    const occurrences = html.split("Add your name").length - 1;
-    expect(occurrences).toBe(2);
+    const occurrences = html.split(">Add your name</").length - 1;
+    expect(occurrences).toBe(1);
     const commitmentsAt = html.indexOf("What they signed");
     expect(commitmentsAt).toBeGreaterThan(-1);
     // The last occurrence is the standalone button, after the nine articles.
@@ -204,6 +230,15 @@ describe("signer page as a landing page for a stranger", () => {
     // The quote is still rendered in full — the clamp is visual, not a server
     // side truncation, so the text stays available to crawlers and a11y tools.
     expect(html).toContain(longest);
+    // ...and nothing inside the clamp can be left dangling by it. A closing
+    // curly quote is the first character `line-clamp` eats, so an opening one
+    // inside the clamped element renders as `“…` with no partner on exactly
+    // the phone widths the clamp was added for. Balanced counts hold whether
+    // the marks are dropped (they are, today) or moved outside the clamp.
+    const quote = html.slice(quoteAt, html.indexOf("</blockquote>", quoteAt));
+    const opens = (quote.match(/“|&ldquo;/g) ?? []).length;
+    const closes = (quote.match(/”|&rdquo;/g) ?? []).length;
+    expect(opens).toBe(closes);
   });
 
   it("renders cleanly when why-I-signed is null", async () => {
