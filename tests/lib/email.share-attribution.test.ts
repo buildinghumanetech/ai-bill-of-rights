@@ -4,12 +4,14 @@ import { REF_PARAM, CHANNEL_PARAM } from "@/lib/share/urls";
 
 /**
  * The confirmation email is the single highest-volume share surface on the
- * site — it goes to 100% of signers. Every link in it that points back at the
- * signer's page must carry `?ref=<signerId>`, or the referral graph records
- * nothing and channel conversion reads as "email barely converts" purely
- * because the links were never tagged.
+ * site — it goes to 100% of signers. Every link in it that a THIRD PARTY will
+ * click must carry `?ref=<signerId>`, or the referral graph records nothing
+ * and channel conversion reads as "email barely converts" purely because the
+ * links were never tagged. Every link the SIGNER clicks must not, or their own
+ * click burns their 30-day first-touch referral slot.
  *
- * These tests pin the tagging itself, not the copy.
+ * These tests pin the tagging itself, not the copy. The `mailto:` encoding
+ * guard lives once, on `shareHrefs`, in tests/lib/share-urls.test.ts.
  */
 
 const SIGNER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
@@ -64,21 +66,46 @@ describe("signConfirmation share attribution", () => {
     expect(body).toContain(`${CHANNEL_PARAM}=email`);
   });
 
-  it("tags the plain-text 'view your signature page' link", () => {
-    // The bare, untagged URL must not appear on its own line — a click from
-    // the email body is a share-surface click and has to be attributable.
+  /**
+   * The distinction the next three tests exist to pin, because it is subtle
+   * and easy to "fix" backwards:
+   *
+   *   share buttons  → go to a THIRD PARTY  → carry `ref` + `via`
+   *   "view mine"    → clicked by the SIGNER → carry `via` ONLY
+   *
+   * A `ref` on a self-directed link is not bad data (the database rejects
+   * self-referral) — it is a swallowed referral. The proxy stamps a
+   * first-touch cookie that lives 30 days, so the signer's own click would
+   * occupy the slot a genuine later referral needed.
+   */
+  it("channels the plain-text 'view your signature page' link but never self-refs it", () => {
     const line = /View your public signature page: (\S+)/.exec(tpl.text)![1];
-    expect(line).toContain(`${REF_PARAM}=${SIGNER_ID}`);
     expect(line).toContain(`${CHANNEL_PARAM}=confirmation-email`);
+    expect(line).not.toContain(`${REF_PARAM}=`);
   });
 
-  it("tags the 'View My Signature' HTML CTA", () => {
+  it("channels the 'View My Signature' HTML CTA but never self-refs it", () => {
     const cta = hrefs(tpl.html)
       .map(unesc)
       .find((h) => h.startsWith(SIGNER_PAGE));
     expect(cta).toBeDefined();
-    expect(cta).toContain(`${REF_PARAM}=${SIGNER_ID}`);
     expect(cta).toContain(`${CHANNEL_PARAM}=confirmation-email`);
+    expect(cta).not.toContain(`${REF_PARAM}=`);
+  });
+
+  it("still refs the three share buttons — those really do go to someone else", () => {
+    // The mirror image of the two tests above. Stripping `ref` from the
+    // self-directed links must not be over-applied to the share buttons,
+    // which is the whole viral loop.
+    for (const [pattern, channel] of [
+      [/twitter\.com\/intent\/tweet\?text=[^&\s]*&url=([^\s"]+)/, "x"],
+      [/linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/, "linkedin"],
+      [/mailto:\?subject=[^&\s]*&body=([^\s"]+)/, "email"],
+    ] as const) {
+      const target = decodeURIComponent(pattern.exec(tpl.text)![1]);
+      expect(target).toContain(`${REF_PARAM}=${SIGNER_ID}`);
+      expect(target).toContain(`${CHANNEL_PARAM}=${channel}`);
+    }
   });
 
   it("leaves no untagged bare signer-page URL anywhere in the email", () => {
@@ -89,14 +116,6 @@ describe("signConfirmation share attribution", () => {
       );
       expect(bare.test(body)).toBe(false);
     }
-  });
-
-  it("mailto body keeps literal spaces percent-encoded, never '+'", () => {
-    // RFC 6068 reads `+` in a mailto as a literal plus, so a form-encoded
-    // body arrives reading "I+just+signed". Regression guard.
-    const raw = /mailto:\?subject=[^&\s]*&body=([^\s"]+)/.exec(tpl.text)![1];
-    expect(raw).not.toContain("+");
-    expect(raw).toContain("%20");
   });
 
   it("degrades to unattributed links when no signerId is supplied", () => {

@@ -4,7 +4,7 @@
  * that makes X, LinkedIn and email invites comparable.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   ANALYTICS_EVENTS,
   setAnalyticsSink,
@@ -76,6 +76,20 @@ describe("funnel helpers", () => {
       referred: true,
       path: "/",
     });
+  });
+
+  it("omits channel on a ref-only landing, exactly as the conversion does", () => {
+    // The two ends of the same funnel. A `?ref=`-only arrival has no channel;
+    // if this event filed it under an "unknown" bucket while
+    // signature_completed stripped it, the landing could never be joined to
+    // the conversion it produced — for precisely the links this measurement
+    // exists to compare.
+    const events = capture();
+    trackShareLinkLanded({ referred: true, path: "/" });
+    trackSignatureCompleted({ method: "email", referred: true });
+    expect(events[0][1]).toEqual({ referred: true, path: "/" });
+    expect(events[0][1]).not.toHaveProperty("channel");
+    expect(events[1][1]).not.toHaveProperty("channel");
   });
 
   it("never lets a broken sink escape into the caller", () => {

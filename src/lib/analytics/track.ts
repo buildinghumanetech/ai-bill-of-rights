@@ -76,14 +76,23 @@ export function track(name: AnalyticsEventName, props?: AnalyticsProps): void {
 
 // ─── Funnel helpers ───────────────────────────────────────────────────────────
 
-/** A visitor arrived on a link carrying attribution params. */
+/**
+ * A visitor arrived on a link carrying attribution params.
+ *
+ * `channel` is absent when the link carried a `?ref=` but no `?via=`, and it
+ * is OMITTED rather than filled with a placeholder — exactly as
+ * `trackSignatureCompleted` treats it. The two events are the two ends of the
+ * same funnel, so they have to bucket "no channel" identically: an arrival
+ * filed under `channel=unknown` that converts into a row with no `channel`
+ * facet at all cannot be joined to its own conversion.
+ */
 export function trackShareLinkLanded(opts: {
   channel?: ShareChannel | string | null;
   referred?: boolean;
   path?: string;
 }): void {
   track(ANALYTICS_EVENTS.shareLinkLanded, {
-    channel: opts.channel ?? "unknown",
+    channel: opts.channel ?? undefined,
     referred: opts.referred ?? false,
     path: opts.path,
   });
@@ -110,7 +119,8 @@ export function trackSignFormSubmitted(
  *
  * `channel` is deliberately optional and nullable: a visitor who typed the URL
  * has no channel, and `clean()` strips it rather than filling the dashboard
- * with an "unknown" bucket that means two different things.
+ * with an "unknown" bucket that means two different things. `trackShareLinkLanded`
+ * does the same, so both ends of the funnel agree on what "no channel" looks like.
  */
 export function trackSignatureCompleted(
   opts: {

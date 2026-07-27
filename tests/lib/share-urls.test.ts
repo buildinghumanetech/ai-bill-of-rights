@@ -7,6 +7,9 @@ import {
   parseChannel,
   isValidRef,
   isShareChannel,
+  shareHrefs,
+  SHARE_EMAIL_SUBJECT,
+  type ShareChannel,
 } from "@/lib/share/urls";
 
 const ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
@@ -212,5 +215,54 @@ describe("parseRef / parseChannel", () => {
     expect(parseRef({ ref: "nope" })).toBeNull();
     expect(parseRef(null)).toBeNull();
     expect(parseChannel({ via: "carrier-pigeon" })).toBeNull();
+  });
+});
+
+/**
+ * `shareHrefs` is the single builder behind the X / LinkedIn / mailto buttons
+ * on BOTH share surfaces — the post-signature modal and the confirmation
+ * email. It used to be two verbatim copies, each with its own copy of the
+ * encoding guard below.
+ */
+describe("shareHrefs", () => {
+  const url = (channel: ShareChannel) =>
+    `https://example.org/s/${ID}?via=${channel}`;
+  const text = (channel: ShareChannel) => `I just signed (${channel})`;
+  const hrefs = shareHrefs({ url, text });
+
+  it("gives each href its own channel-tagged url", () => {
+    expect(
+      decodeURIComponent(/&url=(.+)$/.exec(hrefs.twitterHref)![1]),
+    ).toBe(url("x"));
+    expect(
+      decodeURIComponent(/\?url=(.+)$/.exec(hrefs.linkedinHref)![1]),
+    ).toBe(url("linkedin"));
+    expect(
+      decodeURIComponent(/&body=(.+)$/.exec(hrefs.emailHref)![1]),
+    ).toContain(url("email"));
+  });
+
+  it("puts the channel's own copy in the X text and the mail body", () => {
+    expect(
+      decodeURIComponent(/\?text=([^&]+)/.exec(hrefs.twitterHref)![1]),
+    ).toBe(text("x"));
+    expect(
+      decodeURIComponent(/&body=(.+)$/.exec(hrefs.emailHref)![1]),
+    ).toContain(text("email"));
+  });
+
+  it("uses the one shared mail subject", () => {
+    expect(
+      decodeURIComponent(/\?subject=([^&]+)/.exec(hrefs.emailHref)![1]),
+    ).toBe(SHARE_EMAIL_SUBJECT);
+  });
+
+  it("keeps the mailto body percent-encoded, never form-encoded with '+'", () => {
+    // The one remaining copy of this guard. RFC 6068 reads `+` in a mailto as
+    // a literal plus, so re-serialising the query through URLSearchParams
+    // would make a shared draft arrive reading "I+just+signed".
+    const raw = /&body=(.+)$/.exec(hrefs.emailHref)![1];
+    expect(raw).not.toContain("+");
+    expect(raw).toContain("%20");
   });
 });
