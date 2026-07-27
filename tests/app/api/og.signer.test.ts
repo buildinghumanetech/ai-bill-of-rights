@@ -77,10 +77,21 @@ async function render(): Promise<Response> {
  * Render once with `signerCardQuote` forced to return `quote`, and reduce the
  * PNG to a digest — comparing digests rather than 100KB byte arrays keeps a
  * failure readable while still being a comparison of every pixel.
+ *
+ * The forced answer is a single `mockReturnValueOnce`, so the render has to
+ * consume exactly one: a route that called the helper twice would take the
+ * queued value for the first call and the REAL clamp of the 1000-x row for the
+ * second, and a route that stopped calling it would leave the value queued for
+ * the next render. Either way the digests would then differ for reasons that
+ * have nothing to do with what the card drew, and the caller's assertion would
+ * fail pointing at the renderer. Clearing before and counting after turns that
+ * into a failure on the call count, where the actual fault is.
  */
 async function renderWithQuote(quote: SignerCardQuote): Promise<string> {
+  vi.mocked(signerCardQuote).mockClear();
   vi.mocked(signerCardQuote).mockReturnValueOnce(quote);
   const bytes = new Uint8Array(await (await render()).arrayBuffer());
+  expect(signerCardQuote).toHaveBeenCalledTimes(1);
   return createHash("sha256").update(bytes).digest("hex");
 }
 
