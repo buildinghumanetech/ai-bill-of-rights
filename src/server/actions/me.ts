@@ -2,12 +2,8 @@
 
 import { and, eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
-import {
-  consentRecords,
-  signatures,
-  signers,
-  versions,
-} from "@/lib/db/schema";
+import { signatures, signers, versions } from "@/lib/db/schema";
+import { deleteSigner } from "@/server/actions/revoke";
 
 let _db: any | null = null;
 function getDb() {
@@ -105,9 +101,12 @@ export async function removeMySignature(): Promise<{
   }
   const signerId = signerRows[0].id;
 
-  await db.delete(signatures).where(eq(signatures.signerId, signerId));
-  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
-  await db.delete(signers).where(eq(signers.id, signerId));
+  // Delegate to the one cascade in revoke.ts rather than repeating a subset of
+  // it here. This path used to delete only signatures + consent_records, which
+  // left ~13 other FKs into signers.id intact: anyone who had endorsed a
+  // version, commented, voted, proposed an edit or uploaded a selfie hit
+  // SQLSTATE 23503 on the final DELETE and could not remove their own account.
+  await deleteSigner(db, signerId);
 
   return { success: true };
 }
