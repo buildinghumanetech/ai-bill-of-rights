@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   attestations,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
+import { deleteSigner } from "@/server/actions/revoke";
 
 let _db: any | null = null;
 function getDb() {
@@ -47,40 +48,12 @@ export async function bootstrapAdminAction(): Promise<void> {
 export async function deleteSignerAction(signerId: string): Promise<void> {
   await requireAdminOrBootstrap();
   const db = getDb();
-  // Cascade manually since neon-http has no transaction support. Order
-  // matters for FK constraints; we delete children before parents.
-  //
-  // The production DB still has `comments`, `comment_upvotes`, `reports`
-  // tables left behind from an earlier Phase 3 db:push, even though those
-  // tables aren't in the current schema.ts (the Phase 3 PRs were closed).
-  // The FKs from those tables to `signers` were blocking the final
-  // DELETE FROM signers and 500ing the admin Delete button.
-  //
-  // Wrap each defensive DELETE in try/catch so "relation does not exist" is
-  // a no-op (pglite tests + cleaned dev branches have no such tables; prod
-  // still does).
-  async function tryExec(stmt: ReturnType<typeof sql>): Promise<void> {
-    try {
-      await db.execute(stmt);
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      if (!/does not exist|undefined_table/i.test(msg)) throw err;
-    }
-  }
-  await tryExec(sql`
-    DELETE FROM reports
-    WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`
-    DELETE FROM comment_upvotes
-    WHERE signer_id = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
-  await db.delete(signatures).where(eq(signatures.signerId, signerId));
-  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
-  await db.delete(signers).where(eq(signers.id, signerId));
+  // Delegate to the one cascade in revoke.ts. This action used to carry its
+  // own partial copy (reports, comment_upvotes, comments, signatures,
+  // consent_records) which drifted out of date as tables were added: the
+  // Delete button 500'd with SQLSTATE 23503 on anyone who had endorsed a
+  // version, voted on a comment, proposed an edit or uploaded a selfie.
+  await deleteSigner(db, signerId);
   revalidatePath("/admin/signers");
   revalidatePath("/signers");
 }
