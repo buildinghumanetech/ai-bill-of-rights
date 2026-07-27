@@ -7,6 +7,10 @@
  * `buildPostSignShareLinks` is the pure core of that step, exported from the
  * modal precisely so it can be pinned here without driving a Clerk-backed
  * component through three steps of state.
+ *
+ * The three hrefs themselves are assembled by `shareHrefs`, shared with the
+ * confirmation email; the `mailto:` `+`-vs-`%20` guard lives there, once, in
+ * tests/lib/share-urls.test.ts.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -69,14 +73,6 @@ describe("buildPostSignShareLinks", () => {
     expect(body).toContain(
       `${ORIGIN}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=email`,
     );
-  });
-
-  it("keeps the mailto body free of form-encoded '+' for spaces", () => {
-    // RFC 6068 reads `+` as a literal plus, so a form-encoded body arrives
-    // reading "I+just+signed". Regression guard.
-    const raw = /&body=([^&\s]+)$/.exec(links.emailHref)![1];
-    expect(raw).not.toContain("+");
-    expect(raw).toContain("%20");
   });
 
   it("leads the share copy with the signer's own words when they wrote some", () => {

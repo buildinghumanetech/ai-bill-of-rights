@@ -17,7 +17,7 @@ import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { SelfieCapture } from "@/components/SelfieCapture";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
 import { buildShareText } from "@/lib/share/share-text";
-import { signerShareUrl, type ShareChannel } from "@/lib/share/urls";
+import { shareHrefs, signerShareUrl, type ShareChannel } from "@/lib/share/urls";
 import {
   trackShareClicked,
   trackSignatureCompleted,
@@ -171,19 +171,9 @@ export function buildPostSignShareLinks(opts: {
 
   return {
     shareUrl: urlFor("copy"),
-    twitterHref: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-      textFor("x"),
-    )}&url=${encodeURIComponent(urlFor("x"))}`,
-    // LinkedIn's share-offsite endpoint takes no text — the copy travels with
-    // the OG card, which is why the quote also renders into the image.
-    linkedinHref: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-      urlFor("linkedin"),
-    )}`,
-    emailHref: `mailto:?subject=${encodeURIComponent(
-      "Sign the AI Bill of Rights",
-    )}&body=${encodeURIComponent(
-      `${textFor("email")}\n\n${urlFor("email")}`,
-    )}`,
+    // Shared with the confirmation email, which renders the same three
+    // buttons — see `shareHrefs`.
+    ...shareHrefs({ url: urlFor, text: textFor }),
     suggestedMessage: textFor("linkedin"),
   };
 }
@@ -648,9 +638,12 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
   async function copyShareUrl() {
     if (!shareUrl) return;
-    reportShareClicked("copy");
     try {
       await navigator.clipboard.writeText(shareUrl);
+      // Reported only after the write resolved. Same rule the invite path
+      // below applies with `res.sent > 0`: a clipboard write rejected by an
+      // insecure context or a denied permission is not a share.
+      reportShareClicked("copy");
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

@@ -19,7 +19,7 @@
 
 import { useEffect } from "react";
 import { Analytics } from "@vercel/analytics/next";
-import { parseChannel, parseRef } from "@/lib/share/urls";
+import { shouldReportLanding } from "./landing";
 import { trackShareLinkLanded } from "./track";
 
 /**
@@ -33,24 +33,14 @@ import { trackShareLinkLanded } from "./track";
 function ShareLandingBeacon(): null {
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let params: URLSearchParams;
-    try {
-      params = new URLSearchParams(window.location.search);
-    } catch {
-      return;
-    }
-
-    const ref = parseRef(params);
-    const channel = parseChannel(params);
-    // Only an arrival that actually carried attribution is a "share link
-    // landed". Firing on every pageview would drown the real signal.
-    if (!ref && !channel) return;
-
-    trackShareLinkLanded({
-      channel,
-      referred: ref !== null,
-      path: window.location.pathname,
-    });
+    // Whether this arrival counts, and with what facets, is decided by
+    // `shouldReportLanding` — pure, and unit-tested in tests/lib.
+    const landing = shouldReportLanding(
+      window.location.search,
+      window.location.pathname,
+    );
+    if (!landing) return;
+    trackShareLinkLanded(landing);
   }, []);
 
   return null;

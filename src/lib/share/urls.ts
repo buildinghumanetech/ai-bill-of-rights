@@ -105,6 +105,53 @@ export function withShareParams(url: string, params: ShareParams = {}): string {
   return `${path}${qs ? `?${qs}` : ""}${hash ? `#${hash}` : ""}`;
 }
 
+/** The subject line on every `mailto:` share, so both surfaces say the same thing. */
+export const SHARE_EMAIL_SUBJECT = "Sign the AI Bill of Rights";
+
+export interface ShareHrefs {
+  twitterHref: string;
+  linkedinHref: string;
+  emailHref: string;
+}
+
+/**
+ * The three outbound share hrefs — X, LinkedIn, `mailto:` — built once.
+ *
+ * The post-signature modal and the confirmation email render the same three
+ * buttons, and they had drifted into two verbatim copies of this construction.
+ * A copy is a place for one of them to lose its `?ref=`/`?via=` quietly, and
+ * for the `mailto:` encoding below to be "tidied up" on one side only.
+ *
+ * `url` and `text` are per-channel resolvers rather than plain strings so each
+ * href carries its own `?via=` and its own copy: the caller decides how a URL
+ * is tagged, this decides how the three links are assembled.
+ *
+ * The body is percent-encoded with `encodeURIComponent`, NOT re-serialised
+ * through `URLSearchParams`. RFC 6068 reads `+` in a mailto as a literal plus,
+ * so form-encoding would make a shared draft arrive reading "I+just+signed".
+ */
+export function shareHrefs(opts: {
+  /** The share target, per channel — normally `withShareParams`/`signerShareUrl`. */
+  url: (channel: ShareChannel) => string;
+  /** The share copy, per channel. */
+  text: (channel: ShareChannel) => string;
+}): ShareHrefs {
+  const { url, text } = opts;
+  return {
+    twitterHref: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+      text("x"),
+    )}&url=${encodeURIComponent(url("x"))}`,
+    // LinkedIn's share-offsite endpoint takes no text — the copy travels with
+    // the OG card, which is why the quote also renders into the image.
+    linkedinHref: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+      url("linkedin"),
+    )}`,
+    emailHref: `mailto:?subject=${encodeURIComponent(
+      SHARE_EMAIL_SUBJECT,
+    )}&body=${encodeURIComponent(`${text("email")}\n\n${url("email")}`)}`,
+  };
+}
+
 function splitHash(url: string): [string, string] {
   const i = url.indexOf("#");
   if (i === -1) return [url, ""];

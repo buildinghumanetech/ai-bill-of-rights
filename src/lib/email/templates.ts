@@ -1,5 +1,9 @@
 import { buildShareText } from "@/lib/share/share-text";
-import { withShareParams, type ShareChannel } from "@/lib/share/urls";
+import {
+  shareHrefs,
+  withShareParams,
+  type ShareChannel,
+} from "@/lib/share/urls";
 
 export function commentAccountCreated(opts: {
   displayName: string;
@@ -35,9 +39,12 @@ export function signConfirmation(opts: {
   signatureNumber?: number;
   totalSignatures?: number;
   /**
-   * Signer id, so every link back to their page carries ?ref= attribution.
-   * Null degrades to an untagged-but-still-channelled link rather than
-   * crediting whoever happened to be in the URL before.
+   * Signer id, so every SHARE link carries ?ref= attribution. Null degrades
+   * to an untagged-but-still-channelled link rather than crediting whoever
+   * happened to be in the URL before.
+   *
+   * It is deliberately not applied to the signer's own "view my signature"
+   * links — see `ownPageUrl` below.
    *
    * There is deliberately no `whyISigned` param: this email is sent the
    * instant the signature lands, and the "why I signed" statement is captured
@@ -57,15 +64,26 @@ export function signConfirmation(opts: {
   const shareTextFor = (channel: ShareChannel) => buildShareText({ channel });
 
   /**
-   * The signer clicking through from the email body is itself a share surface
-   * worth measuring, so the "view my signature" links get the same treatment
-   * as the share buttons — under their own channel, so a self-click never gets
-   * counted as an X or LinkedIn conversion.
+   * The two self-directed links — "view your public signature page" and the
+   * "View My Signature" CTA — are clicked by the SIGNER, never by a third
+   * party. They carry the channel but deliberately NO `ref`.
+   *
+   * `ref=<the signer's own id>` here would be an own-goal against the very
+   * loop this email exists to drive: the click stamps a first-touch referral
+   * cookie that lives for 30 days (`referralCookiesToSet`), so a self-ref
+   * would sit in the slot a genuine later referral needed. The database
+   * rejects self-referral, so the harm isn't bad data — it's a swallowed
+   * referral. The share buttons below keep their `ref`; those really do go to
+   * someone else.
    */
-  const ownPageUrl = shareUrlFor("confirmation-email");
-  const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareTextFor("x"))}&url=${encodeURIComponent(shareUrlFor("x"))}`;
-  const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrlFor("linkedin"))}`;
-  const emailShareHref = `mailto:?subject=${encodeURIComponent("Sign the AI Bill of Rights")}&body=${encodeURIComponent(`${shareTextFor("email")}\n\n${shareUrlFor("email")}`)}`;
+  const ownPageUrl = withShareParams(opts.signerPageUrl, {
+    ref: null,
+    channel: "confirmation-email",
+  });
+  const { twitterHref, linkedinHref, emailHref: emailShareHref } = shareHrefs({
+    url: shareUrlFor,
+    text: shareTextFor,
+  });
 
   const subject = `You signed the AI Bill of Rights v${opts.version}`;
 
