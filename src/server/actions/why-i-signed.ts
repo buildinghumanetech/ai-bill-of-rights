@@ -36,7 +36,9 @@ export interface SaveWhyISignedResult {
  *
  * Passing an empty string clears the statement — that is the "remove" path the
  * account page uses, so a signer who regrets their words can take them down
- * without needing anyone's help.
+ * without needing anyone's help. That path is deliberately exempt from the edit
+ * rate limit (see `saveWhyISignedForClerkUser`): "without needing anyone's help"
+ * has to include "and without waiting an hour".
  */
 export async function saveWhyISigned(
   raw: string,

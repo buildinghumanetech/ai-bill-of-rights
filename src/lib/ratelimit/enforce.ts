@@ -54,15 +54,26 @@ const ephemeralHits = new Map<string, Map<string, number[]>>();
  * differently-shaped limiter elsewhere in the codebase, the fallback lives here
  * next to its sibling and keeps the same contract.
  *
- * Known limitation, stated plainly: the counter is per process, so on a
- * multi-instance or scale-to-zero deployment the effective limit is per
- * instance and resets on cold start. That is a real weakening for a
- * brute-force-shaped attack; it is adequate for the thing this limit exists to
- * stop, which is one signed-in signer thrashing their own public statement. The
- * durable fix is a `why_i_signed_edits (signer_id, created_at)` table in
- * `src/lib/db/schema.ts` plus the matching migration, at which point this call
- * site swaps to `enforceRateLimit` with a `countSql` over that table and
- * nothing else has to change.
+ * THIS LIMITER IS BEST-EFFORT. It does not hold, including against the threat
+ * it was added for. The counter lives in one process's memory, and on a
+ * multi-instance or scale-to-zero deployment consecutive requests from one
+ * signed-in signer land on whichever instance the platform picks: the effective
+ * budget is `max` PER INSTANCE, and a cold start hands out a fresh one. So a
+ * signer thrashing their own public statement — write something vile, let it be
+ * shared, swap it back — needs only a handful of successful writes, and that
+ * fits inside the slack here with room to spare. Read this as "raises the cost
+ * of casual thrashing and bounds cache churn in the single-instance case", not
+ * as a guarantee about how many times a statement can change in an hour.
+ *
+ * The durable fix needs somewhere to count, and today there is nowhere: the
+ * rate-limited write is an UPDATE of a column on `signers`, which has no
+ * per-edit audit row, no `updated_at` and no `why_i_signed_updated_at`. Either
+ * a `why_i_signed_edits (signer_id, created_at)` table or a single
+ * `signers.why_i_signed_updated_at` timestamp (cheaper, and enough for a "one
+ * edit per N minutes" rule) would do; both are schema changes plus a migration.
+ * With one in place this call site swaps to `enforceRateLimit` with a `countSql`
+ * over it and nothing else has to change. Until then, do not let the presence of
+ * this call talk anyone out of moderation tooling that does not depend on it.
  */
 export function enforceEphemeralRateLimit(opts: EphemeralOpts): void {
   const now = opts.now ?? Date.now();

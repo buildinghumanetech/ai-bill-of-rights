@@ -7,6 +7,7 @@ import {
   listSignaturesForSigner,
 } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
+import { normalizeWhyISigned } from "@/lib/why-i-signed";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
 import { CommitmentsSummary } from "@/components/CommitmentsSummary";
@@ -71,10 +72,13 @@ export default async function SignerProfile({
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
 
-  const whyISigned: string | null =
-    typeof signer.whyISigned === "string" && signer.whyISigned.trim().length > 0
-      ? signer.whyISigned.trim()
-      : null;
+  // Same normaliser the write path and the OG card use — never a bare trim.
+  // This is the surface that displays the statement most prominently, so a
+  // legacy row (or anything written by a future path that skips the action)
+  // has to be re-cleaned and re-clamped here too; otherwise this page renders
+  // 1000 characters while the OG card for the same signer shows 200 and the
+  // two surfaces disagree about what the person said.
+  const whyISigned: string | null = normalizeWhyISigned(signer.whyISigned);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32 sm:py-24">
