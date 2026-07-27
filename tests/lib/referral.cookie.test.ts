@@ -14,8 +14,12 @@ import {
  * cheapest place to pin the two rules the rest of the referral code assumes:
  * FIRST REF WINS, and nothing unvalidated is ever stored.
  *
- * `src/proxy.ts` does nothing but call this and apply the result, so a green
- * suite here means the middleware's behaviour is pinned too.
+ * Scope: the DECISION only — which cookies a given arrival should produce.
+ * `src/proxy.ts` delegates that decision here, but it also does work of its
+ * own: sequencing this ahead of Clerk's `auth.protect()`, re-wrapping a bare
+ * `Response` that has no cookie jar, and deciding whether to touch the
+ * response at all. None of that is covered by a green suite here — see
+ * tests/app/proxy.referral.test.ts for the wiring.
  */
 
 const REF_A = "11111111-2222-3333-4444-555555555555";
@@ -68,7 +72,11 @@ describe("referralCookiesToSet", () => {
       existingRef: null,
       existingChannel: null,
     });
-    expect(out.map((c) => c.name)).not.toContain(REF_COOKIE);
+    // Asserted as an exact set, not a `not.toContain`: the junk ref must be
+    // dropped AND the channel must still be recorded. A bare "no ref cookie"
+    // check also passes when nothing at all comes back, which would hide a
+    // regression that stopped recording the channel on this arrival.
+    expect(out.map((c) => c.name)).toEqual([REF_CHANNEL_COOKIE]);
   });
 
   it("drops an unknown channel rather than storing it", () => {

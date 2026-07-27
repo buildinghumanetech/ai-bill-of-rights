@@ -15,7 +15,7 @@
  * see handleControlFlowErrors in @clerk/nextjs' clerkMiddleware.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { REF_CHANNEL_COOKIE, REF_COOKIE } from "@/lib/referral/cookie";
 
@@ -81,6 +81,17 @@ beforeEach(() => {
   state.protectCalls = 0;
 });
 
+// NODE_ENV is stubbed by the Secure-flag tests below; put it back so the value
+// does not leak into whatever test file shares this worker process.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+/** The raw `Set-Cookie` line for a given cookie name, as sent on the wire. */
+function setCookieFor(res: Response, name: string): string | undefined {
+  return setCookies(res).find((c) => c.startsWith(`${name}=`));
+}
+
 describe("proxy referral capture", () => {
   it("keeps attribution on the sign-in redirect from a protected route", async () => {
     // The regression under test: `/sign/profile?ref=A` while signed out.
@@ -136,6 +147,32 @@ describe("proxy referral capture", () => {
     expect(
       setCookies(res).find((c) => c.startsWith(REF_CHANNEL_COOKIE)),
     ).toMatch(/Max-Age=0/i);
+  });
+
+  it("marks the attribution cookies Secure in production", async () => {
+    // The one proxy line whose regression is silent. `secure` is derived from
+    // NODE_ENV, and every other test here passes whether the flag is on or
+    // off — the cookies still land, they just travel over plain HTTP in prod
+    // where anyone on the wire can lift someone's attribution. So assert on
+    // the header as sent, not on the cookie jar (which hides the flag).
+    vi.stubEnv("NODE_ENV", "production");
+    const res = await run(`https://example.com/?ref=${REF_A}&via=x`);
+
+    expect(setCookieFor(res, REF_COOKIE)).toMatch(/;\s*Secure\b/i);
+    expect(setCookieFor(res, REF_CHANNEL_COOKIE)).toMatch(/;\s*Secure\b/i);
+  });
+
+  it("leaves Secure off outside production, so dev over plain HTTP works", async () => {
+    // The companion: a blanket `secure: true` would be just as broken, since
+    // the dev server is http://localhost and the browser would drop the
+    // cookies outright — attribution silently missing for every local run.
+    vi.stubEnv("NODE_ENV", "development");
+    const res = await run(`https://example.com/?ref=${REF_A}&via=x`);
+
+    const ref = setCookieFor(res, REF_COOKIE);
+    expect(ref).toBeDefined();
+    expect(ref).not.toMatch(/;\s*Secure\b/i);
+    expect(setCookieFor(res, REF_CHANNEL_COOKIE)).not.toMatch(/;\s*Secure\b/i);
   });
 
   it("still sets cookies when the upstream response is a plain Response", async () => {
