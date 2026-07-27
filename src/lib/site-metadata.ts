@@ -5,15 +5,22 @@ import type { Metadata } from "next";
  * and the homepage hero.
  *
  * The name alone ("The AI Bill of Rights") reads as *rights belonging to AI*
- * until you reach the articles, so the tagline has to travel with it anywhere
- * the title appears without surrounding context: the browser tab, search
- * results, and link-preview cards. Keep `SITE_TAGLINE` attached to the name in
- * every one of those surfaces.
+ * until you reach the articles, so the tagline has to travel with it wherever
+ * the *site* title stands alone with no surrounding context: the homepage tab,
+ * its search result, its link-preview card. That is what `SITE_TITLE` is for —
+ * keep the two attached there.
  *
- * Note this is not yet the *only* place the name appears — several routes still
- * hardcode the string "AI Bill of Rights" in their own titles and copy (see
- * `src/app/about/page.tsx`, `src/app/resources/[slug]/page.tsx`,
- * `src/app/signatories/[id]/page.tsx`). A rename would need to visit those too.
+ * Subpage titles are the other case and deliberately do not carry the tagline:
+ * "About — The AI Bill of Rights — A People's Demand for Human-Centered AI"
+ * truncates to noise. They lead with the page name and carry `SITE_NAME` as
+ * trailing context, which `buildPageMetadata` appends so the wording lives in
+ * one place.
+ *
+ * Note this is not the *only* place the name appears. Route titles all derive
+ * it from `SITE_NAME` now, but body copy still hardcodes the string — headings,
+ * back-links, and prose in `src/app/about/page.tsx`,
+ * `src/app/resources/[slug]/page.tsx`, and `src/app/signatories/[id]/page.tsx`.
+ * A rename would need to visit those too.
  */
 export const SITE_NAME = "The AI Bill of Rights";
 

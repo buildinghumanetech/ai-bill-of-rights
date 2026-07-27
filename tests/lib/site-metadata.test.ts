@@ -211,8 +211,11 @@ describe("buildPageMetadata", () => {
       appendSiteName: false,
     });
     expect(meta.title).toBe(`Ada signed ${SITE_NAME}`);
-    // No doubled site name.
-    expect(String(meta.title).match(new RegExp(SITE_NAME, "g"))).toHaveLength(1);
+    // No doubled site name. Counted by splitting rather than with a RegExp
+    // built from SITE_NAME: this is the rename-safety test, and a future name
+    // containing "(", ".", or "?" would make an unescaped pattern throw or
+    // match the wrong thing exactly when a rename happens.
+    expect(String(meta.title).split(SITE_NAME).length - 1).toBe(1);
   });
 
   it("upgrades to a large image card only when an image is supplied", () => {

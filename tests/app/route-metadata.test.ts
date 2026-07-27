@@ -11,6 +11,17 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
  * route from going back to a bare `{ title, description }` until these tests.
  */
 
+// File-wide, despite reading like it belongs to the /signatories/[id] block:
+// vi.mock is hoisted to the top of the module regardless of where it is
+// written, so nesting it inside a describe would only look scoped. The factory
+// spreads the real module so the other routes' tests, and any future case that
+// reaches a different query, keep working.
+const getSignerById = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/db/queries", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/db/queries")>()),
+  getSignerById,
+}));
+
 type Og = {
   title?: string;
   description?: string;
@@ -41,6 +52,12 @@ function expectOwnCard(meta: {
   expect(og!.description).toBe(meta.description);
   expect(og!.description).not.toBe(SITE_DESCRIPTION);
   expect(tw!.description).toBe(meta.description);
+
+  // The title must name the site somewhere. `appendSiteName: false` is an
+  // unguarded opt-out otherwise: a route could pass a bare "Signer not found"
+  // and ship a card identifying neither the page's site nor its tagline, with
+  // every other assertion here still passing.
+  expect(String(meta.title)).toContain(SITE_NAME);
 
   // ...while still keeping the fields a child block would otherwise drop.
   expect(og!.siteName).toBe(SITE_NAME);
@@ -84,12 +101,6 @@ describe("/resources/[slug] metadata", () => {
 });
 
 describe("/signatories/[id] metadata", () => {
-  const getSignerById = vi.hoisted(() => vi.fn());
-  vi.mock("@/lib/db/queries", () => ({
-    getSignerById,
-    listSignaturesForSigner: vi.fn(),
-  }));
-
   it("carries its own share card, with the OG image, for a real signer", async () => {
     getSignerById.mockResolvedValue({ id: "abc", displayName: "Ada Lovelace" });
 
