@@ -3,6 +3,7 @@ import HeroSection from "./HeroSection";
 import SignatureCount from "./SignatureCount";
 import { TabbedDocument } from "@/components/TabbedDocument";
 import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,11 @@ export default async function Home() {
   return (
     <div className="flex-1">
       <section className="bg-white px-6 pt-14 pb-10 text-center sm:pt-20 sm:pb-14">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">
+          {SITE_TAGLINE}
+        </p>
         <h1 className="text-balance text-5xl font-semibold tracking-tight text-zinc-950 sm:text-7xl">
-          The AI Bill of Rights
+          {SITE_NAME}
         </h1>
         <p className="mx-auto mt-6 max-w-none text-pretty text-xl leading-8 text-zinc-700 sm:text-2xl">
           <strong className="font-semibold text-zinc-950 sm:whitespace-nowrap">
