@@ -87,13 +87,15 @@ function renderNode({ isAdmin = false } = {}) {
 /**
  * The reply/cancel toggle in the action row.
  *
- * Selected by testid, not label: it reads "reply"/"cancel" while the composer's
- * own buttons read "Reply"/"Cancel", and `getByRole`'s name matcher is
- * case-sensitive. Matching on case would make a cosmetic re-casing of the action
- * row break these tests with an error that has nothing to do with mentions.
+ * Selected on its `aria-label`, which exists because the visible copy
+ * ("reply"/"cancel") differs from the composer's own Reply/Cancel buttons only in
+ * letter case. Matching on the visible text would mean a cosmetic re-casing of
+ * the action row breaks these tests with an error pointing nowhere near mentions.
  */
 function toggle() {
-  fireEvent.click(screen.getByTestId("reply-toggle"));
+  fireEvent.click(
+    screen.getByRole("button", { name: /^(Reply to this comment|Cancel reply)$/ }),
+  );
 }
 
 function type(text: string) {
@@ -172,6 +174,10 @@ describe("CommentNode reply mention wiring", () => {
     type("agreed @Ali");
     pick("@Alice Nguyen");
     toggle();
+    // Assert the collapse actually happened. Clicking twice blindly would hide a
+    // regression where the toggle stops collapsing — and the unmount is the
+    // mechanism that loses the picks, so it is the thing worth pinning.
+    expect(screen.queryByRole("textbox")).toBeNull();
     toggle();
 
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
@@ -191,6 +197,7 @@ describe("CommentNode reply mention wiring", () => {
     type("agreed @Ali");
     pick("@Alice Nguyen");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("textbox")).toBeNull();
     toggle();
 
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
@@ -237,6 +244,22 @@ describe("CommentNode reply mention wiring", () => {
       "agreed @Padded Name  ",
     );
 
+    // KNOWN INCONSISTENCY, asserted so it cannot hide: the composer promises a
+    // notification here that the submit will not deliver. `pruneResolvedMentions`
+    // sees the untrimmed value, where "@Padded Name " is present, so the
+    // "Notifying …" line lists Padded Name — and then nobody is emailed. That
+    // line exists precisely so delivery is never a surprise, so this is a real
+    // (if narrow) defect, not just cosmetics.
+    //
+    // The fix is to normalise at the insertion point so composer, submitted body
+    // and server all agree on the needle — trimming inside `mentionText` would do
+    // it in one place. Deliberately not done here: it changes who gets notified,
+    // and that call is not mine to make unilaterally. If you fix it, this
+    // assertion flips to expect ["sig-padded"] and the one below goes away.
+    expect(screen.getByTestId("mention-notify-list").textContent).toContain(
+      "Padded Name",
+    );
+
     await submitReply();
 
     const fd = submitted();
@@ -244,12 +267,7 @@ describe("CommentNode reply mention wiring", () => {
     expect(fd.getAll(MENTION_IDS_FIELD)).toEqual([]);
   });
 
-  it("submits the admin post-as signer, and drops it on collapse", async () => {
-    // Unifying the reset paths made the action-row toggle clear
-    // `replyActAsSignerId`, which it used to preserve. That is a real behaviour
-    // change for admins — collapse to re-read the thread, reopen, and you are
-    // posting as yourself again — so it gets pinned deliberately rather than
-    // left to be discovered.
+  it("submits the admin post-as signer", async () => {
     renderNode({ isAdmin: true });
     toggle();
 
@@ -261,8 +279,25 @@ describe("CommentNode reply mention wiring", () => {
     const fd = submitted();
     expect(fd.get("actAsSignerId")).toBe("sig-alice");
     expect(fd.getAll(MENTION_IDS_FIELD)).toEqual(["sig-alice"]);
+  });
 
-    // Reopen: the post-as selection is back to the default, not the stale pick.
+  it("drops the admin post-as signer when the reply is collapsed", async () => {
+    // Unifying the reset paths made the action-row toggle clear
+    // `replyActAsSignerId`, which it used to preserve: an admin who picks
+    // "post as X", collapses to re-read the thread, and reopens is posting as
+    // themselves again.
+    //
+    // This has to collapse WITHOUT submitting. A successful submit calls
+    // `resetReplyDraft()` and `setShowReply(false)` itself, so a `toggle()` after
+    // one is an expand, skips the `if (showReply)` branch entirely, and measures
+    // the submit path's reset instead — which was never in question.
+    renderNode({ isAdmin: true });
+    toggle();
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "sig-alice" } });
+    toggle();
+    expect(screen.queryByRole("combobox")).toBeNull();
+
     toggle();
     expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("");
   });

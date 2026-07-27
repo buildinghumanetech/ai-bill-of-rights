@@ -443,11 +443,12 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
 
           {/* Action row — reply only; flag moved to header row.
 
-              The toggle carries a `data-testid` because its label differs from
-              the composer's own Reply/Cancel buttons only in letter case, and
-              `getByRole`'s name matcher is case-sensitive. Selecting it by label
-              would mean a cosmetic re-casing of this copy silently breaks the
-              reply-mention tests with an error pointing nowhere near mentions. */}
+              The toggle carries an explicit `aria-label` because its visible copy
+              ("reply"/"cancel") differs from the composer's own Reply/Cancel
+              buttons only in letter case. That is ambiguous for anyone listening
+              to the page, not just for `getByRole`'s case-sensitive name matcher,
+              so the fix is a distinct accessible name rather than a test-only
+              hook. Tests select on it. */}
           <div className="mt-1.5 flex items-center gap-3 flex-wrap">
             <button
               type="button"
@@ -462,7 +463,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                 if (showReply) resetReplyDraft();
                 setShowReply(!showReply);
               }}
-              data-testid="reply-toggle"
+              aria-label={showReply ? "Cancel reply" : "Reply to this comment"}
               className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
             >
               {showReply ? "cancel" : "reply"}
