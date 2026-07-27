@@ -1,5 +1,36 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-26 14:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged the three roborev-fix workers (FK/deletion, analytics wiring, signer-page polish) — 56 files / 403 tests green. Then mutation-tested the headline FK fix and found the new deletion tests **cannot** catch a regression in `src/lib/db/schema.ts`, which is the file that actually ships; added a drift guard for that. Also empirically confirmed a roborev finding that account deletion is **still** broken for signers with other activity.
+
+### Detail of changes made:
+- Merged `5becbfd6` (`ON DELETE SET NULL` on `referred_by_signer_id`, referral capture moved ahead of `auth.protect()` in `src/proxy.ts`, ref/channel cookies now always rewritten as a pair), `4e21315a` (mounts `<SiteAnalytics />`, wires the five previously-dead funnel helpers to real call sites, tags confirmation-email share links, reads the `via` cookie at signing time), and `2dafcf23` (`gist()` now reuses the exported `splitSentences`, signer-page pull quote clamped to four lines so the CTA stays above the fold). All three fast-forwarded or merged clean — no conflicts.
+- **Added `tests/lib/db.referral-fk-drift.test.ts`.** There are two descriptions of the signers table: `src/lib/db/schema.ts` (what `drizzle-kit push` applies to Neon) and the hand-written DDL in `tests/_helpers/pglite-db.ts` (what tests run against). Deleting `onDelete: "set null"` from schema.ts alone left the entire 403-test suite green — including the six new deletion tests written specifically to prove that fix. The guard reads the table's foreign-key metadata via drizzle's `getTableConfig` and asserts `onDelete === "set null"`, plus asserts the test DDL still mirrors the clause so drift in either direction is caught.
+- Verified both directions by mutation: removing `on delete set null` from the *test* DDL reds 5 of the 6 deletion tests with a real FK violation (so those tests are meaningful), and removing `onDelete` from *schema.ts* reds the new guard (and nothing else). Source restored; `git diff src/` empty.
+
+### Roborev triage (jobs 53, 48, 52)
+- **MEDIUM (job 53) — account deletion is still broken for signers with other activity: CONFIRMED empirically.** `referredBySignerId` is the only one of 15 foreign keys to `signers.id` that has an `ON DELETE` action; the other 14 are bare `.references(() => signers.id)`, i.e. `NO ACTION`. `deleteSigner` (`src/server/actions/revoke.ts`) manually cascades selfies, selfie reports, the legacy Phase 3 tables, signatures and consent records — but not `endorsements`, `comment_votes`, `comment_reports`, `comment_mentions`, `proposal_upvotes`, `proposed_edits` or `attestations`. A throwaway pglite proof showed a signer with an endorsement fails with `endorsements_signer_id_fkey`, and a signer with a comment vote fails with `comment_votes_comment_id_fkey`. GDPR erasure therefore still fails, on all three deletion paths, for anyone who has endorsed a version or voted on a comment. Dispatched as its own fix.
+- **MEDIUM (job 48) — the reported `referred` flag can disagree with what was persisted: real.** `sign-from-modal.ts` derives `referred` from the raw cookie, but `resolveReferrerId` drops a ref whose referrer has since deleted their account. So analytics can report `signature_completed{referred:true}` against a null `referred_by_signer_id`, and the two ends of the funnel can never be reconciled. Dispatched.
+- **LOW (job 48) — the confirmation email self-refs: real and worse than it looks.** "View your public signature page" carries the signer's own id as `?ref=`, so clicking your own email stamps a self-ref cookie. The DB rejects self-referral, but the cookie is first-touch for 30 days — so it occupies the slot a genuine later referral would have used. That is an own-goal against the exact viral loop this work exists to build. Dispatched.
+- **MEDIUM (job 48) — none of the new call-site wiring is covered.** Every new test covers a pure function; nothing pins that `<SiteAnalytics />` is mounted or that `signature_completed` fires from both modal success paths. Deleting any of the five new call sites reproduces the original bug with a green suite. Dispatched (needs a jsdom environment).
+- **MEDIUM (job 53) — the `0008` migration is not registered in `drizzle/meta/_journal.json`**, so `drizzle-kit migrate` will never apply it, while the file's header claims it will. Deploys use `push`, so impact is limited to the file's own honesty; dispatched as a docs/mechanism fix.
+- **MEDIUM (job 52) — `gist()` is tested as a function but nothing asserts it reaches the HTML.** Dispatched, along with the clamped pull quote losing its closing quotation mark.
+- Smaller items dispatched with the above: the vacuous `not.toContain` assertion at `tests/lib/referral.cookie.test.ts:71`, the `expectInviterGone(inviteeId)` misnaming, the `Module._load` patch installed at import time rather than in `beforeAll`, `trackShareLinkLanded` filling a missing channel with `"unknown"` while `trackSignatureCompleted` strips it, `share_clicked{channel:"copy"}` firing before the clipboard write is awaited, and the X/LinkedIn/mailto href construction now duplicated verbatim between `SignModal.tsx` and `email/templates.ts`.
+
+### Verification
+- `./node_modules/.bin/vitest run` — **56 files / 403 tests, all passing** (up from 49 / 336).
+- `./node_modules/.bin/tsc --noEmit` — clean.
+
+### Potential concerns to address:
+- **Account deletion is still broken in production** for signers with an endorsement or a comment vote. The `ON DELETE SET NULL` fix closed only the referral column.
+- **`schema.ts` and `tests/_helpers/pglite-db.ts` are two hand-maintained copies of the same schema.** The new drift guard covers exactly one clause on one column. Every other divergence between them is still invisible to the suite, and `drizzle-kit push` will happily drop anything not declared in `schema.ts`.
+- Worker `9a9ae884` (the "why I signed" hardening task) **never started** — no commit, no result file, nothing touched in 29 hours. Its task has been respawned; the underlying orchestrator bug (spawns silently retrying, and `wait_for_workers` dying after 1800s of silence) has now cost time three times today.
+
+---
+
 ## Progress Update as of 2026-07-25 08:45 Pacific
 *(Most recent updates at top)*
 
