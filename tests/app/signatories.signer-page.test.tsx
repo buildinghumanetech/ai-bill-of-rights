@@ -33,6 +33,8 @@ import { getSignerById, listSignaturesForSigner } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { articles } from "@/app/HomepageArticles";
 import { gist } from "@/components/CommitmentsSummary";
+import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
+import { signerCardQuote } from "@/lib/og/signer-quote";
 import SignerProfile from "@/app/signatories/[id]/page";
 
 /** React escapes apostrophes in text nodes; article copy is full of them. */
@@ -256,6 +258,36 @@ describe("signer page as a landing page for a stranger", () => {
     viewerIs(null);
     const html = await renderPage();
     expect(html).not.toContain("<blockquote");
+  });
+
+  // This page is the most prominent display of the statement, and it used to
+  // derive the quote with a bare `.trim()` — no cap, no whitespace collapse, no
+  // control-character strip. A legacy row therefore rendered here in full while
+  // the OG card for the same signer showed 200 characters, so the two surfaces
+  // disagreed about what the person said. Both tests below pin the fix: this
+  // page runs the same `normalizeWhyISigned` as the writer and the OG card.
+  it("re-clamps an over-long legacy row rather than rendering it whole", async () => {
+    const raw = "x".repeat(1000);
+    mockSigner({ whyISigned: raw });
+    viewerIs(null);
+    const html = await renderPage();
+    expect(html).toContain("<blockquote");
+    expect(html).toContain("x".repeat(MAX_WHY_I_SIGNED_LENGTH));
+    expect(html).not.toContain("x".repeat(MAX_WHY_I_SIGNED_LENGTH + 1));
+    // ...and what it renders is exactly what the OG card renders, which is the
+    // agreement between the two surfaces that the sanitiser exists to buy.
+    expect(html).toContain(signerCardQuote(raw).text as string);
+  });
+
+  it("collapses whitespace and strips control characters in the pull quote", async () => {
+    // \u0007 is a C0 control character that `\s` does not match, so only the
+    // control-character pass inside `normalizeWhyISigned` can remove it.
+    mockSigner({ whyISigned: "I\u0007signed  for\n\nmy   students." });
+    viewerIs(null);
+    const html = await renderPage();
+    expect(html).toContain("I signed for my students.");
+    expect(html).not.toContain("\u0007");
+    expect(html).not.toContain("my   students");
   });
 
   it("does not put a bare signature count in front of a newcomer", async () => {

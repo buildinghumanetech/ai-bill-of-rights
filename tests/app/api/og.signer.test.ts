@@ -7,14 +7,22 @@
  * NOTE ON WHAT THESE TESTS CAN AND CANNOT CATCH: satori emits a 1200x630
  * canvas for ANY input, so `pngDimensions(...) === 1200x630` is a smoke test
  * that the route renders at all — it is content-independent and would hold
- * with the sanitiser deleted. The clamping itself is asserted on the string
- * handed to the renderer, in tests/lib/og.signer-quote.test.ts. Do not add a
- * clamping assertion here in terms of the PNG; it cannot fail.
+ * with the sanitiser deleted. Do not write a clamping assertion in terms of
+ * the PNG's dimensions; it cannot fail. The clamp's own rules are asserted in
+ * tests/lib/og.signer-quote.test.ts.
+ *
+ * What is left for THIS file is the wiring — that the route asks
+ * `signerCardQuote` about the raw column value and draws what it gets back —
+ * and the only way to see that from out here is to watch the route's call. So
+ * the module is mocked with a spy wrapping the real implementation. Anything
+ * asserted purely on a helper this file called itself is a statement about the
+ * helper, not about the route, and will pass with the route bypassing it.
  */
 
+import { createHash } from "node:crypto";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
-import { signerCardQuote } from "@/lib/og/signer-quote";
+import type { SignerCardQuote } from "@/lib/og/signer-quote";
 
 vi.mock("@/lib/db/queries", () => ({
   getSignerById: vi.fn(),
@@ -23,10 +31,20 @@ vi.mock("@/lib/db/queries", () => ({
 vi.mock("@/lib/selfie/queries", () => ({
   getActiveSelfieForSigner: vi.fn(),
 }));
+// A spy AROUND the real implementation, not a stand-in for it: every other
+// test in this file still exercises the genuine clamp and sizing, and the
+// sanitiser case below can watch the route's use of it. See the note in that
+// test for why watching is the only way to make that case able to fail.
+vi.mock("@/lib/og/signer-quote", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/og/signer-quote")>();
+  return { ...actual, signerCardQuote: vi.fn(actual.signerCardQuote) };
+});
 
 import { GET } from "@/app/api/og/signer/[id]/route";
 import { getSignerById, getSignatureNumber } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
+import { signerCardQuote } from "@/lib/og/signer-quote";
 
 const SIGNER_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -55,11 +73,25 @@ async function render(): Promise<Response> {
   });
 }
 
+/**
+ * Render once with `signerCardQuote` forced to return `quote`, and reduce the
+ * PNG to a digest — comparing digests rather than 100KB byte arrays keeps a
+ * failure readable while still being a comparison of every pixel.
+ */
+async function renderWithQuote(quote: SignerCardQuote): Promise<string> {
+  vi.mocked(signerCardQuote).mockReturnValueOnce(quote);
+  const bytes = new Uint8Array(await (await render()).arrayBuffer());
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 describe("GET /api/og/signer/[id]", () => {
   beforeEach(() => {
     vi.mocked(getSignerById).mockReset();
     vi.mocked(getSignatureNumber).mockReset();
     vi.mocked(getActiveSelfieForSigner).mockReset();
+    // mockClear, not mockReset: the spy wraps the real signerCardQuote and
+    // resetting it would throw that implementation away.
+    vi.mocked(signerCardQuote).mockClear();
   });
 
   it("returns a 1200x630 PNG when the signer has no statement", async () => {
@@ -94,18 +126,41 @@ describe("GET /api/og/signer/[id]", () => {
     expect(pngDimensions(bytes)).toEqual({ width: 1200, height: 630 });
   });
 
-  it("hands the renderer a clamped quote for an over-long legacy row", async () => {
+  it("renders what signerCardQuote returned for the raw column value", async () => {
     // A row written before the cap existed must not be able to blow the
-    // layout: the route re-normalises on the way out. Asserting on the STRING
-    // the route computes — not on the PNG — is what makes this able to fail.
+    // layout, and the route's defence is that it renders `signerCardQuote(...)`
+    // rather than the column. The PNG's DIMENSIONS cannot show that — satori
+    // emits 1200x630 either way — and calling the helper here in the test
+    // process and asserting on its return value shows nothing about the route
+    // at all: that version of this test passed with the route interpolating
+    // `signer.whyISigned` straight into the JSX. So this watches the route's
+    // own call, and then watches the pixels move when the answer changes.
     const raw = "x".repeat(1000);
     mockSigner(raw);
+
+    // (a) the route asked the helper about the RAW column value, and the real
+    //     implementation clamped it.
     const res = await render();
     expect(res.status).toBe(200);
+    expect(signerCardQuote).toHaveBeenCalledTimes(1);
+    expect(signerCardQuote).toHaveBeenCalledWith(raw);
+    const returned = vi.mocked(signerCardQuote).mock.results[0].value;
+    expect(returned.text).toHaveLength(MAX_WHY_I_SIGNED_LENGTH);
+    expect(returned.fontSize).toBe(20);
 
-    const { text, fontSize } = signerCardQuote(raw);
-    expect(text).toHaveLength(MAX_WHY_I_SIGNED_LENGTH);
-    expect(fontSize).toBe(20);
+    // (b) ...and the card draws the TEXT that came back. Two renders differing
+    //     ONLY in the helper's `text` — same signer row, same font size, same
+    //     line height — must produce different pixels. A route that calls the
+    //     helper and then draws `signer.whyISigned` anyway produces identical
+    //     bytes here, which is what makes this assertion able to fail; the
+    //     repeat render pins that byte-identity is a real signal and not just
+    //     a non-deterministic renderer never repeating itself.
+    const style = { fontSize: 20, lineHeight: 1.38 };
+    const drewA = await renderWithQuote({ text: "AAAAAAAAAA", ...style });
+    const drewAagain = await renderWithQuote({ text: "AAAAAAAAAA", ...style });
+    const drewB = await renderWithQuote({ text: "BBBBBBBBBB", ...style });
+    expect(drewAagain).toBe(drewA);
+    expect(drewB).not.toBe(drewA);
   });
 
   it("404s for an unknown signer", async () => {

@@ -16,7 +16,8 @@ import { enforceEphemeralRateLimit } from "@/lib/ratelimit/enforce";
 import { normalizeWhyISigned } from "@/lib/why-i-signed";
 
 /**
- * How often one signer may rewrite their statement.
+ * How often one signer may SET their statement — see `saveWhyISignedForClerkUser`
+ * for why clearing it is deliberately not counted.
  *
  * The statement is public and lands in a cached OG image, so a tight loop of
  * edits is both a moderation-evasion vector (write something vile, let it get
@@ -59,6 +60,16 @@ export type SaveWhyISignedOutcome =
  * The limit is checked BEFORE the update so a rejected attempt leaves the
  * stored statement untouched, and it is keyed on the signer row rather than the
  * Clerk id so the bucket survives an email change.
+ *
+ * TAKING THE STATEMENT DOWN IS NEVER LIMITED. The limit exists to bound the
+ * moderation-evasion loop — write something vile, let it get shared, swap it
+ * back — and every lap of that loop needs a non-empty write to re-add the text,
+ * so counting only the SET path bounds the loop exactly as tightly. Counting the
+ * clear as well bought nothing and cost the one person the account page makes a
+ * promise to: someone who edits ten times, realises the sentence was a mistake,
+ * and then cannot remove it for up to an hour while it stays live on their
+ * public page, in their OG card and in the share copy. A removal therefore
+ * neither consumes a slot nor can be refused for want of one.
  */
 export async function saveWhyISignedForClerkUser(
   db: any,
@@ -78,19 +89,26 @@ export async function saveWhyISignedForClerkUser(
     };
   }
 
-  try {
-    enforceEphemeralRateLimit({
-      bucket: "why_i_signed",
-      key: owner[0].id,
-      windowSec: WHY_I_SIGNED_WINDOW_SEC,
-      max: WHY_I_SIGNED_EDITS_PER_HOUR,
-    });
-  } catch {
-    return {
-      ok: false,
-      reason: "rate_limited",
-      error: `You've changed your statement too many times in the last hour. Try again later.`,
-    };
+  // `normalizeWhyISigned(raw) === null` is exactly "this write removes the
+  // statement" — empty, whitespace-only, or not a string at all. The update
+  // below re-derives the same value, so the two cannot drift.
+  const isRemoval = normalizeWhyISigned(raw) === null;
+
+  if (!isRemoval) {
+    try {
+      enforceEphemeralRateLimit({
+        bucket: "why_i_signed",
+        key: owner[0].id,
+        windowSec: WHY_I_SIGNED_WINDOW_SEC,
+        max: WHY_I_SIGNED_EDITS_PER_HOUR,
+      });
+    } catch {
+      return {
+        ok: false,
+        reason: "rate_limited",
+        error: `You've changed your statement too many times in the last hour. Try again later.`,
+      };
+    }
   }
 
   const updated = await updateWhyISignedForClerkUser(db, clerkUserId, raw);

@@ -142,14 +142,40 @@ describe("saveWhyISignedForClerkUser — rate limited", () => {
     expect(await storedStatement(db)).toBe(last);
   });
 
-  it("limits the removal path as well as the edit path", async () => {
-    // Otherwise the loop is just save/remove/save/remove.
+  it("never refuses a removal, even with the budget spent", async () => {
+    // Taking your own words down is the one thing the account page promises
+    // will always work; a limit that blocks it leaves the statement live on a
+    // public page and in a shared OG card for up to an hour. The abuse loop is
+    // still bounded because re-adding the text is a SET, and SETs are counted.
     const db = await seed();
     for (let i = 0; i < WHY_I_SIGNED_EDITS_PER_HOUR; i++) {
-      await saveWhyISignedForClerkUser(db, CLERK_ID, i % 2 === 0 ? "on" : "");
+      const res = await saveWhyISignedForClerkUser(db, CLERK_ID, `edit ${i}`);
+      expect(res.ok).toBe(true);
     }
-    const refused = await saveWhyISignedForClerkUser(db, CLERK_ID, "");
-    expect(refused).toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(
+      await saveWhyISignedForClerkUser(db, CLERK_ID, "one edit too many"),
+    ).toMatchObject({ ok: false, reason: "rate_limited" });
+
+    // Budget spent — the removal still lands.
+    const removed = await saveWhyISignedForClerkUser(db, CLERK_ID, "");
+    expect(removed).toMatchObject({ ok: true, whyISigned: null });
+    expect(await storedStatement(db)).toBeNull();
+
+    // Whitespace-only is the same path, and repeating it is still free: a
+    // removal must not consume a slot it could then be refused for.
+    for (let i = 0; i < WHY_I_SIGNED_EDITS_PER_HOUR + 5; i++) {
+      expect(
+        (await saveWhyISignedForClerkUser(db, CLERK_ID, "   \n  ")).ok,
+      ).toBe(true);
+    }
+    expect(await storedStatement(db)).toBeNull();
+
+    // ...and none of that bought the signer a way back in: putting text up
+    // again is a SET, so it is still refused and the row stays empty.
+    expect(
+      await saveWhyISignedForClerkUser(db, CLERK_ID, "back up it goes"),
+    ).toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(await storedStatement(db)).toBeNull();
   });
 
   it("counts per signer, not globally", async () => {
