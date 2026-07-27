@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MENTION_IDS_FIELD,
   appendResolvedMentions,
   mentionText,
   pruneResolvedMentions,
@@ -119,7 +120,7 @@ describe("the wire contract", () => {
   it("ignores empty id values", () => {
     const fd = new FormData();
     appendResolvedMentions(fd, []);
-    fd.append("mentionSignerIds", "");
+    fd.append(MENTION_IDS_FIELD, "");
     expect(readSubmittedMentions(fd).signerIds).toEqual([]);
   });
 });

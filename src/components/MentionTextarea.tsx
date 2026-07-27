@@ -118,9 +118,16 @@ export function MentionTextarea({
     notifyRef.current = onResolvedMentionsChange;
   });
   useEffect(() => {
+    // INVARIANT: this must recompute from exactly the inputs `resolvedKey` was
+    // derived from, or the parent gets told a set that isn't the one that
+    // triggered telling it. If you change either expression, change both.
+    //
     // Recomputed rather than closed over so the effect depends on `resolvedKey`
     // alone. Deliberately not memoising `resolved` for identity: React may drop a
-    // useMemo cache, which would refire this on an unchanged set.
+    // useMemo cache, which would refire this on an unchanged set. Handing the
+    // value over through a ref would be the obvious way to compute it once, but
+    // writing a ref during render trips `react-hooks` ("Cannot access refs during
+    // render"), so the duplication stays and the invariant is stated instead.
     notifyRef.current?.(pruneResolvedMentions(value, picked));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedKey]);
