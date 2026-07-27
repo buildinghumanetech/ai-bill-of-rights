@@ -428,7 +428,17 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                   openSignModal();
                   return;
                 }
-                setShowReply((v) => !v);
+                // Collapsing unmounts the composer, which loses its picks.
+                // Clear the draft too so reopening can't show mention text that
+                // would no longer notify anyone.
+                setShowReply((v) => {
+                  if (v) {
+                    setReplyBody("");
+                    setReplyMentions([]);
+                    setReplyError(null);
+                  }
+                  return !v;
+                });
               }}
               className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
             >

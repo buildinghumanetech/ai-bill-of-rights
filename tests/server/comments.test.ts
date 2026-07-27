@@ -423,9 +423,11 @@ describe("write-time mention resolution (data layer)", () => {
       })),
     );
     const read = readSubmittedMentions(fd);
+    // No prose-parsing branch — this mirrors the action, which notifies nobody
+    // when a submission carries no resolution.
     const mentions = read.fromComposer
       ? resolveSubmittedMentions(body, read.signerIds, known)
-      : parseMentions(body, known);
+      : [];
     for (const m of mentions.filter((m) => m.signerId !== authorSignerId)) {
       await db
         .insert(commentMentions)
@@ -492,9 +494,11 @@ describe("write-time mention resolution (data layer)", () => {
     expect(rows).toEqual([]);
   });
 
-  it("still parses the prose when the client did no resolution", async () => {
-    // No source marker at all (a form posted without JS): the fallback keeps
-    // working so such a client isn't silently downgraded to zero notifications.
+  it("notifies nobody when a submission carries no resolution", async () => {
+    // No source marker (a hand-rolled POST). There is deliberately no prose
+    // fallback: one the client selects by omitting a field would be an opt-out
+    // from the containment guarantee, and `parseMentions` would notify Alice for
+    // a body like `bob!@alice.com`.
     const { db, versionId, signerId } = await seed();
     const alice = await addSigner(db, "u_alice_f", "Alice");
 
@@ -508,19 +512,14 @@ describe("write-time mention resolution (data layer)", () => {
 
     const read = readSubmittedMentions(new FormData());
     expect(read.fromComposer).toBe(false);
-    const mentions = parseMentions(body, [alice]);
-    for (const m of mentions) {
-      await db
-        .insert(commentMentions)
-        .values({ commentId, mentionedSignerId: m.signerId })
-        .onConflictDoNothing();
-    }
+    // The prose still names Alice, and the old path would have found her.
+    expect(parseMentions(body, [alice])).toHaveLength(1);
+
     const rows = await db
       .select()
       .from(commentMentions)
       .where(eq(commentMentions.commentId, commentId));
-    expect(rows).toHaveLength(1);
-    expect(rows[0].mentionedSignerId).toBe(alice.id);
+    expect(rows).toEqual([]);
   });
 
   it("drops a self-mention", async () => {
