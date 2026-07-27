@@ -9,7 +9,6 @@ import {
   type SignerSignatureStatus,
 } from "@/lib/db/signature-status";
 import { reaffirmSignature } from "@/lib/db/reaffirm";
-import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
@@ -95,41 +94,27 @@ export async function reaffirmMySignature(
   }
   const signer = signerRows[0];
 
-  // Bounds SIGNATURES created, which is the thing this action writes. Counting
-  // consent_records here would be theatre: reaffirmSignature short-circuits
-  // before writing one, and the unique index permits at most one signature —
-  // hence one consent record — per (signer, version), so that counter would sit
-  // at 1 no matter how often the action were called.
+  // NO RATE LIMIT HERE, deliberately — read this before adding one back.
   //
-  // Repeat calls that write nothing are deliberately NOT limited. They are
-  // reads, no more expensive than any other server action, and rejecting a
-  // no-op that reports the state the caller already asked for would only make
-  // the UI worse.
-  try {
-    await enforceRateLimit(db, {
-      bucket: "reaffirm",
-      signerId: signer.id,
-      windowSec: 3600,
-      max: 5,
-      countSql: `SELECT count(*)::int AS n FROM "signatures"
-                  WHERE "signer_id" = $1
-                    AND "signed_at" > now() - interval '1 hour'`,
-    });
-  } catch (err) {
-    // enforceRateLimit throws its own "Rate limit exceeded" for a real
-    // rejection. Anything else is a DB or SQL failure, and reporting that as
-    // "too many attempts" would send the user away to retry something that is
-    // not their fault and will not fix itself.
-    const msg = err instanceof Error ? err.message : "";
-    if (/rate limit exceeded/i.test(msg)) {
-      return {
-        success: false,
-        error: "Too many attempts. Please try again later.",
-      };
-    }
-    console.error("[reaffirm] rate-limit check failed:", err);
-    return { success: false, error: "We couldn't record your signature." };
-  }
+  // A counter over rows this action creates cannot trip. reaffirmSignature
+  // writes at most ONE signature per (signer, version), enforced by a unique
+  // index, and writes a consent record only when it is about to create that
+  // signature — deleting it again if the insert fails. So nothing unbounded is
+  // written, and a `count(*) ... FROM signatures WHERE signer_id = $1` bound
+  // would sit at 1 forever no matter how often the action were called. A limit
+  // that can never reject is worse than none: it reads as protection.
+  //
+  // What WOULD be worth bounding is ATTEMPTS — the refusal paths above and
+  // below cost an auth() round trip and a couple of selects each, and a
+  // rejected caller can currently repeat them for free. Counting attempts
+  // needs somewhere to record them, i.e. a rate-limit table and a migration;
+  // migrations here are applied by hand (see AGENTS.md), so that is a decision
+  // to take on purpose rather than smuggle in with a review fix.
+  //
+  // Until then, note honestly what a rejected caller costs us: an auth() round
+  // trip, two or three selects, one consent-text render and a sha256. All CPU
+  // and cheap reads, no writes — the same order of cost as any other server
+  // action, which is the reason this is a "worth doing" and not a "must fix".
 
   const h = await headers();
   const fields = extractCapturedFields(h, {

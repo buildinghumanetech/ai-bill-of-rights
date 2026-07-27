@@ -702,8 +702,20 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 <p className="text-sm font-semibold text-red-900">
                   Remove your signature from the AI Bill of Rights?
                 </p>
+                {/*
+                  Says "every version" explicitly. removeMySignature deletes the
+                  signer row and EVERY signature it owns, and this view can be
+                  reached while looking at a specific version — someone reading
+                  "your signature" next to a version number reasonably takes it
+                  to mean that one. This is the same hazard that earned
+                  signed-other its own branch without a remove button; the
+                  wording is what fixes it for the branches that keep one.
+                */}
                 <p className="mt-1 text-sm text-red-800">
-                  This deletes your signer record and is irreversible.
+                  This removes your name from{" "}
+                  <strong>every version</strong> you have signed, not just the
+                  one you are viewing, and deletes your signer record. It is
+                  irreversible.
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
@@ -802,6 +814,62 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
             </div>
           </div>
         )}
+
+        {/*
+          They signed, and the version this page asks about has no row at all —
+          the deployed VERSION constant is ahead of the database, or we are
+          mid-way through an unsync/re-sync. Separate from signed-other because
+          "no longer open for signing" would be FALSE here, and stating it about
+          the version the site is campaigning for is worse than saying nothing.
+
+          So this says nothing about the requested version — the one claim that
+          holds whatever the cause. resolveSignatureStatus logs the fault
+          server-side, which is where it can actually be acted on.
+        */}
+        {step === "form" &&
+          signatureStatus?.state === "signed-version-unknown" && (
+            <div>
+              <h2
+                id="sign-modal-title"
+                className="text-2xl font-semibold tracking-tight text-zinc-950"
+              >
+                You&apos;ve signed the AI Bill of Rights as:
+              </h2>
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+                <div className="text-xl font-semibold">
+                  {signatureStatus.displayName}
+                </div>
+                <div className="mt-1 text-sm">
+                  Verified by{" "}
+                  {signatureStatus.verificationMethod === "sms"
+                    ? "Phone"
+                    : "Email"}{" "}
+                  — v{signatureStatus.version} on{" "}
+                  {formatSignedDate(signatureStatus.signedAt)}
+                </div>
+              </div>
+
+              <p className="mt-5 text-sm text-zinc-600">
+                Your signature stands and still appears in the public list.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-2">
+                <a
+                  href="/account"
+                  className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+                >
+                  Manage my signature
+                </a>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
 
         {step === "form" && signatureStatus?.state === "signed-earlier" && (
           <div>

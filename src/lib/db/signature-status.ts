@@ -73,11 +73,35 @@ export interface SignedOtherStatus {
   requestedVersion: string;
 }
 
+/**
+ * They have signed, and the version being asked about has NO ROW AT ALL.
+ *
+ * Kept apart from `signed-other` because the honest copy differs. `sync-versions`
+ * is a manual post-deploy step (see AGENTS.md and README "Post-deploy steps"),
+ * and `SignModal` hardcodes the version constant — so a deploy whose constant is
+ * ahead of the database, or the window during the unsync/re-sync remedy, leaves
+ * the requested version genuinely absent. Telling those people the version is
+ * "no longer open for signing" would be a false statement about the version the
+ * site is actively campaigning for.
+ *
+ * The UI for this state says nothing about the requested version at all, which
+ * is the only claim that stays true whatever the cause.
+ */
+export interface SignedVersionUnknownStatus {
+  state: "signed-version-unknown";
+  displayName: string;
+  verificationMethod: "email" | "sms";
+  signedAt: string;
+  version: string;
+  requestedVersion: string;
+}
+
 export type SignerSignatureStatus =
   | { state: "not-signed" }
   | SignedStatus
   | SignedEarlierStatus
-  | SignedOtherStatus;
+  | SignedOtherStatus
+  | SignedVersionUnknownStatus;
 
 interface SignerLike {
   id: string;
@@ -146,13 +170,28 @@ export async function resolveSignatureStatus(
   // intermediate version (signed 0.0.1, asking about a published-and-archived
   // 0.0.2) is newer AND unsignable: `reaffirmSignature` refuses every
   // non-current version, so offering the button there guarantees a failure.
+  //
+  // Three outcomes, not two: no row, an archived row, and a current row.
   const requested = await db
     .select({ isCurrent: versions.isCurrent })
     .from(versions)
     .where(eq(versions.version, versionString))
     .limit(1);
-  const requestedIsOpen = requested.length > 0 && Boolean(requested[0].isCurrent);
-  if (!requestedIsOpen) {
+
+  // No row at all is NOT the same as an archived row — see
+  // SignedVersionUnknownStatus. Collapsing them tells people the version the
+  // site is campaigning for is closed, which is both false and unactionable.
+  if (requested.length === 0) {
+    // An operational fault, not a user one: the deployed version constant is
+    // ahead of the database. Say so where operators look, since the UI
+    // deliberately does not.
+    console.warn(
+      `[signature-status] no versions row for ${versionString} — is sync-versions pending?`,
+    );
+    return { ...common, state: "signed-version-unknown" };
+  }
+
+  if (!requested[0].isCurrent) {
     return { ...common, state: "signed-other" };
   }
 

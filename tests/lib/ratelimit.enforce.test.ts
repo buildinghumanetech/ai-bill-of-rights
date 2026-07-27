@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { signers, comments, versions } from "@/lib/db/schema";
 import { syncVersions } from "@/lib/db/sync";
-import { enforceRateLimit } from "@/lib/ratelimit/enforce";
+import { enforceRateLimit, RateLimitError } from "@/lib/ratelimit/enforce";
 
 const md = `---
 version: 1.0.0
@@ -75,5 +75,29 @@ describe("enforceRateLimit", () => {
         countSql: `SELECT count(*)::int as n FROM comments WHERE signer_id = $1 AND created_at > now() - interval '1 hour'`,
       }),
     ).rejects.toThrow(/rate/i);
+  });
+
+  it("throws a typed RateLimitError, not a bare Error", async () => {
+    // Callers must be able to tell "you are over the limit" from "the check
+    // itself blew up" — a DB failure reported as "too many attempts" sends
+    // someone away to retry something that will not fix itself. Matching the
+    // message text is a contract across a module boundary that nothing
+    // enforces; the type is one the compiler keeps.
+    const { db, signerId } = await seed();
+
+    const attempt = enforceRateLimit(db, {
+      bucket: "reaffirm",
+      signerId,
+      windowSec: 3600,
+      max: 0, // already over before any write
+      countSql: `SELECT 0::int as n`,
+    });
+
+    await expect(attempt).rejects.toBeInstanceOf(RateLimitError);
+    const err = await attempt.catch((e) => e);
+    expect(err.code).toBe("rate_limited");
+    expect(err.bucket).toBe("reaffirm");
+    // The message is preserved: callers that surface it directly still work.
+    expect(err.message).toMatch(/rate limit exceeded/i);
   });
 });

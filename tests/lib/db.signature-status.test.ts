@@ -249,6 +249,46 @@ describe("resolveSignatureStatus", () => {
     expect(status.requestedVersion).toBe("0.0.1");
   });
 
+  it("does not claim a version is closed when it simply has no row yet", async () => {
+    // sync-versions is a MANUAL post-deploy step and SignModal hardcodes the
+    // version constant, so a deploy can be ahead of the database — as can the
+    // window during the unsync/re-sync remedy. Reporting signed-other there
+    // renders "v0.1.0 is no longer open for signing" about the very version the
+    // site is campaigning for: false, and with no sign path offered.
+    const db = await createTestDb();
+    await syncVersions(db, [
+      {
+        version: "0.0.1",
+        publishedAt: new Date("2026-05-18T00:00:00Z"),
+        markdown: markdownFor("0.0.1"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: true,
+        gitCommitSha: null,
+      },
+    ]);
+    const signer = await seedSigner(db, "u-ahead");
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString: "0.0.1",
+      consentTextHash: "7".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    // 0.1.0 has no row at all.
+    const status = await resolveSignatureStatus(db, signer, "0.1.0");
+
+    expect(status.state).toBe("signed-version-unknown");
+    if (status.state !== "signed-version-unknown") {
+      throw new Error("unreachable");
+    }
+    // Their own signature is still reported accurately.
+    expect(status.version).toBe("0.0.1");
+    expect(status.requestedVersion).toBe("0.1.0");
+    expect(status.displayName).toBe("Signer u-ahead");
+  });
+
   it("reports signed-other for an archived version NEWER than the one signed", async () => {
     // The gap between the two guards: 0.0.2 is newer than the signed 0.0.1 but
     // is archived, so reaffirmSignature would refuse it. Returning
@@ -446,6 +486,61 @@ describe("reaffirmSignature", () => {
       .from(consentRecords)
       .where(eq(consentRecords.signerId, signer.id));
     expect(consentAfter.length).toBe(consentBefore.length + 1);
+  });
+
+  it("deletes the consent record AND rethrows on a non-duplicate failure", async () => {
+    // The catch was widened from the duplicate-key branch to every error path.
+    // Without this case, moving the delete back inside `if (/duplicate key/)`
+    // would still pass every other test — the race test only drives the
+    // duplicate path. Two things must hold here: the orphan is cleaned up, and
+    // the error is NOT swallowed into a success.
+    const db = await createTestDb();
+    await seedVersions(db);
+    const signer = await seedPriorSigner(db, "u-boom");
+
+    const failingDb = {
+      ...db,
+      select: db.select.bind(db),
+      delete: db.delete.bind(db),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      insert(table: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const builder: any = (db as any).insert(table);
+        if (table === signatures) {
+          builder.values = () =>
+            Promise.reject(new Error("connection reset by peer"));
+        }
+        return builder;
+      },
+    } as unknown as Parameters<typeof reaffirmSignature>[0];
+
+    const consentBefore = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+
+    await expect(
+      reaffirmSignature(failingDb, {
+        signerId: signer.id,
+        versionString: "0.1.0",
+        consentTextHash: "b".repeat(64),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        capturedFields: {} as any,
+      }),
+    ).rejects.toThrow(/connection reset/);
+
+    // No orphan left behind, and no signature written.
+    const consentAfter = await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.signerId, signer.id));
+    expect(consentAfter).toHaveLength(consentBefore.length);
+    expect(
+      await db
+        .select()
+        .from(signatures)
+        .where(eq(signatures.signerId, signer.id)),
+    ).toHaveLength(1); // just the 0.0.1 they arrived with
   });
 
   it("adds a signature on the current version without touching the earlier one", async () => {

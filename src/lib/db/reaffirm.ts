@@ -23,19 +23,22 @@ export type ReaffirmResult =
  * name on the new one.
  *
  * Guards, all of which matter because this is reachable by any authenticated
- * user with a version string of their choosing:
+ * user with a version string of their choosing. Listed IN THE ORDER THEY FIRE,
+ * which is also the order they are checked in the body — so a commenter probing
+ * an archived version gets guard 2's message, not guard 3's:
  *
- * 1. **The signer must already have signed something.** This is a RE-affirm,
+ * 1. **The version must exist.** The caller supplies the string.
+ * 2. **Only the current version may be affirmed.** Otherwise a caller could
+ *    attach signature rows to any archived version row, which no UI offers and
+ *    which would corrupt the per-version signer lists.
+ * 3. **The signer must already have signed something.** This is a RE-affirm,
  *    not a first signature. Comment-only accounts get a `signers` row with
  *    zero signatures (`createSignerFromModal`), so without this check an
  *    authenticated commenter calling the action directly would become a public
  *    signatory of the bill — skipping the consent page and the `consent ===
  *    "yes"` gate that `submitSignAction` requires. First-time signing has its
  *    own flow; this is not a back door into it.
- * 2. **Only the current version may be affirmed.** Otherwise a caller could
- *    attach signature rows to any archived version row, which no UI offers and
- *    which would corrupt the per-version signer lists.
- * 3. **An existing signature short-circuits.** `recordSignature` inserts the
+ * 4. **An existing signature short-circuits.** `recordSignature` inserts the
  *    consent record BEFORE the signature, so relying on the unique-constraint
  *    violation to detect a repeat means every repeat call leaves an orphan
  *    `consent_records` row behind. `consent_records` has no unique constraint,
