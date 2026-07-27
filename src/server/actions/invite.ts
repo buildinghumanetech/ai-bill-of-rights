@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { signers } from "@/lib/db/schema";
 import { signInvitation } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
+import { homeShareUrl, signerShareUrl } from "@/lib/share/urls";
 
 let _db: any | null = null;
 function getDb() {
@@ -61,10 +62,15 @@ export async function sendInvitationsAction(
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+  // Both links go to the invitee — a third party — so both carry the inviter's
+  // `?ref=` and the `invite` channel. Untagged, a personally-invited friend who
+  // clicks through and signs is attributed to nobody and lands in no channel
+  // bucket, while the modal has already reported `share_clicked{invite}`: the
+  // funnel reads "high share volume, zero conversions" as a pure artifact.
   const tpl = signInvitation({
     inviterName: inviter.displayName,
-    inviterPageUrl: `${siteUrl}/signatories/${inviter.id}`,
-    siteUrl,
+    inviterPageUrl: signerShareUrl(siteUrl, inviter.id, "invite"),
+    siteUrl: homeShareUrl(siteUrl, inviter.id, "invite"),
   });
 
   const failed: string[] = [];

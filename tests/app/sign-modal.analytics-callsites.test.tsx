@@ -233,12 +233,33 @@ describe("signature_completed fires from both SignModal success paths", () => {
 });
 
 describe("the copy button only reports a share that happened", () => {
+  /**
+   * jsdom's `navigator` is one object shared by the whole file, so a stub
+   * installed here outlives the test that installed it. The last test below
+   * installs a THROWING `writeText`; left in place, any test added after this
+   * block inherits a clipboard that rejects and fails for a reason that has
+   * nothing to do with what it was testing. Capture the original descriptor
+   * once and put it back after every test.
+   */
+  const originalClipboard = Object.getOwnPropertyDescriptor(
+    navigator,
+    "clipboard",
+  );
+
   function stubClipboard(writeText: () => Promise<void>) {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: vi.fn(writeText) },
     });
   }
+
+  afterEach(() => {
+    if (originalClipboard) {
+      Object.defineProperty(navigator, "clipboard", originalClipboard);
+    } else {
+      delete (navigator as { clipboard?: unknown }).clipboard;
+    }
+  });
 
   async function clickCopy(): Promise<void> {
     await act(async () => {

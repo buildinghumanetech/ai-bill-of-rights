@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signerShareUrl } from "@/lib/share/urls";
+import { shareHrefs, signerShareUrl } from "@/lib/share/urls";
 
 interface Props {
   /** The signer this box belongs to. Owner-only UI — never render it to a visitor. */
@@ -24,17 +24,19 @@ export function ShareSignature({ signerId, siteUrl }: Props) {
   // three are not one owner's to move right now.
   const shareText =
     "I signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name.";
-  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-    `${shareText} ${signerShareUrl(siteUrl, signerId, "x")}`,
-  )}`;
-  const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-    signerShareUrl(siteUrl, signerId, "linkedin"),
-  )}`;
-  const emailUrl = `mailto:?subject=${encodeURIComponent(
-    "I signed the AI Bill of Rights",
-  )}&body=${encodeURIComponent(
-    `${shareText}\n\n${signerShareUrl(siteUrl, signerId, "email")}`,
-  )}`;
+  // The three hrefs come from `shareHrefs`, the one place they are assembled.
+  // This used to be a third hand-rolled copy and it had already drifted: the X
+  // href stuffed the URL inside `text=` with no `&url=` param, so X rendered no
+  // link card, and the mailto used its own subject line — two share surfaces
+  // sending different subjects for the same action.
+  const {
+    twitterHref: tweetUrl,
+    linkedinHref: linkedInUrl,
+    emailHref: emailUrl,
+  } = shareHrefs({
+    url: (channel) => signerShareUrl(siteUrl, signerId, channel),
+    text: () => shareText,
+  });
 
   async function copyLink() {
     try {
