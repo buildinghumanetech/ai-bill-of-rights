@@ -28,25 +28,38 @@ import {
 const SITE_URL = "https://ai-for-people.org";
 const INVITER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 
-const state = vi.hoisted(() => ({
-  clerkUserId: null as string | null,
-  signerRows: [] as unknown[],
-}));
-
 /**
- * A stand-in for the drizzle chain `invite.ts` runs:
+ * `dbStub` lives INSIDE `vi.hoisted` alongside the mutable state, not in a
+ * module-scope `const` below the mocks. `vi.mock` factories and the `import` of
+ * the action under test are both hoisted above every `const` in this file, so a
+ * factory closing over a module-scope `dbStub` is only safe while nothing in
+ * the graph statically imports `@/lib/db` — the day `invite.ts` swaps its lazy
+ * `require` for a normal `import`, that factory fires during hoisted evaluation
+ * and throws `ReferenceError: Cannot access 'dbStub' before initialization`
+ * instead of mocking. Hoisting the stub removes the trap rather than relying on
+ * the import graph staying the shape it is today.
+ *
+ * The stub is a stand-in for the drizzle chain `invite.ts` runs:
  * `db.select().from(signers).where(eq(...)).limit(1)`. Nothing about the query
  * itself is under test here — only what the action does with the row it gets.
  */
-const dbStub = {
-  select: () => ({
-    from: () => ({
-      where: () => ({
-        limit: async () => state.signerRows,
+const state = vi.hoisted(() => {
+  const s = {
+    clerkUserId: null as string | null,
+    signerRows: [] as unknown[],
+    db: null as unknown,
+  };
+  s.db = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => s.signerRows,
+        }),
       }),
     }),
-  }),
-};
+  };
+  return s;
+});
 
 /**
  * `invite.ts` reaches for the Neon client through a lazy CommonJS
@@ -66,7 +79,7 @@ const loader = Module as unknown as {
 const originalLoad = loader._load;
 beforeAll(() => {
   loader._load = function (this: unknown, request, ...rest) {
-    if (request === "@/lib/db") return { db: dbStub };
+    if (request === "@/lib/db") return { db: state.db };
     return originalLoad.call(this, request, ...rest);
   } as typeof originalLoad;
 });
@@ -74,7 +87,11 @@ afterAll(() => {
   loader._load = originalLoad;
 });
 
-vi.mock("@/lib/db", () => ({ db: dbStub }));
+vi.mock("@/lib/db", () => ({
+  get db() {
+    return state.db;
+  },
+}));
 vi.mock("@clerk/nextjs/server", () => ({
   auth: async () => ({ userId: state.clerkUserId }),
 }));
@@ -89,11 +106,24 @@ vi.mock("@/lib/email/send", () => ({
 
 import { sendInvitationsAction } from "@/server/actions/invite";
 
+/**
+ * `process.env` is ONE object shared by every file in a Vitest worker, so
+ * setting `NEXT_PUBLIC_SITE_URL` here without restoring it leaks this file's
+ * origin into whatever suite runs next in the same worker — the same
+ * cross-file-state class as the jsdom clipboard stub this branch already
+ * fixed. `vi.stubEnv` records the previous value; `vi.unstubAllEnvs` in
+ * `afterAll` puts it back (or deletes it if it was never set), keeping the hook
+ * pair symmetric like the `Module._load` patch above.
+ */
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 beforeEach(() => {
   sentEmails.length = 0;
   state.clerkUserId = "user_inviter";
   state.signerRows = [{ id: INVITER_ID, displayName: "Ada Lovelace" }];
-  process.env.NEXT_PUBLIC_SITE_URL = SITE_URL;
+  vi.stubEnv("NEXT_PUBLIC_SITE_URL", SITE_URL);
 });
 
 /** Every absolute site URL in the invitation body, in order of appearance. */

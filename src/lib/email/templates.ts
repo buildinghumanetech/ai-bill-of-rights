@@ -191,16 +191,27 @@ Here's their unique signatory URL: ${opts.signerPageUrl}
   };
 }
 
+/**
+ * Every link in this email goes to a THIRD PARTY — the invitee — so both URLs
+ * below must already carry `?ref=<inviter>` and `?via=invite` before they get
+ * here. Build them with `homeShareUrl`/`signerShareUrl`; an untagged value is a
+ * regression, not a stylistic choice. That is why neither param is called
+ * `siteUrl`: the previous version took the bare origin, and a friend who
+ * clicked through and signed was attributed to nobody while the modal had
+ * already reported `share_clicked{channel:"invite"}`.
+ */
 export function signInvitation(opts: {
   inviterName: string;
+  /** The inviter's public signature page, attribution-tagged. */
   inviterPageUrl: string;
-  siteUrl: string;
+  /** The "read it for yourself" homepage link, attribution-tagged. */
+  readItUrl: string;
 }): { subject: string; text: string } {
   return {
     subject: `${opts.inviterName} invited you to sign the AI Bill of Rights`,
     text: `${opts.inviterName} just signed the AI Bill of Rights — nine commitments we're demanding from every AI company — and thought you'd want to add your name too.
 
-Read it and decide for yourself: ${opts.siteUrl}
+Read it and decide for yourself: ${opts.readItUrl}
 
 ${opts.inviterName}'s signature: ${opts.inviterPageUrl}
 

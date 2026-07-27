@@ -152,7 +152,11 @@ export default async function SignerProfile({
       ) : null}
 
       {isOwner ? (
-        <ShareSignature signerId={signer.id} siteUrl={siteUrl} />
+        <ShareSignature
+          signerId={signer.id}
+          siteUrl={siteUrl}
+          whyISigned={whyISigned}
+        />
       ) : (
         <section className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
           <h2 className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
