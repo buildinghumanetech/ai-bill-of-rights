@@ -137,10 +137,8 @@ describe("current version document", () => {
     // gained a sentence of substance.
     "0.1.0": new Set([
       "article-1", // closing line -> 'The default is "No LLM training on my data."'
-      "article-2", // closing line -> "LLM memory built on your life is yours."
       "article-4", // "persuasive dark patterns" -> "deceptive patterns"
       "article-5", // + logging sentence, + closing line
-      "article-6", // closing line -> the AI-agent "license plate" sentence
       "article-7", // + COPPA definition of a child
     ]),
   };

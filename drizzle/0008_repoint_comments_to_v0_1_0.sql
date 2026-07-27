@@ -8,23 +8,26 @@
 -- WHAT CHANGED IN v0.1.0, and what that means for anchors. This migration
 -- originally rested on "Articles 1-9 are byte-identical, so every anchor still
 -- resolves." That is NO LONGER TRUE — v0.1.0 revised the wording of Articles
--- 1, 2, 4, 5, 6 and 7. The revisions break down into three cases:
+-- 1, 4, 5 and 7. The revisions break down into three cases:
 --
 --   (a) Sentences APPENDED at the end of an article (5 gained two; 11 is new).
 --       Existing anchors are unaffected: article-5-s-1 still addresses the same
 --       sentence, and nothing shifted underneath it.
 --
---   (b) Text CHANGED in place, same position (article-1-s-4, article-2-s-4,
---       article-4-s-1, article-6-s-3). The anchor still resolves and still
---       points at the same slot in the same article. The comment now sits
---       beside reworded text — for 1, 2 and 4 the claim is unchanged and only
---       sharper; for article-6-s-3 the closing line genuinely changed subject
---       ("The loop stays open." -> the AI-agent "license plate" sentence).
---       There is no better anchor to move those to, and dropping the threads
---       would lose real discussion, so they move. Highlights degrade safely:
---       the homepage matches comments.selected_text as a substring, so a
---       selection that no longer appears renders unhighlighted rather than
+--   (b) Text CHANGED in place, same position (article-1-s-4, article-4-s-1).
+--       The anchor still resolves and still points at the same slot in the same
+--       article, and in both cases the claim is unchanged and only sharper —
+--       "The default is no." -> 'The default is "No LLM training on my data."',
+--       and "persuasive dark patterns" -> "deceptive patterns". No comment ends
+--       up beside a sentence that changed subject. Highlights degrade safely
+--       regardless: the homepage matches comments.selected_text as a substring,
+--       so a selection that no longer appears renders unhighlighted rather than
 --       landing on the wrong words.
+--
+--       Articles 2 and 6 were revised in an earlier draft of this publish and
+--       then deliberately reverted to their v0.0.1 wording, which is why they
+--       are absent here. Article 6 in particular had been the one case where a
+--       closing line changed subject; it no longer does.
 --
 --   (c) A sentence INSERTED MID-ARTICLE. Exactly one: v0.1.0 adds the COPPA
 --       definition of a child to Article 7 as the new s-5, pushing "Children's

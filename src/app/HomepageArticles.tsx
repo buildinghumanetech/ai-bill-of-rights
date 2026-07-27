@@ -58,7 +58,7 @@ export const articles: Article[] = [
     number: "02",
     title: "Your Memory Is Portable",
     body: "Everything an AI system learns about you must be exportable by you, in a readable format, at any time. You have the right to move that context to a different system. You have the right to delete it completely.",
-    pullQuote: "LLM memory built on your life is yours.",
+    pullQuote: "Memory built on your life is yours.",
     connects: [
       {
         title: "Right to data portability (GDPR Article 20)",
@@ -137,8 +137,7 @@ connects: [
     number: "06",
     title: "You Have the Right to Human Contact",
     body: "In any situation involving significant consequence — health, legal, financial, crisis — you have the right to reach a human being. AI systems may not be deployed as permanent gatekeepers that eliminate human access.",
-    pullQuote:
-      'Every AI agent has a "license plate" identifier that tracks it back to a human responsible for its actions.',
+    pullQuote: "The loop stays open.",
 connects: [
       {
         title: "Consumer protection law",
