@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { buildShareText } from "@/lib/share/share-text";
 import { shareHrefs, signerShareUrl } from "@/lib/share/urls";
 
 interface Props {
@@ -8,6 +9,13 @@ interface Props {
   signerId: string;
   /** Absolute origin, e.g. https://ai-for-people.org */
   siteUrl: string;
+  /**
+   * The signer's own "why I signed" statement, already normalised by the page.
+   * `buildShareText` leads with it when it exists — which is the whole point of
+   * the feature, and this is the surface the signer is most likely to share
+   * from, so it must not be dropped here.
+   */
+  whyISigned?: string | null;
 }
 
 /**
@@ -15,27 +23,25 @@ interface Props {
  * link is built with `signerShareUrl` so `?ref=`/`?via=` attribution rides
  * along and we can tell which channel actually converts.
  */
-export function ShareSignature({ signerId, siteUrl }: Props) {
+export function ShareSignature({ signerId, siteUrl, whyISigned }: Props) {
   const [copied, setCopied] = useState(false);
 
   const copyUrl = signerShareUrl(siteUrl, signerId, "copy");
-  // Near-verbatim copies of this pitch also live in `src/app/SignModal.tsx`
-  // and `src/lib/email/templates.ts`; they should be consolidated, but all
-  // three are not one owner's to move right now.
-  const shareText =
-    "I signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name.";
-  // The three hrefs come from `shareHrefs`, the one place they are assembled.
-  // This used to be a third hand-rolled copy and it had already drifted: the X
-  // href stuffed the URL inside `text=` with no `&url=` param, so X rendered no
-  // link card, and the mailto used its own subject line — two share surfaces
-  // sending different subjects for the same action.
+  // The three hrefs come from `shareHrefs` and the copy from `buildShareText` —
+  // the one place each is assembled. This used to hand-roll both and both had
+  // already drifted: the X href stuffed the URL inside `text=` with no `&url=`
+  // param, so X rendered no link card; the mailto used its own subject line;
+  // and the pitch was a fourth copy that opened differently from the other
+  // three AND silently dropped the signer's statement. Going through
+  // `buildShareText` also means the X copy is measured against X's weighted
+  // character limit instead of merely hoped to fit.
   const {
     twitterHref: tweetUrl,
     linkedinHref: linkedInUrl,
     emailHref: emailUrl,
   } = shareHrefs({
     url: (channel) => signerShareUrl(siteUrl, signerId, channel),
-    text: () => shareText,
+    text: (channel) => buildShareText({ channel, whyISigned }),
   });
 
   async function copyLink() {

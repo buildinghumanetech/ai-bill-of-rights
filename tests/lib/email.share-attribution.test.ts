@@ -158,7 +158,7 @@ describe("signInvitation share attribution", () => {
   const tpl = signInvitation({
     inviterName: "Ada Lovelace",
     inviterPageUrl: signerShareUrl(ORIGIN, INVITER_ID, "invite"),
-    siteUrl: homeShareUrl(ORIGIN, INVITER_ID, "invite"),
+    readItUrl: homeShareUrl(ORIGIN, INVITER_ID, "invite"),
   });
 
   /** Every absolute site URL in the body, in order of appearance. */

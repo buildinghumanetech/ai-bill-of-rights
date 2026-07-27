@@ -70,7 +70,7 @@ export async function sendInvitationsAction(
   const tpl = signInvitation({
     inviterName: inviter.displayName,
     inviterPageUrl: signerShareUrl(siteUrl, inviter.id, "invite"),
-    siteUrl: homeShareUrl(siteUrl, inviter.id, "invite"),
+    readItUrl: homeShareUrl(siteUrl, inviter.id, "invite"),
   });
 
   const failed: string[] = [];
