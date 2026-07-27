@@ -17,6 +17,7 @@
   "dependencies": {
     "@clerk/nextjs": "^6.39.3",
     "@neondatabase/serverless": "^0.10.4",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.4.0",
     "drizzle-orm": "^0.36.4",
     "gray-matter": "^4.0.3",

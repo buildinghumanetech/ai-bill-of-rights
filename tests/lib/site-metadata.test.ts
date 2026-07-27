@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  OG_IMAGE_URL,
   PRODUCTION_ORIGIN,
   SITE_DESCRIPTION,
   SITE_NAME,
@@ -72,11 +73,31 @@ describe("buildRootMetadata", () => {
     expect(og.url).toBeUndefined();
   });
 
-  it("sets a summary card on Twitter and a website OG type", () => {
+  // This asserted `summary` when the root card had no picture to show. It has
+  // one now (`/api/og`), and a large card with an image is the whole point of
+  // shipping that route — `summary` would render the image in a thumbnail.
+  it("sets a large-image card on Twitter and a website OG type", () => {
     const meta = buildRootMetadata();
-    expect((meta.twitter as { card?: string }).card).toBe("summary");
+    expect((meta.twitter as { card?: string }).card).toBe(
+      "summary_large_image",
+    );
     expect((meta.openGraph as { type?: string }).type).toBe("website");
     expect((meta.openGraph as { siteName?: string }).siteName).toBe(SITE_NAME);
+  });
+
+  it("carries the site OG image at the size the route actually renders", () => {
+    const meta = buildRootMetadata();
+    expect((meta.openGraph as { images?: unknown }).images).toEqual([
+      {
+        url: OG_IMAGE_URL,
+        width: 1200,
+        height: 630,
+        alt: expect.stringContaining("AI Bill of Rights"),
+      },
+    ]);
+    expect((meta.twitter as { images?: unknown }).images).toEqual([
+      OG_IMAGE_URL,
+    ]);
   });
 
   it("derives metadataBase from NEXT_PUBLIC_SITE_URL", () => {

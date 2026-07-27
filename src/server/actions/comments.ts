@@ -4,6 +4,12 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { comments, signers, commentMentions } from "@/lib/db/schema";
+import {
+  createComment,
+  deleteComment,
+  editComment,
+  sanitizeText,
+} from "@/server/comments/core";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { listSignersForMention } from "@/lib/db/queries";
@@ -13,63 +19,14 @@ import {
 } from "@/lib/comments/resolved-mentions";
 import { mentionEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
+import { getDb } from "@/lib/db/lazy";
 
 /**
- * Strip control characters and trim, then cap length.
- * Used for both comment body and selectedText.
+ * The create/edit/delete writes live in `@/server/comments/core`, a plain
+ * module, because everything exported from this file is a POST-reachable
+ * Server Function and those functions take the acting signer id — and, for
+ * edit/delete, an `isAdmin` boolean — as plain arguments.
  */
-function sanitizeText(raw: string, maxLen: number): string {
-  return raw.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "").trim().slice(0, maxLen);
-}
-
-export interface CreateCommentInput {
-  baseVersionId: string;
-  signerId: string;
-  anchorId?: string;
-  proposalId?: string;
-  parentCommentId?: string;
-  body: string;
-  selectedText?: string | null;
-}
-
-/**
- * Data-layer insert. Trims the body, validates that exactly one of
- * (anchorId, proposalId) is set, and rejects empties.
- *
- * The action wrapper below does auth + rate-limit + soft-ban checks.
- */
-export async function createComment(
-  db: any,
-  input: CreateCommentInput,
-): Promise<{ id: string }> {
-  const body = input.body.trim();
-  if (!body) throw new Error("Comment body cannot be empty.");
-  const hasAnchor = Boolean(input.anchorId);
-  const hasProposal = Boolean(input.proposalId);
-  if (hasAnchor === hasProposal) {
-    throw new Error("Comment must target exactly one of anchorId or proposalId.");
-  }
-  const [row] = await db
-    .insert(comments)
-    .values({
-      baseVersionId: input.baseVersionId,
-      signerId: input.signerId,
-      anchorId: input.anchorId ?? null,
-      proposalId: input.proposalId ?? null,
-      parentCommentId: input.parentCommentId ?? null,
-      body,
-      selectedText: input.selectedText ?? null,
-    })
-    .returning({ id: comments.id });
-  return { id: row.id };
-}
-
 export async function submitCommentAction(formData: FormData): Promise<{ ok: boolean; error?: string; id?: string }> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Not signed in." };
@@ -266,66 +223,6 @@ export async function unhideCommentAction(commentId: string): Promise<{ ok: bool
     .where(eq(comments.id, commentId));
   revalidatePath("/");
   revalidatePath("/admin/comments");
-  return { ok: true };
-}
-
-/**
- * Data-layer delete. Used by deleteCommentAction and tests.
- * Caller is responsible for permission checks.
- */
-export async function deleteComment(
-  db: any,
-  commentId: string,
-  callerSignerId: string,
-  callerIsAdmin: boolean,
-): Promise<{ ok: boolean; error?: string }> {
-  const comment = await db
-    .select({ id: comments.id, signerId: comments.signerId })
-    .from(comments)
-    .where(eq(comments.id, commentId))
-    .limit(1);
-  if (comment.length === 0) return { ok: false, error: "Comment not found." };
-
-  const isOwner = comment[0].signerId === callerSignerId;
-  if (!isOwner && !callerIsAdmin) return { ok: false, error: "Not authorized." };
-
-  const hiddenReason = callerIsAdmin && !isOwner ? "admin_delete" : "user_delete";
-
-  await db
-    .update(comments)
-    .set({ hiddenAt: new Date(), hiddenReason })
-    .where(eq(comments.id, commentId));
-  return { ok: true };
-}
-
-/**
- * Data-layer edit. Used by editCommentAction and tests.
- * Caller is responsible for permission checks.
- */
-export async function editComment(
-  db: any,
-  commentId: string,
-  newBody: string,
-  callerSignerId: string,
-  callerIsAdmin: boolean,
-): Promise<{ ok: boolean; error?: string }> {
-  const comment = await db
-    .select({ id: comments.id, signerId: comments.signerId })
-    .from(comments)
-    .where(eq(comments.id, commentId))
-    .limit(1);
-  if (comment.length === 0) return { ok: false, error: "Comment not found." };
-
-  const isOwner = comment[0].signerId === callerSignerId;
-  if (!isOwner && !callerIsAdmin) return { ok: false, error: "Not authorized." };
-
-  const body = sanitizeText(newBody, 5000);
-  if (!body) return { ok: false, error: "Comment body cannot be empty." };
-
-  await db
-    .update(comments)
-    .set({ body })
-    .where(eq(comments.id, commentId));
   return { ok: true };
 }
 

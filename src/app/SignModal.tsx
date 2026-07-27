@@ -13,7 +13,17 @@ import {
   removeMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
+import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { SelfieCapture } from "@/components/SelfieCapture";
+import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
+import { buildShareText } from "@/lib/share/share-text";
+import { shareHrefs, signerShareUrl, type ShareChannel } from "@/lib/share/urls";
+import {
+  trackShareClicked,
+  trackSignatureCompleted,
+  trackSignFormSubmitted,
+  trackSignModalOpened,
+} from "@/lib/analytics/track";
 
 interface Props {
   open: boolean;
@@ -116,6 +126,58 @@ function formatNamePreview(
   return `${maskedFirst} ${maskedLast}`.trim();
 }
 
+export interface PostSignShareLinks {
+  /** The plain link shown in the copy box. */
+  shareUrl: string;
+  twitterHref: string;
+  linkedinHref: string;
+  emailHref: string;
+  /** LinkedIn's dialog carries no text, so this is what people paste. */
+  suggestedMessage: string;
+}
+
+/**
+ * Every outbound link on the post-signature share step.
+ *
+ * Pure and exported so it can be pinned by tests: this is the highest-intent
+ * share surface on the site, and a `?ref=`/`?via=` that quietly falls off one
+ * of these buttons is invisible until the referral numbers are already wrong.
+ * Everything goes through `signerShareUrl` — nothing here hand-builds a URL.
+ *
+ * Returns inert values (`""` / `"#"`) until both the signer id and the origin
+ * exist, so a half-built link is never rendered as a real one. `origin` is
+ * empty during SSR, before the client has a `window`.
+ */
+export function buildPostSignShareLinks(opts: {
+  origin: string;
+  signerId: string | null;
+  whyISigned: string | null;
+}): PostSignShareLinks {
+  const ready = Boolean(opts.signerId && opts.origin);
+  const urlFor = (channel: ShareChannel) =>
+    ready ? signerShareUrl(opts.origin, opts.signerId!, channel) : "";
+  const textFor = (channel: ShareChannel) =>
+    buildShareText({ whyISigned: opts.whyISigned, channel });
+
+  if (!ready) {
+    return {
+      shareUrl: "",
+      twitterHref: "#",
+      linkedinHref: "#",
+      emailHref: "#",
+      suggestedMessage: textFor("linkedin"),
+    };
+  }
+
+  return {
+    shareUrl: urlFor("copy"),
+    // Shared with the confirmation email, which renders the same three
+    // buttons — see `shareHrefs`.
+    ...shareHrefs({ url: urlFor, text: textFor }),
+    suggestedMessage: textFor("linkedin"),
+  };
+}
+
 function clerkErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "errors" in err) {
     const errors = (err as { errors?: Array<{ message?: string }> }).errors;
@@ -164,6 +226,15 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   const [signerId, setSignerId] = useState<string | null>(null);
   const [signerName, setSignerName] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  // "Why I signed" lives on the post-signature step only — the pre-signature
+  // form is already long, and anything added ahead of the conversion event is
+  // friction. Here the user has already signed and is in a moment of
+  // commitment, so the ask is free.
+  const [whyInput, setWhyInput] = useState("");
+  /** What's actually saved on the server — drives the share copy. */
+  const [whySaved, setWhySaved] = useState<string | null>(null);
+  const [whyPending, setWhyPending] = useState(false);
+  const [whyError, setWhyError] = useState<string | null>(null);
   const [inviteEmails, setInviteEmails] = useState<string[]>([]);
   const [inviteInput, setInviteInput] = useState("");
   const [invitePending, setInvitePending] = useState(false);
@@ -174,6 +245,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   >(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Top of the funnel. `mode` is the honest answer to "which button did they
+  // come from" — the two modes are genuinely different intents, and the drop
+  // -off from here to `signature_completed` is the number worth arguing about.
+  useEffect(() => {
+    if (!open) return;
+    trackSignModalOpened({ source: mode });
+  }, [open, mode]);
 
   // Close on Escape. Use the DOM KeyboardEvent (not React's synthetic
   // event imported above) — addEventListener expects globalThis.KeyboardEvent.
@@ -197,6 +276,10 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setSignerId(null);
       setSignerName("");
       setCopied(false);
+      setWhyInput("");
+      setWhySaved(null);
+      setWhyPending(false);
+      setWhyError(null);
       setInviteEmails([]);
       setInviteInput("");
       setInvitePending(false);
@@ -258,10 +341,32 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
   if (!open) return null;
 
+  /**
+   * The conversion event, reported from the one place that knows all three
+   * facts: how they verified, whether they came in on somebody's share link,
+   * and which surface that link was on. The last two are read server-side from
+   * httpOnly cookies and handed back on the result — the browser cannot work
+   * them out for itself.
+   *
+   * Fire-and-forget by construction: `track()` swallows its own errors, so
+   * this can never turn a completed signature into a failed one.
+   */
+  function reportSignatureCompleted(res: {
+    referred?: boolean;
+    channel?: string | null;
+  }) {
+    trackSignatureCompleted({
+      method,
+      referred: res.referred ?? false,
+      channel: res.channel ?? null,
+    });
+  }
+
   async function handleFormSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    if (mode === "sign") trackSignFormSubmitted({ method });
 
     try {
       // If the user is already authenticated (returning visitor or a stale
@@ -300,6 +405,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
           setError(res.error ?? "We couldn't record your signature.");
           return;
         }
+        reportSignatureCompleted(res);
         if (res.signerId) setSignerId(res.signerId);
         if (res.displayName) setSignerName(res.displayName);
         setStep("done");
@@ -435,7 +541,14 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       }
 
       // Hand off to the server action to record the signature / create the account.
-      let res: { success: boolean; error?: string; signerId?: string; displayName?: string };
+      let res: {
+        success: boolean;
+        error?: string;
+        signerId?: string;
+        displayName?: string;
+        referred?: boolean;
+        channel?: string | null;
+      };
       if (mode === "comment-only") {
         res = await createSignerFromModal({
           firstName,
@@ -461,6 +574,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
         setError(res.error ?? (mode === "comment-only" ? "We couldn't create your account." : "We couldn't record your signature."));
         return;
       }
+      if (mode === "sign") reportSignatureCompleted(res);
       if (res.signerId) setSignerId(res.signerId);
       if (res.displayName) setSignerName(res.displayName);
       setStep("done");
@@ -490,17 +604,46 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       ? email.trim().length > 0
       : phoneDigits.replace(/\D/g, "").length >= 7);
 
-  const shareUrl =
-    signerId && typeof window !== "undefined"
-      ? `${window.location.origin}/signatories/${signerId}`
-      : "";
+  // Every outbound link goes through the canonical builder so the ?ref=/?via=
+  // attribution can never silently fall off one of these buttons. Leads with
+  // the signer's own sentence once they've written one.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const { shareUrl, twitterHref, linkedinHref, emailHref, suggestedMessage } =
+    buildPostSignShareLinks({ origin, signerId, whyISigned: whySaved });
 
-  const shareText = `I just signed the AI Bill of Rights — nine commitments we're demanding from every AI company. Add your name too:`;
+  async function handleSaveWhy() {
+    setWhyPending(true);
+    setWhyError(null);
+    try {
+      const res = await saveWhyISigned(whyInput);
+      if (!res.success) {
+        setWhyError(res.error ?? "Couldn't save that.");
+        return;
+      }
+      setWhySaved(res.whyISigned ?? null);
+      // Reflect the sanitised/truncated text back so what they see is what
+      // the world will see.
+      setWhyInput(res.whyISigned ?? "");
+    } catch (err) {
+      setWhyError(err instanceof Error ? err.message : "Couldn't save that.");
+    } finally {
+      setWhyPending(false);
+    }
+  }
+
+  /** Every share surface on the post-signature step reports through here. */
+  function reportShareClicked(channel: ShareChannel) {
+    trackShareClicked({ channel, surface: "post-sign" });
+  }
 
   async function copyShareUrl() {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
+      // Reported only after the write resolved. Same rule the invite path
+      // below applies with `res.sent > 0`: a clipboard write rejected by an
+      // insecure context or a denied permission is not a share.
+      reportShareClicked("copy");
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -565,6 +708,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       if (res.error) {
         setInviteResult({ kind: "error", message: res.error });
       } else {
+        // Only a send that actually left the building counts as a share.
+        if (res.sent > 0) reportShareClicked("invite");
         setInviteResult({
           kind: "success",
           sent: res.sent,
@@ -582,22 +727,6 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setInvitePending(false);
     }
   }
-
-  const twitterHref = shareUrl
-    ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-        shareText,
-      )}&url=${encodeURIComponent(shareUrl)}`
-    : "#";
-  const linkedinHref = shareUrl
-    ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-        shareUrl,
-      )}`
-    : "#";
-  const emailHref = shareUrl
-    ? `mailto:?subject=${encodeURIComponent(
-        "Sign the AI Bill of Rights",
-      )}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`
-    : "#";
 
   return (
     <div
@@ -668,11 +797,43 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
             {confirmingRemove ? (
               <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5">
+                {/*
+                  This button does NOT just remove a signature — it runs the
+                  full account cascade in src/server/signers/delete.ts. The
+                  copy has to name everything that cascade destroys, or people
+                  are consenting to something the dialog never described.
+                  If you widen the cascade, widen this list in the same commit.
+                */}
                 <p className="text-sm font-semibold text-red-900">
-                  Remove your signature from the AI Bill of Rights?
+                  Delete your account and everything in it?
                 </p>
                 <p className="mt-1 text-sm text-red-800">
-                  This deletes your signer record and is irreversible.
+                  This is irreversible. It permanently deletes:
+                </p>
+                <ul className="mt-2 list-disc pl-5 text-sm text-red-800">
+                  <li>
+                    Your signature, and your name, location and affiliation
+                    from the public signers list
+                  </li>
+                  <li>Your profile photo, including all backup copies</li>
+                  <li>
+                    Every comment you&apos;ve written, and every proposed edit
+                    you&apos;ve made
+                  </li>
+                  <li>
+                    Your votes, upvotes and endorsements, and your
+                    &ldquo;why I signed&rdquo; statement
+                  </li>
+                  <li>
+                    <strong className="font-semibold">
+                      Other people&apos;s comments on your proposals
+                    </strong>{" "}
+                    — their replies to your proposed edits go with the proposal
+                  </li>
+                </ul>
+                <p className="mt-2 text-sm text-red-800">
+                  Replies other people wrote to your comments are kept. Your
+                  email or phone is freed up, so you can sign again later.
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
@@ -681,7 +842,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     disabled={removing}
                     className="flex-1 rounded-full bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {removing ? "Removing…" : "Yes, remove"}
+                    {removing ? "Deleting…" : "Yes, delete everything"}
                   </button>
                   <button
                     type="button"
@@ -703,7 +864,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                   }}
                   className="w-full rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100"
                 >
-                  Remove my signature
+                  Delete my account
                 </button>
                 <button
                   type="button"
@@ -1118,6 +1279,65 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
 
             {signerId && mode === "sign" ? (
               <>
+                {/* Why did you sign? — optional, never blocking. Placed after
+                    the signature (not before) so it adds zero friction ahead
+                    of the conversion event. Their sentence becomes the default
+                    share copy and the pull-quote on their share card. */}
+                <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <label
+                    htmlFor="why-i-signed-input"
+                    className="block text-xs font-medium uppercase tracking-[0.18em] text-emerald-700"
+                  >
+                    Why did you sign?
+                  </label>
+                  <p className="mt-1 text-xs text-emerald-800">
+                    One sentence, in your own words. We&apos;ll put it on your
+                    signature card so people see a person, not a petition.
+                  </p>
+                  <textarea
+                    id="why-i-signed-input"
+                    rows={3}
+                    maxLength={MAX_WHY_I_SIGNED_LENGTH}
+                    value={whyInput}
+                    onChange={(e) => setWhyInput(e.target.value)}
+                    placeholder="Because my kids will grow up with this technology and I want it on their side."
+                    className="mt-3 w-full resize-none rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <span
+                      className={`text-xs ${
+                        whyInput.length >= MAX_WHY_I_SIGNED_LENGTH
+                          ? "font-medium text-amber-700"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      {whyInput.length}/{MAX_WHY_I_SIGNED_LENGTH}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveWhy}
+                      disabled={whyPending || whyInput.trim().length === 0}
+                      className="rounded-full bg-emerald-600 px-5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {whyPending
+                        ? "Saving…"
+                        : whySaved
+                          ? "Update"
+                          : "Add to my card"}
+                    </button>
+                  </div>
+                  {whyError ? (
+                    <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {whyError}
+                    </p>
+                  ) : null}
+                  {whySaved && !whyError ? (
+                    <p className="mt-2 text-xs font-medium text-emerald-800">
+                      Saved — your words now lead every share below.
+                    </p>
+                  ) : null}
+                </div>
+
                 {/* Add a selfie photo to your signature */}
                 <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
@@ -1153,9 +1373,18 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                       {copied ? "Copied!" : "Copy"}
                     </button>
                   </div>
+                  {/* LinkedIn's share dialog carries no text of its own, so
+                      give the signer their own line to paste. */}
+                  <p className="mt-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs leading-relaxed text-zinc-700">
+                    <span className="mb-1 block font-semibold uppercase tracking-[0.14em] text-[#0a66c2]">
+                      Suggested message
+                    </span>
+                    {suggestedMessage}
+                  </p>
                   <div className="mt-3 flex items-center gap-2">
                     <a
                       href={twitterHref}
+                      onClick={() => reportShareClicked("x")}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-center text-xs font-medium text-white hover:bg-zinc-700"
@@ -1164,6 +1393,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     </a>
                     <a
                       href={linkedinHref}
+                      onClick={() => reportShareClicked("linkedin")}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 rounded-lg bg-[#0a66c2] px-3 py-2 text-center text-xs font-medium text-white hover:bg-[#0a55a3]"
@@ -1172,6 +1402,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     </a>
                     <a
                       href={emailHref}
+                      onClick={() => reportShareClicked("email")}
                       className="flex-1 rounded-lg bg-zinc-200 px-3 py-2 text-center text-xs font-medium text-zinc-900 hover:bg-zinc-300"
                     >
                       Email

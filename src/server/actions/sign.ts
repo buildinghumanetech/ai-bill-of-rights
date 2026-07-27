@@ -4,68 +4,19 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@clerk/nextjs/server";
-import { consentRecords, signatures, signers, versions } from "@/lib/db/schema";
-import { extractCapturedFields, type CapturedFields } from "@/lib/fingerprint/extract";
+import { signers } from "@/lib/db/schema";
+import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
+import { recordSignature } from "@/server/signatures/record";
+import { getDb } from "@/lib/db/lazy";
 
-// Use the lazy getDb() pattern established in src/lib/db/queries.ts to keep
-// tests from instantiating the Neon client.
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
-
-export interface RecordSignatureInput {
-  signerId: string;
-  versionString: string;
-  consentTextHash: string;
-  capturedFields: CapturedFields;
-}
-
-export async function recordSignature(
-  dbClient: any = null,
-  input: RecordSignatureInput,
-): Promise<{ signatureId: string }> {
-  const db = dbClient ?? getDb();
-  const versionRows = await db
-    .select()
-    .from(versions)
-    .where(eq(versions.version, input.versionString))
-    .limit(1);
-  if (versionRows.length === 0) {
-    throw new Error(`Unknown version: ${input.versionString}`);
-  }
-  const versionRow = versionRows[0];
-
-  // The Neon HTTP driver does not support db.transaction(); we insert
-  // consent first, then the signature. If the signatures insert fails (e.g.
-  // unique-constraint double-submit) the orphan consent_records row is
-  // acceptable — it can be swept by a periodic job. Atomic semantics here
-  // would require switching to the neon-serverless WebSocket driver.
-  const [record] = await db
-    .insert(consentRecords)
-    .values({
-      signerId: input.signerId,
-      consentTextHash: input.consentTextHash,
-      capturedFields: input.capturedFields as unknown as object,
-    })
-    .returning({ id: consentRecords.id });
-
-  const [sig] = await db
-    .insert(signatures)
-    .values({
-      signerId: input.signerId,
-      versionId: versionRow.id,
-      versionHashAtSigning: versionRow.markdownHash,
-      consentRecordId: record.id,
-    })
-    .returning({ id: signatures.id });
-
-  return { signatureId: sig.id };
-}
-
+/**
+ * The insert itself lives in `@/server/signatures/record`, a plain module,
+ * because everything exported from this file is a POST-reachable Server
+ * Function and `recordSignature` takes the signer id to sign as. Here it
+ * comes off the Clerk session.
+ */
 export async function submitSignAction(formData: FormData): Promise<void> {
   const { userId } = await auth();
   if (!userId) redirect("/");
@@ -139,6 +90,9 @@ export async function submitSignAction(formData: FormData): Promise<void> {
         revokeUrl: `${siteUrl}/account/revoke`,
         signatureNumber,
         totalSignatures,
+        // Without this every share link in the email — the highest-volume
+        // share surface we have — goes out with no ?ref= at all.
+        signerId: signer.id,
       });
       await sendEmail({ to: email, ...tpl });
     }

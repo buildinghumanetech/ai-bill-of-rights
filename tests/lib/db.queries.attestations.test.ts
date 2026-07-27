@@ -5,7 +5,7 @@ import {
   listPublishedAttestations,
   listPendingReviewAttestations,
 } from "@/lib/db/queries";
-import { createAttestation, verifyAttestationToken } from "@/server/actions/attestations";
+import { createAttestation, verifyAttestationToken } from "@/server/attestations/core";
 
 const markdown = `---
 version: 1.0.0

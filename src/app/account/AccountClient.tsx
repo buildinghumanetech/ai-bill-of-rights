@@ -8,6 +8,8 @@ import {
   removeMySignatureForVersionAction,
   updateMyProfileAction,
 } from "@/server/actions/account";
+import { saveWhyISigned } from "@/server/actions/why-i-signed";
+import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
 import { SelfieCard, type SelfieCardData } from "@/components/SelfieCard";
 
 interface Signature {
@@ -19,6 +21,7 @@ interface Props {
   initialDisplayName: string;
   initialAffiliation: string | null;
   initialLocationText: string | null;
+  initialWhyISigned: string | null;
   verificationMethod: string;
   signatures: Signature[];
   selfieCard: SelfieCardData;
@@ -28,6 +31,7 @@ export default function AccountClient({
   initialDisplayName,
   initialAffiliation,
   initialLocationText,
+  initialWhyISigned,
   verificationMethod,
   signatures: initialSignatures,
   selfieCard,
@@ -40,6 +44,17 @@ export default function AccountClient({
   const [profilePending, startProfileTransition] = useTransition();
 
   const [signatures, setSignatures] = useState<Signature[]>(initialSignatures);
+
+  // "Why I signed" — editable and removable from here. The statement is public
+  // (signer page, OG card, share copy), so someone who regrets what they wrote
+  // needs a way to change or take it down that doesn't involve emailing us.
+  const [whyISigned, setWhyISigned] = useState(initialWhyISigned ?? "");
+  const [savedWhyISigned, setSavedWhyISigned] = useState(
+    initialWhyISigned ?? "",
+  );
+  const [whyError, setWhyError] = useState<string | null>(null);
+  const [whyNote, setWhyNote] = useState<string | null>(null);
+  const [whyPending, startWhyTransition] = useTransition();
 
   const { signOut } = useClerk();
   const router = useRouter();
@@ -66,6 +81,56 @@ export default function AccountClient({
       }
       setProfileNote("Saved.");
     });
+  }
+
+  /**
+   * Save or clear the statement. `next` is the raw text; the empty string is
+   * the clear path — the server action normalises "" to SQL NULL. Everything
+   * that matters (sanitising, the cap, the rate limit) is enforced server-side;
+   * the counter below is a courtesy, exactly as in the sign modal.
+   */
+  function submitWhyISigned(next: string, successNote: string) {
+    setWhyError(null);
+    setWhyNote(null);
+    startWhyTransition(async () => {
+      const res = await saveWhyISigned(next);
+      if (!res.success) {
+        setWhyError(res.error ?? "Couldn't save that.");
+        return;
+      }
+      const stored = res.whyISigned ?? "";
+      setWhyISigned(stored);
+      setSavedWhyISigned(stored);
+      setWhyNote(
+        res.truncated
+          ? `Saved — trimmed to ${MAX_WHY_I_SIGNED_LENGTH} characters.`
+          : successNote,
+      );
+    });
+  }
+
+  /**
+   * True when the textarea holds exactly what is already stored, i.e. there is
+   * nothing to save. Saving it anyway would spend one of the ten hourly edits
+   * on a write that changes nothing, so ten idle clicks of "Update" — no typing
+   * at all — would lock the signer out of changing their statement for an hour.
+   */
+  const whyUnchanged = whyISigned === savedWhyISigned;
+
+  function handleWhySave(e: FormEvent) {
+    e.preventDefault();
+    // The button below is disabled in these cases; this is the belt to its
+    // braces, since a form can be submitted by routes other than that button.
+    if (whyUnchanged || whyISigned.trim().length === 0) return;
+    submitWhyISigned(whyISigned, "Saved.");
+  }
+
+  function handleWhyRemove() {
+    const confirmed = window.confirm(
+      "Remove your statement? It will disappear from your public page and your share card.",
+    );
+    if (!confirmed) return;
+    submitWhyISigned("", "Removed.");
   }
 
   async function handleRemoveVersion(version: string) {
@@ -146,6 +211,71 @@ export default function AccountClient({
         </div>
       </form>
 
+      <form
+        onSubmit={handleWhySave}
+        className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6"
+      >
+        <h2 className="text-xl font-semibold text-zinc-950">Why you signed</h2>
+        <p className="mt-1 text-xs text-emerald-900">
+          One sentence, in your own words. It appears on your public signature
+          page, on your share card, and in the text people see when you share.
+        </p>
+        <label className="mt-4 block">
+          <span className="sr-only">Why you signed</span>
+          <textarea
+            id="account-why-i-signed"
+            rows={3}
+            maxLength={MAX_WHY_I_SIGNED_LENGTH}
+            value={whyISigned}
+            onChange={(e) => setWhyISigned(e.target.value)}
+            placeholder="Because my kids will grow up with this technology and I want it on their side."
+            className="mt-1 w-full resize-none rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          />
+        </label>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <span
+            className={`text-xs ${
+              whyISigned.length >= MAX_WHY_I_SIGNED_LENGTH
+                ? "font-medium text-amber-700"
+                : "text-zinc-500"
+            }`}
+          >
+            {whyISigned.length}/{MAX_WHY_I_SIGNED_LENGTH}
+          </span>
+          <div className="flex items-center gap-2">
+            {savedWhyISigned ? (
+              <button
+                type="button"
+                onClick={handleWhyRemove}
+                disabled={whyPending}
+                className="rounded-full border border-red-200 bg-white px-4 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                Remove
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              disabled={
+                whyPending || whyUnchanged || whyISigned.trim().length === 0
+              }
+              className="rounded-full bg-emerald-600 px-5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {whyPending ? "Saving…" : savedWhyISigned ? "Update" : "Save"}
+            </button>
+          </div>
+        </div>
+        {whyError ? (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+            {whyError}
+          </p>
+        ) : null}
+        {whyNote ? (
+          <p className="mt-3 rounded-md bg-emerald-100 px-3 py-2 text-xs text-emerald-900">
+            {whyNote}
+          </p>
+        ) : null}
+      </form>
+
       <SelfieCard initial={selfieCard} />
 
       <section className="mt-10">
@@ -198,11 +328,20 @@ export default function AccountClient({
         >
           Sign out
         </button>
+        {/*
+          This is the main entry point to the full account cascade in
+          src/server/signers/delete.ts — signatures, profile, comments,
+          proposed edits, other people's comments on those edits, votes,
+          endorsements and photo blobs. The label has to name that, not just
+          the signatures and the profile, or people arrive at
+          /account/revoke expecting something far narrower than what the
+          page then describes. Keep it in step with that page's list.
+        */}
         <Link
           href="/account/revoke"
           className="text-sm font-medium text-red-700 underline-offset-4 hover:underline"
         >
-          Remove all my signatures and delete my profile →
+          Delete my account — signatures, comments, proposals and photos →
         </Link>
       </section>
     </>

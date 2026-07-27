@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
-import { recordSignature } from "@/server/actions/sign";
+import { recordSignature } from "@/server/signatures/record";
 import { signatures, consentRecords, signers } from "@/lib/db/schema";
 import { syncVersions } from "@/lib/db/sync";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";

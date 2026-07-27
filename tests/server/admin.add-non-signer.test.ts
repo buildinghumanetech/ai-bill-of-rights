@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
-import { insertNonSigner } from "@/server/actions/admin";
+import { insertNonSigner } from "@/server/admin/non-signers";
 import { signers, signatures, consentRecords } from "@/lib/db/schema";
 
 describe("insertNonSigner (data layer for adminAddNonSignerAction)", () => {

@@ -1,9 +1,16 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { upsertSignerProfile } from "./profile";
-import { recordSignature } from "./sign";
+import {
+  REF_CHANNEL_COOKIE,
+  REF_COOKIE,
+  readChannelCookieValue,
+  readRefCookieValue,
+} from "@/lib/referral/cookie";
+import { upsertSignerProfile } from "@/server/profile/upsert";
+import { recordSignature } from "@/server/signatures/record";
+import { getDb } from "@/lib/db/lazy";
 import {
   renderConsentText,
   CURRENT_CONSENT_VERSION,
@@ -35,6 +42,37 @@ function decodePercentEncoding(s: string): string {
     return decodeURIComponent(s);
   } catch {
     return s;
+  }
+}
+
+/** What the proxy stamped on this visitor when they first arrived. */
+interface ReferralAttribution {
+  /** Signer id of whoever introduced them, if anyone. */
+  ref: string | null;
+  /** The `?via=` surface that introduction came from, if it carried one. */
+  channel: string | null;
+}
+
+const UNATTRIBUTED: ReferralAttribution = { ref: null, channel: null };
+
+// Read the attribution cookies the proxy stamped on arrival. Best effort by
+// design: if the cookie jar is unavailable or holds junk we return nulls and
+// the signature proceeds unattributed. A signature is never worth losing over
+// a referral credit.
+//
+// Both cookies are read from the same jar in one go, because the pair always
+// describes the same share event — reading them separately would let a retry
+// pick up a ref from one moment and a channel from another.
+async function readReferralAttribution(): Promise<ReferralAttribution> {
+  try {
+    const jar = await cookies();
+    return {
+      ref: readRefCookieValue(jar.get(REF_COOKIE)?.value),
+      channel: readChannelCookieValue(jar.get(REF_CHANNEL_COOKIE)?.value),
+    };
+  } catch (err) {
+    console.warn("[referral] could not read attribution cookies:", err);
+    return UNATTRIBUTED;
   }
 }
 
@@ -73,6 +111,33 @@ export interface SignFromModalResult {
   alreadySigned?: boolean;
   signerId?: string;
   displayName?: string;
+  /**
+   * Whether this signature came in through somebody's share link, and which
+   * surface it arrived from. The client reports these to analytics — the
+   * cookies are httpOnly, so the browser cannot work either out for itself,
+   * and without them "which surface converts" stays unanswerable.
+   *
+   * These two answer deliberately different questions, and they can disagree:
+   *
+   * `referred` means "the database recorded a referrer for this signer" —
+   * i.e. `signers.referred_by_signer_id` is non-null. It is NOT "the visitor
+   * arrived carrying a ref cookie". A ref that named a since-deleted signer is
+   * dropped at write time, and this reports `false` for it, because the whole
+   * point of the flag is that analytics conversions must reconcile against
+   * `countReferralsBySigner`. A `true` here is a row you can go and find.
+   *
+   * `channel` is independent of that: it is the `?via=` surface the visitor
+   * arrived from, straight off the cookie, and it stays reportable even when
+   * the ref did not survive. Share links can carry a `via` with no usable ref
+   * at all, and "which surface converts" is a real question that shouldn't go
+   * dark just because the referrer deleted their account. So expect — and do
+   * not treat as a bug — events with `referred:false, channel:"linkedin"`.
+   *
+   * Never a signer id: `referred` is a boolean on purpose. Who referred whom
+   * is a database question (`countReferralsBySigner`), not an analytics one.
+   */
+  referred?: boolean;
+  channel?: string | null;
 }
 
 export async function recordSignatureFromModal(
@@ -140,13 +205,21 @@ export async function recordSignatureFromModal(
     const verificationMethod: "email" | "sms" =
       input.method === "email" ? "email" : "sms";
 
-    const profile = await upsertSignerProfile(undefined, {
+    // What the cookie claims. This is an INPUT to the database write, not the
+    // outcome of it: `upsertSignerProfile` runs the ref through
+    // `resolveReferrerId` and will drop it if the referrer's row is gone. The
+    // analytics `referred` flag below is therefore read back off the write,
+    // never from here — see the doc on SignFromModalResult.
+    const attribution = await readReferralAttribution();
+
+    const profile = await upsertSignerProfile(getDb(), {
       clerkUserId: userId,
       displayName,
       affiliation: null,
       locationText,
       verificationMethod,
       notificationPreference: input.notificationPreference ?? "major",
+      referredBySignerId: attribution.ref,
     });
 
     const consentText = renderConsentText(CURRENT_CONSENT_VERSION, {
@@ -169,7 +242,7 @@ export async function recordSignatureFromModal(
       raw_last_name: input.lastName.trim(),
     };
     try {
-      await recordSignature(undefined, {
+      await recordSignature(getDb(), {
         signerId: profile.id,
         versionString: input.versionString,
         consentTextHash,
@@ -214,6 +287,9 @@ export async function recordSignatureFromModal(
           revokeUrl: `${siteUrl}/account/revoke`,
           signatureNumber,
           totalSignatures,
+          // Without this every share link in the email — the highest-volume
+          // share surface we have — goes out with no ?ref= at all.
+          signerId: profile.id,
         });
         await sendEmail({ to: email, ...tpl });
       }
@@ -230,7 +306,14 @@ export async function recordSignatureFromModal(
       console.error("[email] team notification send failed:", err);
     }
 
-    return { success: true, signerId: profile.id, displayName };
+    return {
+      success: true,
+      signerId: profile.id,
+      displayName,
+      // The persisted attribution, not the cookie's claim about it.
+      referred: profile.referredBySignerId !== null,
+      channel: attribution.channel,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return { success: false, error: msg };
@@ -343,13 +426,14 @@ export async function createSignerFromModal(
       };
     }
 
-    const profile = await upsertSignerProfile(undefined, {
+    const profile = await upsertSignerProfile(prodDb, {
       clerkUserId: userId,
       displayName,
       affiliation: null,
       locationText,
       verificationMethod,
       notificationPreference: input.notificationPreference ?? "major",
+      referredBySignerId: (await readReferralAttribution()).ref,
     });
 
     // Confirmation email (best effort).

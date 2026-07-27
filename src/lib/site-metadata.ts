@@ -91,7 +91,22 @@ export function getSiteUrl(): string {
  * `og:url` would be inherited by `/about`, `/resources/[slug]`, and friends and
  * point their share cards at the homepage. `metadataBase` covers canonical
  * resolution without that hazard.
+ *
+ * The image is the one thing here that inheritance makes *better* rather than
+ * riskier. `/api/og` renders the document itself, not the homepage — it names
+ * the site and its nine commitments and says nothing route-specific — so a
+ * route that inherits it shares as the site, which is exactly right for the
+ * ones that have no card of their own. That set currently includes
+ * `/bill-of-rights` and `/signatories`, the two most shareable pages we have.
+ * Contrast `og:url`, which is wrong the moment it is inherited. Any route that
+ * wants a *different* picture overrides the whole `openGraph` block anyway,
+ * via `buildPageMetadata`.
  */
+export const OG_IMAGE_URL = "/api/og";
+
+const OG_IMAGE_ALT =
+  "The AI Bill of Rights — nine commitments demanded of every AI company";
+
 export function buildRootMetadata(): Metadata {
   return {
     metadataBase: new URL(getSiteUrl()),
@@ -102,11 +117,15 @@ export function buildRootMetadata(): Metadata {
       description: SITE_DESCRIPTION,
       siteName: SITE_NAME,
       type: "website",
+      images: [
+        { url: OG_IMAGE_URL, width: 1200, height: 630, alt: OG_IMAGE_ALT },
+      ],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title: SITE_TITLE,
       description: SITE_DESCRIPTION,
+      images: [OG_IMAGE_URL],
     },
   };
 }

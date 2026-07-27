@@ -11,7 +11,7 @@ import {
 import {
   approveAttestation,
   hideAttestation,
-} from "@/server/actions/attestations";
+} from "@/server/attestations/core";
 import DeleteAttestationButton from "./DeleteAttestationButton";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ async function approveFormAction(formData: FormData): Promise<void> {
     throw new Error("Not authorized");
   }
   const id = String(formData.get("id"));
-  await approveAttestation(null, id);
+  await approveAttestation(db, id);
   redirect("/admin/attestations");
 }
 
@@ -47,7 +47,7 @@ async function hideFormAction(formData: FormData): Promise<void> {
   }
   const id = String(formData.get("id"));
   const reason = String(formData.get("reason") ?? "false claim");
-  await hideAttestation(null, id, reason);
+  await hideAttestation(db, id, reason);
   redirect("/admin/attestations");
 }
 

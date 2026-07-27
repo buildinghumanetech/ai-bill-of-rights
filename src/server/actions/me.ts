@@ -2,21 +2,9 @@
 
 import { and, eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
-import {
-  consentRecords,
-  signatures,
-  signers,
-  versions,
-} from "@/lib/db/schema";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = require("@/lib/db").db;
-  }
-  return _db;
-}
+import { signatures, signers, versions } from "@/lib/db/schema";
+import { deleteSigner } from "@/server/signers/delete";
+import { getDb } from "@/lib/db/lazy";
 
 export interface SignedStatus {
   state: "signed";
@@ -82,10 +70,18 @@ export async function getMySignatureStatus(
 }
 
 /**
- * Hard-deletes the current user's signer row + every signature and consent
- * record they own. After this, the same Clerk session is free to sign again
- * with new preferences. Cascading manually because neon-http has no
- * transaction support.
+ * Hard-deletes the current user's account by running the full cascade in
+ * `@/server/signers/delete`. Do NOT read the list of destroyed tables from
+ * here — `deleteSigner` is the authority, and it reaches far past signatures
+ * and consent records: comments, votes, mentions, upvotes, endorsements,
+ * proposals, selfies (rows and blobs), and other people's comments on this
+ * signer's proposals all go with it. Anything that describes the blast radius
+ * to a user (see the confirm dialog in src/app/SignModal.tsx) has to be kept
+ * in step with that function, not with this comment.
+ *
+ * After this, the same Clerk session is free to sign again with new
+ * preferences. The cascade is manual because neon-http has no transaction
+ * support.
  */
 export async function removeMySignature(): Promise<{
   success: boolean;
@@ -105,9 +101,13 @@ export async function removeMySignature(): Promise<{
   }
   const signerId = signerRows[0].id;
 
-  await db.delete(signatures).where(eq(signatures.signerId, signerId));
-  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
-  await db.delete(signers).where(eq(signers.id, signerId));
+  // Delegate to the one cascade in @/server/signers/delete rather than
+  // repeating a subset of
+  // it here. This path used to delete only signatures + consent_records, which
+  // left ~13 other FKs into signers.id intact: anyone who had endorsed a
+  // version, commented, voted, proposed an edit or uploaded a selfie hit
+  // SQLSTATE 23503 on the final DELETE and could not remove their own account.
+  await deleteSigner(db, signerId);
 
   return { success: true };
 }

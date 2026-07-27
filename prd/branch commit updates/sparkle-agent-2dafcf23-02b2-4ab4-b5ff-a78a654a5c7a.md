@@ -1,0 +1,33 @@
+# Branch Progress: sparkle/agent-2dafcf23-02b2-4ab4-b5ff-a78a654a5c7a
+
+## Progress Update as of [2026-07-25 09:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Polish pass over the `/signatories/[id]` signer landing page — four loose ends left by the rewrite from owner-profile to stranger-facing landing page. The duplicate, weaker sentence splitter in `CommitmentsSummary` now delegates to the `splitSentences()` already used by `HomepageArticles`, and `gist()` finally has a unit test pinning all nine article bodies (previously the page test only asserted article *titles*, so `gist()` could have returned `""` for every article with the suite still green). The unbounded `whyISigned` pull quote is now clamped to four lines, measured in Chrome against real compiled Tailwind: on a 375x667 phone the sign CTA's bottom edge moved from 682px (below the fold) to 632px (above it). The signer-page test that claimed to cover the second CTA did not — it was satisfied by the first CTA's heading — so it was replaced with an occurrence count plus position assertions, and verified to go red when the button is deleted. Suite went 49 files / 336 tests → 50 files / 362 tests, all green.
+
+### Detail of changes made:
+
+- **`src/app/HomepageArticles.tsx`** — `splitSentences()` changed from module-private to `export`. No other change to the file; its behaviour is untouched. The doc comment now says *why* it is exported (so `<CommitmentsSummary>` shares one definition of "sentence") and *why* the "followed by a capital" lookahead matters (it is what stops `e.g. `, `U.S. ` and `vs. ` from reading as sentence ends).
+- **`src/components/CommitmentsSummary.tsx`** — `gist()` is now `splitSentences(body)[0] ?? body.trim()` instead of a hand-rolled `body.indexOf(". ")`. The old form had three failure modes on any future article body: it cut mid-clause at an abbreviation, it ignored `?`/`!` sentence ends (returning the whole paragraph as the "gist"), and it never trimmed. `?? body.trim()` covers the empty/whitespace-only body case, where `splitSentences` returns `[]`.
+- **`src/app/signatories/[id]/page.tsx`** — the `whyISigned` `<blockquote>` is now `line-clamp-4 text-lg leading-snug sm:text-2xl` (was `text-xl sm:text-2xl`, unbounded). Measured in Chrome with the project's real compiled Tailwind output over the real SSR markup:
+  - 375x667 (iPhone SE): quote 149px unclamped → 99px clamped; CTA bottom 682px → 632px, i.e. from *below* the 667px fold to above it.
+  - 390x844 (iPhone 14 Pro): CTA bottom 629px → 604px; already above the fold, but the quote no longer dominates the first screen.
+  - 640px (the `sm` breakpoint) and up: a full 200-character statement fits in four lines uncut for prose, long-word, and many-short-word text, so the clamp never actually bites on desktop. Verified at 640/768/1024.
+  - The clamp is visual only (`-webkit-line-clamp`); the full statement stays in the DOM for crawlers and screen readers. The `text-lg` mobile step exists to fit more of the statement inside those four lines.
+- **`tests/app/commitments-summary.gist.test.ts` (new, 24 tests)** — pins `gist()` output for all nine current article bodies as exact literals, asserts each result is a non-empty prefix of its body, and asserts the pinned set covers exactly the shipped article numbers (so a tenth article cannot slip in untested). Plus abbreviation cases (`e.g. `, `U.S. `, `vs. `), `?`/`!` sentence ends, single-sentence bodies, and empty/whitespace bodies. Verified against the *old* implementation: 3 of these fail, exactly the three failure modes above.
+  - One test deliberately pins a **known limitation**: `splitSentences` still splits at an abbreviation followed by a capitalised word ("e.g. Common Crawl" → `"Public corpora, e.g."`). Pinned so the boundary is a recorded decision rather than a surprise; tighten the regex in `HomepageArticles` if an article body ever needs it.
+- **`tests/app/signatories.signer-page.test.tsx`** — added two tests:
+  - *"repeats the sign CTA below the commitments list for a non-owner"* replaces the coverage the old `expect(html).toContain("Add your name")` only appeared to give. That string is already in the **first** CTA's heading ("Add your name to the AI Bill of Rights"), so the second CTA button below the nine commitments was untested and deletable. The new test counts occurrences (`=== 2`) and asserts `lastIndexOf("Add your name")` falls after both `"What they signed"` and the ninth article's title. **Verified red**: deleting the second CTA fails it with `expected 1 to be 2`, while the old assertion stayed green.
+  - *"bounds the pull quote's height so the sign CTA stays reachable"* asserts `line-clamp-4` is on the `<blockquote>` open tag and that a 200-character statement is still rendered in full (clamp is visual, not truncation).
+- **`src/components/ShareSignature.tsx`** — `shareText` was a template literal with no interpolation; now a plain double-quoted string.
+
+### Potential concerns to address:
+
+- **The share pitch is copied in three places.** `ShareSignature.tsx`, `src/app/SignModal.tsx`, and `src/lib/email/templates.ts` all carry a near-verbatim "I signed the AI Bill of Rights — nine commitments… Add your name." Changing the pitch means editing three files and it will silently drift. It belongs in one module (`src/lib/share/`), but the other two files are owned by another worker right now, so only a comment was left at the `ShareSignature` site. **Follow-up: consolidate once ownership allows.**
+- **Clamped quotes are unrecoverable on mobile.** A statement longer than ~4 lines at 375px is cut with an ellipsis and there is no "read more" affordance — the reader cannot get the rest. That is the deliberate trade (CTA reachability beats full quote display on the page whose job is conversion), but if signers start writing to the 200-character cap regularly, an expand toggle would be worth adding. Note the closing curly quote is clamped away too, leaving a visually unbalanced opening `“`.
+- **`gist()` is only as good as `splitSentences()`.** Both now share one implementation, which is the point, but that implementation is still a regex heuristic. The pinned-limitation test documents where it breaks. Anyone adding an article body with an abbreviation followed by a proper noun will get a truncated gist on the signer page and should fix the splitter rather than work around it in `CommitmentsSummary`.
+- **`splitSentences` is now public API of `HomepageArticles.tsx`.** That module is a page-level component file, not a util module; a `src/lib/text/` home would be tidier. Left in place deliberately — the task scope was export-only, not restructuring.
+
+---

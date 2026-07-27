@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
-import { upsertSignerProfile } from "@/server/actions/profile";
+import { upsertSignerProfile } from "@/server/profile/upsert";
 import { signers } from "@/lib/db/schema";
 
 describe("upsertSignerProfile", () => {

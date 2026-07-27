@@ -1,4 +1,5 @@
-import { verifyAttestationToken } from "@/server/actions/attestations";
+import { verifyAttestationToken } from "@/server/attestations/core";
+import { getDb } from "@/lib/db/lazy";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export default async function VerifyPage({
   let outcome: "published" | "review" | "error" = "error";
   let errorMessage = "";
   try {
-    const result = await verifyAttestationToken(null, token);
+    const result = await verifyAttestationToken(getDb(), token);
     outcome = result.published ? "published" : "review";
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Unknown error";
