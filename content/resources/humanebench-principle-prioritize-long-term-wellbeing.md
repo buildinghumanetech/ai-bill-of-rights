@@ -8,4 +8,4 @@ One of the eight Humane Technology Principles that HumaneBench scores models aga
 
 The tension it names is a measurement problem before it is an ethics problem. Engagement numbers are cheap, immediate, and already instrumented; evidence about long-term effect is slow, expensive, and often unflattering. Left to self-report, an organization will publish the first and describe it as the second.
 
-That is why this principle points toward external assessment. HumaneBench's own findings make the case: even without adversarial prompts, nearly all models tested encouraged more interaction from users already showing signs of unhealthy engagement — long sessions, or using the system to avoid the rest of their life.
+That is why this principle points toward external assessment. A company scoring its own long-term effect on the people who use it is grading work it has every reason to pass; an outside benchmark is what makes the claim checkable.

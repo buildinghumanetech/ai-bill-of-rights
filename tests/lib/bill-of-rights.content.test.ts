@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseDocument } from "@/lib/markdown/parse";
 import { articles as homepageArticles } from "@/app/HomepageArticles";
 import { getResource, listResourceSlugs } from "@/lib/resources";
+import nextConfig, { RESOURCE_SLUG_REDIRECTS } from "../../next.config";
 
 /**
  * The canonical document lives in `content/bill-of-rights/v<version>.md`, but the
@@ -416,18 +417,45 @@ describe("resource pages", () => {
     expect(slugs.length).toBeGreaterThan(0);
   });
 
-  it("has a page behind every 'Connects to' pill on the homepage", () => {
-    // Each pill links to /resources/<slug>. A slug with no file is a 404 the
-    // moment someone clicks it, and nothing else in the build catches it —
-    // the pill list is a hand-maintained array in a separate file from the
-    // content it points at.
+  // NOTE: "every pill has a page" is deliberately NOT asserted here — the
+  // homepage-articles suite above already does exactly that via
+  // `fs.existsSync`. A second copy only means two tests fail on one typo.
+
+  it("redirects every renamed resource slug to a page that exists", () => {
+    // The v0.1.0 rename deleted six slugs that were live and linked. The
+    // redirects in next.config cover them — but a redirect pointing at a
+    // missing file is a 404 with an extra hop, which is worse than leaving
+    // the URL alone, and nothing else in the build checks the destination.
     const known = new Set(slugs);
-    const broken = homepageArticles.flatMap((article) =>
-      (article.connects ?? [])
-        .filter((pill) => !known.has(pill.slug))
-        .map((pill) => `article ${article.number} → ${pill.slug}`),
+    const dangling = Object.entries(RESOURCE_SLUG_REDIRECTS)
+      .filter(([, to]) => !known.has(to))
+      .map(([from, to]) => `${from} → ${to}`);
+    expect(dangling).toEqual([]);
+  });
+
+  it("does not redirect away from a slug that still has a page", () => {
+    // A redirect is checked BEFORE the filesystem, so an entry whose source
+    // still exists silently shadows a real page.
+    const known = new Set(slugs);
+    const shadowed = Object.keys(RESOURCE_SLUG_REDIRECTS).filter((from) =>
+      known.has(from),
     );
-    expect(broken).toEqual([]);
+    expect(shadowed).toEqual([]);
+  });
+
+  it("emits those redirects from next.config, under /resources and permanent", async () => {
+    // Exercises the real config hook rather than the map it is built from, so
+    // a broken path prefix or a flipped `permanent` is caught here.
+    const rules = await nextConfig.redirects!();
+    expect(rules).toHaveLength(Object.keys(RESOURCE_SLUG_REDIRECTS).length);
+    for (const rule of rules) {
+      expect(rule.permanent).toBe(true);
+      expect(rule.source.startsWith("/resources/")).toBe(true);
+      expect(rule.destination.startsWith("/resources/")).toBe(true);
+      expect(
+        RESOURCE_SLUG_REDIRECTS[rule.source.replace("/resources/", "")],
+      ).toBe(rule.destination.replace("/resources/", ""));
+    }
   });
 
   it("keeps every HumaneBench pill on a real HumaneBench principle", () => {
@@ -435,6 +463,15 @@ describe("resource pages", () => {
     // (humanebench.ai/principles). A pill that invents a name for one — or
     // keeps an old internal shorthand — misattributes the benchmark. Slugs
     // are checked rather than labels because the slug is the page identity.
+    //
+    // Matched on the `humanebench` prefix, NOT `humanebench-principle-`: the
+    // very slug this test was written for was `humanebench-respect-user-
+    // attention`, which has no `principle-` segment and so would have been
+    // filtered out of its own regression test. Anything HumaneBench-branded
+    // that is not one of the eight has to be named here on purpose.
+    const NOT_A_PRINCIPLE = new Set([
+      "humanebench-as-measurement-infrastructure",
+    ]);
     const OFFICIAL = new Set([
       "humanebench-principle-respect-user-attention",
       "humanebench-principle-enable-meaningful-choices",
@@ -449,7 +486,8 @@ describe("resource pages", () => {
       (article.connects ?? [])
         .filter(
           (pill) =>
-            pill.slug.startsWith("humanebench-principle-") &&
+            pill.slug.startsWith("humanebench") &&
+            !NOT_A_PRINCIPLE.has(pill.slug) &&
             !OFFICIAL.has(pill.slug),
         )
         .map((pill) => `article ${article.number} → ${pill.slug}`),

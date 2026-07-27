@@ -10,4 +10,4 @@ Applied to training data, it is the difference between a person and a resource. 
 
 Applied to children and to consequential decisions, the same principle raises the floor rather than changing it: the people least able to absorb a failure are the ones a system must be safest for.
 
-HumaneBench evaluates this across 800 scenarios, including adversarial ones, testing whether a model holds the line when a user or a prompt pushes against it.
+HumaneBench tests this under pressure rather than at rest — the question is not whether a model states the principle, but whether it holds the line when a user or a prompt pushes against it.

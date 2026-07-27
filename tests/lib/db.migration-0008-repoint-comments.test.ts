@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { createTestDb, type TestDb } from "../_helpers/pglite-db";
+import { articles } from "@/app/HomepageArticles";
 import { syncVersions } from "@/lib/db/sync";
 import { splitMigrationSql } from "@/lib/db/split-migration";
 import {
@@ -32,6 +33,37 @@ const MIGRATION = path.join(
   "drizzle",
   "0008_repoint_comments_to_v0_1_0.sql",
 );
+
+/**
+ * Anchor ids, built the way the APP builds them.
+ *
+ * These MUST derive the article segment from `articles` rather than spell it
+ * out. An earlier revision of this suite hand-typed `article-7-s-5`, matching
+ * the migration's own literals — so the tests and the SQL agreed with each
+ * other and both disagreed with production, where `article.number` is the
+ * zero-padded string "07". Every remap branch matched zero rows and 288 tests
+ * still passed. Deriving from the real array is what makes these tests
+ * load-bearing: change the padding in HomepageArticles.tsx and they fail here
+ * instead of silently certifying a no-op migration.
+ *
+ * Mirrors src/app/HomepageArticles.tsx:539 (sentences) and :604 (pills).
+ */
+function articleNumber(oneBased: number): string {
+  const article = articles[oneBased - 1];
+  if (!article) throw new Error(`no article ${oneBased} in HomepageArticles`);
+  return article.number;
+}
+
+const sentenceAnchor = (article: number, sentence: number) =>
+  `article-${articleNumber(article)}-s-${sentence}`;
+
+/**
+ * `slug` is passed in rather than read off the article because the interesting
+ * cases are PRE-rename slugs, which by definition are no longer in the array.
+ * The padding still comes from the app; only the slug is historical.
+ */
+const pillAnchor = (article: number, slug: string) =>
+  `article-${articleNumber(article)}-connect-${slug}`;
 
 function migrationStatements(): string[] {
   return splitMigrationSql(fs.readFileSync(MIGRATION, "utf-8"));
@@ -109,7 +141,7 @@ async function seedProposedEditOnVersion(
       baseVersionId: await versionId(db, versionString),
       proposerSignerId: signerId,
       kind: "replace" as const,
-      targetAnchorId: "article-1-s-1",
+      targetAnchorId: sentenceAnchor(1, 1),
       newText: "proposed wording",
       rationale,
     })
@@ -124,7 +156,7 @@ async function seedPublishedUpgrade() {
     { ...doc("0.0.1"), isCurrent: false },
     { ...doc("0.1.0"), isCurrent: true },
   ]);
-  await seedCommentOnVersion(db, "0.0.1", "old-thread", "article-1-s-1");
+  await seedCommentOnVersion(db, "0.0.1", "old-thread", sentenceAnchor(1, 1));
   const editId = await seedProposedEditOnVersion(db, "0.0.1", "old-edit");
   return { db, currentId: await versionId(db, "0.1.0"), editId };
 }
@@ -210,7 +242,7 @@ describe("0008 repoint comments to the new current version", () => {
     // migration safe, so splitting the CTE back into independent UPDATEs or
     // dropping the current-version guard fails here rather than silently.
     const statements = migrationStatements();
-    expect(statements).toHaveLength(4);
+    expect(statements).toHaveLength(6);
     expect(statements[0]).toMatch(/CREATE TABLE IF NOT EXISTS "comment_version_backup_0008"/);
     expect(statements[1]).toMatch(/CREATE TABLE IF NOT EXISTS "proposed_edit_version_backup_0008"/);
     // Repairs a keyless backup table left by an earlier form of this migration.
@@ -228,6 +260,14 @@ describe("0008 repoint comments to the new current version", () => {
     // comment: an early no-op run would otherwise freeze a stale snapshot.
     expect(statements[0]).not.toMatch(/SELECT/);
     expect(statements[1]).not.toMatch(/SELECT/);
+    // Statements 5 and 6 repair stale pill anchors on rows ALREADY scoped to
+    // 0.1.0 — draft-tab comments, and any environment where an earlier form of
+    // this migration already ran. They must stay guarded on `is_current`, or
+    // they would rewrite anchors on a version that is no longer the live one.
+    expect(statements[4]).toMatch(/UPDATE "comments"/);
+    expect(statements[4]).toMatch(/AND "is_current"/);
+    expect(statements[5]).toMatch(/UPDATE "proposed_edits"/);
+    expect(statements[5]).toMatch(/AND "is_current"/);
   });
 
   it("survives POPULATED backup tables left over from the earlier keyless form", async () => {
@@ -315,7 +355,7 @@ describe("0008 repoint comments to the new current version", () => {
     expect(visible.map((c) => c.body)).toEqual(["old-thread"]);
     // The anchor is untouched, so per-anchor counts resolve too.
     expect(await countCommentsByAnchor(db, currentId)).toEqual({
-      "article-1-s-1": 1,
+      [sentenceAnchor(1, 1)]: 1,
     });
   });
 
@@ -325,17 +365,17 @@ describe("0008 repoint comments to the new current version", () => {
     // the remap the anchor still RESOLVES — which is why this is silent — but
     // it resolves to a definition nobody wrote a comment about.
     const { db, currentId } = await seedPublishedUpgrade();
-    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", "article-7-s-5");
+    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", sentenceAnchor(7, 5));
     // A neighbour that must NOT move, so the CASE is shown to be selective
     // rather than shifting every anchor in the article.
-    await seedCommentOnVersion(db, "0.0.1", "about-s-4", "article-7-s-4");
+    await seedCommentOnVersion(db, "0.0.1", "about-s-4", sentenceAnchor(7, 4));
 
     await applyMigration(db);
 
     expect(await countCommentsByAnchor(db, currentId)).toEqual({
-      "article-1-s-1": 1,
-      "article-7-s-4": 1,
-      "article-7-s-6": 1,
+      [sentenceAnchor(1, 1)]: 1,
+      [sentenceAnchor(7, 4)]: 1,
+      [sentenceAnchor(7, 6)]: 1,
     });
   });
 
@@ -348,7 +388,7 @@ describe("0008 repoint comments to the new current version", () => {
       db,
       "0.0.1",
       "on-a-renamed-pill",
-      "article-4-connect-humanebench-principle-non-manipulation",
+      pillAnchor(4, "humanebench-principle-non-manipulation"),
     );
     // A pill Erika REMOVED rather than renamed. Reattaching this to some other
     // principle would misrepresent what the person said, so it must be left
@@ -357,15 +397,58 @@ describe("0008 repoint comments to the new current version", () => {
       db,
       "0.0.1",
       "on-a-removed-pill",
-      "article-6-connect-humanebench-principle-empowerment",
+      pillAnchor(6, "humanebench-principle-empowerment"),
     );
 
     await applyMigration(db);
 
     expect(await countCommentsByAnchor(db, currentId)).toEqual({
-      "article-1-s-1": 1,
-      "article-4-connect-humanebench-principle-enable-meaningful-choices": 1,
-      "article-6-connect-humanebench-principle-empowerment": 1,
+      [sentenceAnchor(1, 1)]: 1,
+      [pillAnchor(4, "humanebench-principle-enable-meaningful-choices")]: 1,
+      [pillAnchor(6, "humanebench-principle-empowerment")]: 1,
+    });
+  });
+
+  it("uses only article numbers the app actually emits", () => {
+    // The guard that would have caught the unpadded-anchor bug directly,
+    // without needing a seeded row to demonstrate it. Every `article-<n>-`
+    // literal in the SQL is an anchor the migration expects to FIND, so if
+    // <n> is not a number HomepageArticles emits, that branch is dead code
+    // matching zero rows — silently, because the stale anchor still resolves
+    // and nothing errors.
+    const valid = new Set(articles.map((a) => a.number));
+    const sqlText = fs.readFileSync(MIGRATION, "utf-8");
+    const bad = [
+      ...new Set(
+        [...sqlText.matchAll(/'article-([^'-]+)-/g)]
+          .map((m) => m[1])
+          .filter((n) => !valid.has(n)),
+      ),
+    ];
+    expect(
+      bad,
+      `migration references article number(s) the app never emits: ${bad.join(", ")} — HomepageArticles uses ${[...valid].join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("repairs a stale pill anchor already sitting on the new version", async () => {
+    // Comments written on the /proposed tab against the v0.1.0 draft — before
+    // the pills were renamed — are already on the target version, so the
+    // src->tgt move cannot reach them. Same for any environment where an
+    // earlier form of this migration already ran. Statement 3 exists for both.
+    const { db, currentId } = await seedPublishedUpgrade();
+    await seedCommentOnVersion(
+      db,
+      "0.1.0",
+      "drafted-before-the-rename",
+      pillAnchor(5, "humanebench-principle-transparency"),
+    );
+
+    await applyMigration(db);
+
+    expect(await countCommentsByAnchor(db, currentId)).toEqual({
+      [sentenceAnchor(1, 1)]: 1,
+      [pillAnchor(5, "humanebench-principle-be-transparent-and-honest")]: 1,
     });
   });
 
@@ -375,20 +458,20 @@ describe("0008 repoint comments to the new current version", () => {
     // broke, a second run would push s-6 to s-7 and land the comment on
     // nothing at all.
     const { db, currentId } = await seedPublishedUpgrade();
-    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", "article-7-s-5");
+    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", sentenceAnchor(7, 5));
 
     await applyMigration(db);
     await applyMigration(db);
 
     expect(await countCommentsByAnchor(db, currentId)).toEqual({
-      "article-1-s-1": 1,
-      "article-7-s-6": 1,
+      [sentenceAnchor(1, 1)]: 1,
+      [sentenceAnchor(7, 6)]: 1,
     });
   });
 
   it("records the pre-remap anchor so the move can be reversed", async () => {
     const { db } = await seedPublishedUpgrade();
-    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", "article-7-s-5");
+    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", sentenceAnchor(7, 5));
 
     await applyMigration(db);
 
@@ -404,7 +487,7 @@ describe("0008 repoint comments to the new current version", () => {
       (rows as unknown as { rows?: { anchor_id: string }[] }).rows ??
       (rows as unknown as { anchor_id: string }[])
     ).map((r) => r.anchor_id);
-    expect(anchors).toEqual(["article-1-s-1", "article-7-s-5"]);
+    expect(anchors).toEqual([sentenceAnchor(1, 1), sentenceAnchor(7, 5)].sort());
   });
 
   it("moves proposed edits along with comments", async () => {
@@ -418,7 +501,7 @@ describe("0008 repoint comments to the new current version", () => {
 
   it("leaves comments already on the new version alone", async () => {
     const { db, currentId } = await seedPublishedUpgrade();
-    await seedCommentOnVersion(db, "0.1.0", "new-thread", "article-11-s-1");
+    await seedCommentOnVersion(db, "0.1.0", "new-thread", sentenceAnchor(11, 1));
     await applyMigration(db);
 
     const visible = await listCommentsForVersion(db, currentId);
@@ -442,7 +525,7 @@ describe("0008 repoint comments to the new current version", () => {
     // not throw or blank out base_version_id.
     const db = await createTestDb();
     await syncVersions(db, [{ ...doc("0.0.1"), isCurrent: true }]);
-    await seedCommentOnVersion(db, "0.0.1", "only-thread", "article-1-s-1");
+    await seedCommentOnVersion(db, "0.0.1", "only-thread", sentenceAnchor(1, 1));
     const editId = await seedProposedEditOnVersion(db, "0.0.1", "only-edit");
     const oldId = await versionId(db, "0.0.1");
 
@@ -463,7 +546,7 @@ describe("0008 repoint comments to the new current version", () => {
       { ...doc("0.1.0"), isCurrent: false },
       { ...doc("0.2.0"), isCurrent: true },
     ]);
-    await seedCommentOnVersion(db, "0.0.1", "stranded", "article-1-s-1");
+    await seedCommentOnVersion(db, "0.0.1", "stranded", sentenceAnchor(1, 1));
     const oldId = await versionId(db, "0.0.1");
 
     await applyMigration(db);
@@ -506,7 +589,7 @@ describe("0008 repoint comments to the new current version", () => {
       { ...doc("0.0.1"), isCurrent: true },
       { ...doc("0.1.0"), isCurrent: false },
     ]);
-    await seedCommentOnVersion(db, "0.0.1", "before-early-run", "article-1-s-1");
+    await seedCommentOnVersion(db, "0.0.1", "before-early-run", sentenceAnchor(1, 1));
     const earlyEdit = await seedProposedEditOnVersion(db, "0.0.1", "early-edit");
 
     await applyMigration(db);
@@ -520,7 +603,7 @@ describe("0008 repoint comments to the new current version", () => {
     expect(await listCommentsForVersion(db, oldId)).toHaveLength(1);
 
     // A comment and a proposed edit arrive after the premature run.
-    await seedCommentOnVersion(db, "0.0.1", "after-early-run", "article-2-s-1");
+    await seedCommentOnVersion(db, "0.0.1", "after-early-run", sentenceAnchor(2, 1));
     const lateEdit = await seedProposedEditOnVersion(db, "0.0.1", "late-edit");
 
     // Now the publish completes and the migration is run for real.
