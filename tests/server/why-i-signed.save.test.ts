@@ -46,6 +46,34 @@ async function storedStatement(db: TestDb): Promise<string | null> {
   return rows[0].whyISigned;
 }
 
+/**
+ * Hand back the same db with its `update` counted.
+ *
+ * "This call performed no write" is not observable from the stored value — a
+ * removal of an already-empty statement stores exactly what was already there —
+ * and `signers` has no updated_at to watch either. So the only way to see it is
+ * to watch the call: `saveWhyISignedForClerkUser` reaches the database through
+ * `db.select()` and `db.update()` and nothing else, so a proxy over those two
+ * is a complete account of what it did.
+ */
+function countingDb(db: TestDb): { db: TestDb; updates: number } {
+  const spy = {
+    db: null as unknown as TestDb,
+    updates: 0,
+  };
+  spy.db = new Proxy(db as object, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (prop !== "update") return value;
+      return (...args: unknown[]) => {
+        spy.updates++;
+        return (value as (...a: unknown[]) => unknown).apply(target, args);
+      };
+    },
+  }) as TestDb;
+  return spy;
+}
+
 describe("saveWhyISignedForClerkUser — happy path", () => {
   beforeEach(() => resetEphemeralRateLimits());
 
@@ -156,25 +184,86 @@ describe("saveWhyISignedForClerkUser — rate limited", () => {
       await saveWhyISignedForClerkUser(db, CLERK_ID, "one edit too many"),
     ).toMatchObject({ ok: false, reason: "rate_limited" });
 
-    // Budget spent — the removal still lands.
+    // Budget spent — the removal still lands, and it is a real write.
     const removed = await saveWhyISignedForClerkUser(db, CLERK_ID, "");
-    expect(removed).toMatchObject({ ok: true, whyISigned: null });
+    expect(removed).toMatchObject({ ok: true, whyISigned: null, changed: true });
     expect(await storedStatement(db)).toBeNull();
 
-    // Whitespace-only is the same path, and repeating it is still free: a
-    // removal must not consume a slot it could then be refused for.
-    for (let i = 0; i < WHY_I_SIGNED_EDITS_PER_HOUR + 5; i++) {
-      expect(
-        (await saveWhyISignedForClerkUser(db, CLERK_ID, "   \n  ")).ok,
-      ).toBe(true);
-    }
-    expect(await storedStatement(db)).toBeNull();
-
-    // ...and none of that bought the signer a way back in: putting text up
-    // again is a SET, so it is still refused and the row stays empty.
+    // ...and it did not buy the signer a way back in: putting text up again is
+    // a SET, so it is still refused and the row stays empty.
     expect(
       await saveWhyISignedForClerkUser(db, CLERK_ID, "back up it goes"),
     ).toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(await storedStatement(db)).toBeNull();
+  });
+
+  it("does not spend an edit slot on a removal", async () => {
+    // The other half of "removals are free". Every removal above happens with
+    // the budget already spent, so an implementation that COUNTS the removal
+    // but skips the refusal check would pass those unchanged — and a signer who
+    // made five edits and five removals would silently be down to five edits.
+    // Spend the removal first, then check the full budget is still there.
+    const db = await seed();
+    expect((await saveWhyISignedForClerkUser(db, CLERK_ID, "")).ok).toBe(true);
+
+    for (let i = 0; i < WHY_I_SIGNED_EDITS_PER_HOUR; i++) {
+      const res = await saveWhyISignedForClerkUser(db, CLERK_ID, `edit ${i}`);
+      expect(res).toMatchObject({ ok: true });
+    }
+    expect(await storedStatement(db)).toBe(
+      `edit ${WHY_I_SIGNED_EDITS_PER_HOUR - 1}`,
+    );
+  });
+
+  it("makes a removal that removes nothing a no-op — no UPDATE at all", async () => {
+    // Removals are exempt from the limit, which is only safe if a removal that
+    // changes nothing COSTS nothing: otherwise a signed-in signer can drive an
+    // unbounded loop of `UPDATE … RETURNING` plus two `revalidatePath` calls
+    // against a row that is already NULL — the cache-thrash vector the limit's
+    // own docstring names. So the first removal writes, and every repeat after
+    // it must touch the database exactly zero times.
+    const db = await seed();
+    const spy = countingDb(db);
+
+    const first = await saveWhyISignedForClerkUser(spy.db, CLERK_ID, "");
+    expect(first).toMatchObject({ ok: true, whyISigned: null, changed: true });
+    expect(spy.updates).toBe(1);
+    const signerId = first.ok ? first.signerId : null;
+
+    for (let i = 0; i < WHY_I_SIGNED_EDITS_PER_HOUR + 5; i++) {
+      // Empty string and whitespace-only are the same path; both are already
+      // satisfied by the NULL sitting in the row.
+      const again = await saveWhyISignedForClerkUser(
+        spy.db,
+        CLERK_ID,
+        i % 2 === 0 ? "" : "   \n  ",
+      );
+      expect(again).toMatchObject({
+        ok: true,
+        // Still the caller's own row, reported the same way a real write does.
+        signerId,
+        whyISigned: null,
+        // The flag the server action reads to skip its revalidatePath calls.
+        changed: false,
+      });
+    }
+    expect(spy.updates).toBe(1);
+    expect(await storedStatement(db)).toBeNull();
+  });
+
+  it("still writes a removal over a legacy empty-string row", async () => {
+    // `normalizeWhyISigned` has always stored SQL NULL for "no statement", but
+    // a row written before it existed can hold "". That is not already-empty as
+    // far as the rest of the app's null checks are concerned, so the no-op
+    // shortcut must not swallow it.
+    const db = await seed();
+    await db
+      .update(signers)
+      .set({ whyISigned: "" })
+      .where(eq(signers.clerkUserId, CLERK_ID));
+
+    const res = await saveWhyISignedForClerkUser(db, CLERK_ID, "");
+    expect(res).toMatchObject({ ok: true, whyISigned: null, changed: true });
     expect(await storedStatement(db)).toBeNull();
   });
 

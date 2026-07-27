@@ -109,8 +109,19 @@ export default function AccountClient({
     });
   }
 
+  /**
+   * True when the textarea holds exactly what is already stored, i.e. there is
+   * nothing to save. Saving it anyway would spend one of the ten hourly edits
+   * on a write that changes nothing, so ten idle clicks of "Update" — no typing
+   * at all — would lock the signer out of changing their statement for an hour.
+   */
+  const whyUnchanged = whyISigned === savedWhyISigned;
+
   function handleWhySave(e: FormEvent) {
     e.preventDefault();
+    // The button below is disabled in these cases; this is the belt to its
+    // braces, since a form can be submitted by routes other than that button.
+    if (whyUnchanged || whyISigned.trim().length === 0) return;
     submitWhyISigned(whyISigned, "Saved.");
   }
 
@@ -244,7 +255,9 @@ export default function AccountClient({
             ) : null}
             <button
               type="submit"
-              disabled={whyPending || whyISigned.trim().length === 0}
+              disabled={
+                whyPending || whyUnchanged || whyISigned.trim().length === 0
+              }
               className="rounded-full bg-emerald-600 px-5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {whyPending ? "Saving…" : savedWhyISigned ? "Update" : "Save"}

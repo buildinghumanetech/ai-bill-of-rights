@@ -50,7 +50,18 @@ export async function updateWhyISignedForClerkUser(
 }
 
 export type SaveWhyISignedOutcome =
-  | { ok: true; signerId: string; whyISigned: string | null }
+  | {
+      ok: true;
+      signerId: string;
+      whyISigned: string | null;
+      /**
+       * False when the call was a no-op — the stored statement already held
+       * exactly what the caller asked for, so no row was written. Callers use
+       * this to skip the cache invalidation they would otherwise fire for a
+       * write that did not happen; see `saveWhyISigned`.
+       */
+      changed: boolean;
+    }
   | { ok: false; reason: "no_signer" | "rate_limited"; error: string };
 
 /**
@@ -70,6 +81,13 @@ export type SaveWhyISignedOutcome =
  * and then cannot remove it for up to an hour while it stays live on their
  * public page, in their OG card and in the share copy. A removal therefore
  * neither consumes a slot nor can be refused for want of one.
+ *
+ * "Not limited" is not the same as "unbounded", though, and the exemption is
+ * only safe because a removal that removes nothing does nothing: when the row
+ * is already NULL this returns without issuing the UPDATE, so the loop the
+ * limit used to bound — write, revalidate every cached surface, repeat — cannot
+ * be driven through the removal path either. The FIRST removal, the one the
+ * account page promises, still always lands.
  */
 export async function saveWhyISignedForClerkUser(
   db: any,
@@ -77,7 +95,7 @@ export async function saveWhyISignedForClerkUser(
   raw: unknown,
 ): Promise<SaveWhyISignedOutcome> {
   const owner = await db
-    .select({ id: signers.id })
+    .select({ id: signers.id, whyISigned: signers.whyISigned })
     .from(signers)
     .where(eq(signers.clerkUserId, clerkUserId))
     .limit(1);
@@ -93,6 +111,15 @@ export async function saveWhyISignedForClerkUser(
   // statement" — empty, whitespace-only, or not a string at all. The update
   // below re-derives the same value, so the two cannot drift.
   const isRemoval = normalizeWhyISigned(raw) === null;
+
+  // Nothing to take down: report success (the caller asked for an empty
+  // statement and an empty statement is what they have) without spending a
+  // write or a cache invalidation on it. Only `null` counts as already-empty —
+  // a legacy row holding "" still gets rewritten to SQL NULL so the rest of the
+  // app's null checks keep meaning what they say.
+  if (isRemoval && owner[0].whyISigned === null) {
+    return { ok: true, signerId: owner[0].id, whyISigned: null, changed: false };
+  }
 
   if (!isRemoval) {
     try {
@@ -119,5 +146,10 @@ export async function saveWhyISignedForClerkUser(
       error: "No signature on this account.",
     };
   }
-  return { ok: true, signerId: updated.signerId, whyISigned: updated.whyISigned };
+  return {
+    ok: true,
+    signerId: updated.signerId,
+    whyISigned: updated.whyISigned,
+    changed: true,
+  };
 }

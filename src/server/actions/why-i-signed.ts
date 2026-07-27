@@ -39,6 +39,10 @@ export interface SaveWhyISignedResult {
  * without needing anyone's help. That path is deliberately exempt from the edit
  * rate limit (see `saveWhyISignedForClerkUser`): "without needing anyone's help"
  * has to include "and without waiting an hour".
+ *
+ * The revalidation below is guarded on `outcome.changed` for the same reason
+ * the core skips its UPDATE on a no-op: an unlimited path must not be able to
+ * bust two cached routes per call when nothing was written.
  */
 export async function saveWhyISigned(
   raw: string,
@@ -51,8 +55,10 @@ export async function saveWhyISigned(
   try {
     const outcome = await saveWhyISignedForClerkUser(getDb(), userId, raw);
     if (!outcome.ok) return { success: false, error: outcome.error };
-    revalidatePath(`/signatories/${outcome.signerId}`);
-    revalidatePath("/account");
+    if (outcome.changed) {
+      revalidatePath(`/signatories/${outcome.signerId}`);
+      revalidatePath("/account");
+    }
     return { success: true, whyISigned: outcome.whyISigned, truncated };
   } catch (err) {
     console.error("[why-i-signed] save failed:", err);
