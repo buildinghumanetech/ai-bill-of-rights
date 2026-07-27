@@ -161,10 +161,13 @@ export function MentionTextarea({
     const before = value.slice(0, mentionQuery.atIndex);
     const after = value.slice(mentionQuery.atIndex + 1 + mentionQuery.query.length);
     // Insert through `mentionText` rather than formatting `@name` a second time
-    // here. The text this writes has to be byte-identical to the needle that
+    // here. The NEEDLE — the `@Name` substring — has to be byte-identical to what
     // `pruneResolvedMentions` (below) and `resolveSubmittedMentions` (server side)
     // search for, or a pick resolves in the composer and then vanishes at submit.
     // Two copies of the format is how that drifts; behaviour is unchanged today.
+    //
+    // The trailing space is deliberately NOT part of `mentionText`: it is a
+    // typing affordance for the composer, not part of what anything matches on.
     const inserted = mentionText(signer.displayName);
     const newValue = `${before}${inserted} ${after}`;
     onChange(newValue);
@@ -247,7 +250,14 @@ export function MentionTextarea({
           {resolved.map((m, idx) => (
             <span key={m.signerId}>
               {idx > 0 ? ", " : ""}
-              <span className="font-medium text-zinc-700">@{m.displayName}</span>
+              {/* Rendered through `mentionText` so the name shown here is the
+                  same string the notification resolves on. If that ever
+                  normalises the name, promising "@Padded Name " while
+                  delivering on "@Padded Name" would be a lie of exactly the
+                  kind this line exists to prevent. */}
+              <span className="font-medium text-zinc-700">
+                {mentionText(m.displayName)}
+              </span>
             </span>
           ))}
         </p>
@@ -276,7 +286,9 @@ export function MentionTextarea({
                   : "text-zinc-700 hover:bg-zinc-50"
               }`}
             >
-              @{s.displayName}
+              {/* Same reasoning as the notify line: the suggestion should read
+                  as the text picking it will insert. */}
+              {mentionText(s.displayName)}
             </button>
           ))}
         </div>
