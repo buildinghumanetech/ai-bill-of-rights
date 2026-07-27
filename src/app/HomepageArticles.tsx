@@ -41,10 +41,10 @@ export const articles: Article[] = [
     number: "01",
     title: "Your Data Belongs to You",
     body: "No AI company may use your conversations, your images, or your behavioral data to train their models without your explicit, informed, revocable consent. Opt-out is not consent. Buried checkboxes are not consent.",
-    pullQuote: 'The default is "No LLM training on my data"',
+    pullQuote: 'The default is "No LLM training on my data."',
     connects: [
       {
-        title: "HumaneBench Principle — Dignity",
+        title: "HumaneBench Principle — Protect Dignity and Safety",
         slug: "humanebench-principle-dignity",
       },
       { title: "GDPR Article 7", slug: "gdpr-article-7" },
@@ -78,7 +78,7 @@ export const articles: Article[] = [
     pullQuote: "Disclosure is not a feature — it is a floor.",
     connects: [
       {
-        title: "HumaneBench Principle — Honesty",
+        title: "HumaneBench Principle — Be Transparent and Honest",
         slug: "humanebench-principle-honesty",
       },
       {
@@ -94,11 +94,11 @@ export const articles: Article[] = [
   {
     number: "04",
     title: "You Cannot Be Manipulated Against Your Interests",
-    body: "AI systems must not use psychological techniques — urgency, social pressure, manufactured intimacy, dependency loops, or persuasive dark patterns — to get you to buy, believe, or stay. The system's commercial interests cannot override your autonomy.",
+    body: "AI systems must not use psychological techniques — urgency, social pressure, manufactured intimacy, dependency loops, or deceptive patterns — to get you to buy, believe, or stay. The system's commercial interests cannot override your autonomy.",
     pullQuote: "Ever.",
     connects: [
       {
-        title: "HumaneBench Principle — Non-Manipulation",
+        title: "HumaneBench Principle — Enable Meaningful Choices",
         slug: "humanebench-principle-non-manipulation",
       },
       {
@@ -111,21 +111,25 @@ export const articles: Article[] = [
   {
     number: "05",
     title: "You Have the Right to an Explanation",
-    body: "When an AI system makes a consequential decision about you — your loan, your medical care, your content visibility, your job application — you have the right to know why, in plain language, and how to appeal it.",
+    body: "When an AI system makes a consequential decision about you — your loan, your medical care, your content visibility, your job application — you have the right to know why, in plain language, and how to appeal it. The data it used, the factors it weighed, and the steps it took must be logged and made legible to you.",
     pullQuote:
-      "AI systems must explain their reasoning around consequential decisions in plain language.",
-    connects: [
+      "If a system cannot account for a decision, it should not be making it.",
+connects: [
       {
-        title: "HumaneBench Principle — Transparency",
+        title: "HumaneBench Principle — Be Transparent and Honest",
         slug: "humanebench-principle-transparency",
       },
       {
-        title: "White House AI Bill of Rights (2022)",
+        title: "White House AI Bill of Rights — Notice and Explanation (2022)",
         slug: "white-house-ai-bill-of-rights-2022",
       },
       {
         title: "GDPR Article 22 (automated decision-making)",
         slug: "gdpr-article-22-automated-decision-making",
+      },
+      {
+        title: "EU AI Act Article 12 (record-keeping / logging)",
+        slug: "eu-ai-act-article-12-record-keeping",
       },
     ],
   },
@@ -135,12 +139,11 @@ export const articles: Article[] = [
     body: "In any situation involving significant consequence — health, legal, financial, crisis — you have the right to reach a human being. AI systems may not be deployed as permanent gatekeepers that eliminate human access.",
     pullQuote:
       'Every AI agent has a "license plate" identifier that tracks it back to a human responsible for its actions.',
-    connects: [
+connects: [
       {
-        title: "HumaneBench Principle — Empowerment",
-        slug: "humanebench-principle-empowerment",
+        title: "Consumer protection law",
+        slug: "consumer-protection-law",
       },
-      { title: "Consumer protection law", slug: "consumer-protection-law" },
       {
         title: "Healthcare AI ethics literature",
         slug: "healthcare-ai-ethics-literature",
@@ -150,9 +153,13 @@ export const articles: Article[] = [
   {
     number: "07",
     title: "Children Are Not a Market",
-    body: "AI systems interacting with minors must meet a higher standard of care. No behavioral profiling for advertising. No dependency design. No substitute for human developmental relationships.",
+    body: "AI systems interacting with minors must meet a higher standard of care. No behavioral profiling for advertising. No dependency design. No substitute for human developmental relationships. For the purposes of this article, a child is anyone under 13, consistent with COPPA.",
     pullQuote: "Children's data is not a training asset.",
     connects: [
+      {
+        title: "HumaneBench Principle — Protect Dignity and Safety",
+        slug: "humanebench-principle-dignity",
+      },
       { title: "COPPA", slug: "coppa" },
       {
         title: "UK Age Appropriate Design Code",
@@ -174,6 +181,10 @@ export const articles: Article[] = [
     body: "Frontier AI companies must publish independent, third-party assessments of their systems' impacts on user wellbeing — not self-reported metrics, not cherry-picked studies. External auditors. Public results.",
     pullQuote: "Consequences for harm.",
     connects: [
+      {
+        title: "HumaneBench Principle — Prioritize Long-term Wellbeing",
+        slug: "humanebench-principle-long-term-wellbeing",
+      },
       {
         title: "HumaneBench as measurement infrastructure",
         slug: "humanebench-as-measurement-infrastructure",
@@ -200,7 +211,7 @@ export const articles: Article[] = [
         slug: "center-for-humane-technology-attention-rights",
       },
       {
-        title: "HumaneBench Respect User Attention",
+        title: "HumaneBench Principle — Respect User Attention",
         slug: "humanebench-respect-user-attention",
       },
       {
@@ -211,50 +222,49 @@ export const articles: Article[] = [
   },
   {
     number: "10",
-    title: "Freedom From Algorithmic Discrimination",
-    body: "No AI system may produce different outcomes for you because of your race, ethnicity, gender, disability, age, religion, sexual orientation, or any other protected characteristic — in hiring, lending, housing, healthcare, policing, insurance, or education. Disparate impact counts even when no one intended it. Companies must test for it before deployment, publish what they find, and fix what they break.",
-    pullQuote: "No AI may treat you differently for who you are.",
-    connects: [
+    title: "Freedom from Algorithmic Discrimination",
+    body: "No AI system may treat you differently because of who you are — your race, your gender, your age, your disability, or any protected characteristic. When a system makes a decision about you, it must be tested for discriminatory impact before it reaches you, and monitored after. Disparate harm is not a glitch to be patched later.",
+    pullQuote: "Bias at scale is still discrimination.",
+connects: [
       {
-        title: "HumaneBench Principle — Dignity",
-        slug: "humanebench-principle-dignity",
+        title: "HumaneBench Principle — Design for Equity and Inclusion",
+        slug: "humanebench-principle-equity-inclusion",
       },
       {
-        title: "EU AI Act high-risk AI systems (Annex III)",
+        title: "White House AI Bill of Rights — Algorithmic Discrimination Protections (2022)",
+        slug: "white-house-ai-bill-of-rights-2022",
+      },
+      {
+        title: "EU AI Act (high-risk system requirements)",
         slug: "eu-ai-act-high-risk-systems",
       },
       {
-        title: "US civil rights and anti-discrimination law",
-        slug: "us-civil-rights-anti-discrimination-law",
-      },
-      {
-        title: "White House AI Bill of Rights (2022)",
-        slug: "white-house-ai-bill-of-rights-2022",
+        title: "EEOC guidance on AI in employment (Title VII)",
+        slug: "eeoc-guidance-ai-employment",
       },
     ],
   },
   {
     number: "11",
-    title: "You Have the Right to Safe, Tested Systems",
-    body: "Before an AI system is used to make a decision about you, it must be tested and shown to be safe and effective.",
-    pullQuote:
-      "The burden of proving it works falls on the company that builds it, not on you to prove it broke you after the fact.",
-    connects: [
+    title: "A Right to Safe, Tested Systems",
+    body: "Before an AI system is used to make a consequential decision about you, it must be tested and shown to be safe and effective. The burden of proving it works belongs to the company that builds it — not to you, after it has already caused harm. Untested is not the same as neutral.",
+    pullQuote: "You are not the experiment.",
+connects: [
       {
-        title: "HumaneBench as measurement infrastructure",
-        slug: "humanebench-as-measurement-infrastructure",
+        title: "HumaneBench Principle — Protect Dignity and Safety",
+        slug: "humanebench-principle-dignity",
+      },
+      {
+        title: "White House AI Bill of Rights — Safe and Effective Systems (2022)",
+        slug: "white-house-ai-bill-of-rights-2022",
+      },
+      {
+        title: "EU AI Act — risk management & conformity assessment (Articles 9, 43)",
+        slug: "eu-ai-act-conformity-assessments",
       },
       {
         title: "NIST AI Risk Management Framework",
         slug: "nist-ai-risk-management-framework",
-      },
-      {
-        title: "EU AI Act conformity assessments",
-        slug: "eu-ai-act-conformity-assessments",
-      },
-      {
-        title: "Model cards and system documentation",
-        slug: "model-cards-and-system-documentation",
       },
     ],
   },

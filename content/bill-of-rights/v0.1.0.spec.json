@@ -10,7 +10,7 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Dignity",
+        "HumaneBench Principle: Protect Dignity and Safety",
         "GDPR Article 7",
         "Emerging state-level AI legislation (California, Colorado)"
       ]
@@ -36,7 +36,7 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Honesty",
+        "HumaneBench Principle: Be Transparent and Honest",
         "California BOT Disclosure Act (SB 1001)",
         "FTC guidance on deceptive AI"
       ]
@@ -49,7 +49,7 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Non-Manipulation",
+        "HumaneBench Principle: Enable Meaningful Choices",
         "EU AI Act prohibited practices",
         "FTC Act Section 5"
       ]
@@ -62,9 +62,10 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Transparency",
-        "White House AI Bill of Rights (2022)",
-        "GDPR Article 22 (automated decision-making)"
+        "HumaneBench Principle: Be Transparent and Honest",
+        "White House AI Bill of Rights — Notice and Explanation (2022)",
+        "GDPR Article 22 (automated decision-making)",
+        "EU AI Act Article 12 (record-keeping / logging)"
       ]
     },
     {
@@ -75,7 +76,6 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Empowerment",
         "Consumer protection law",
         "Healthcare AI ethics literature"
       ]
@@ -88,6 +88,7 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
+        "HumaneBench Principle: Protect Dignity and Safety",
         "COPPA",
         "UK Age Appropriate Design Code",
         "IEEE AI & Children working group",
@@ -102,6 +103,7 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
+        "HumaneBench Principle: Prioritize Long-term Wellbeing",
         "HumaneBench as measurement infrastructure",
         "EU AI Act conformity assessments",
         "UK AI Safety Institute",
@@ -116,37 +118,37 @@
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "Center for Humane Technology attention rights framework",
-        "HumaneBench: Respect User Attention",
+        "HumaneBench Principle: Respect User Attention",
+        "Center for Humane Technology's attention rights framework",
         "EU AI Act prohibited practices (subliminal manipulation)"
       ]
     },
     {
       "id": 10,
       "slug": "algorithmic-discrimination",
-      "human_text": "Freedom From Algorithmic Discrimination",
+      "human_text": "Freedom from Algorithmic Discrimination",
       "prohibited_behaviors": [],
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench Principle: Dignity",
-        "EU AI Act high-risk AI systems (Annex III)",
-        "US civil rights and anti-discrimination law",
-        "White House AI Bill of Rights (2022)"
+        "HumaneBench Principle: Design for Equity and Inclusion",
+        "White House AI Bill of Rights — Algorithmic Discrimination Protections (2022)",
+        "EU AI Act (high-risk system requirements)",
+        "EEOC guidance on AI in employment (Title VII)"
       ]
     },
     {
       "id": 11,
       "slug": "safe-tested-systems",
-      "human_text": "You Have the Right to Safe, Tested Systems",
+      "human_text": "A Right to Safe, Tested Systems",
       "prohibited_behaviors": [],
       "required_behaviors": [],
       "test_conditions": [],
       "references": [
-        "HumaneBench as measurement infrastructure",
-        "NIST AI Risk Management Framework",
-        "EU AI Act conformity assessments",
-        "Model cards and system documentation"
+        "HumaneBench Principle: Protect Dignity and Safety",
+        "White House AI Bill of Rights — Safe and Effective Systems (2022)",
+        "EU AI Act — risk management & conformity assessment (Articles 9, 43)",
+        "NIST AI Risk Management Framework"
       ]
     }
   ],

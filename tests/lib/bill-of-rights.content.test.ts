@@ -113,12 +113,44 @@ describe("current version document", () => {
     }
   });
 
-  it("carries every article from the previous version over verbatim", () => {
-    // A published version's markdown hash is locked once synced, so a new
-    // version may only ADD articles — never silently reword an existing one.
+  /**
+   * Articles whose wording DELIBERATELY changed in a given version, relative to
+   * the version before it.
+   *
+   * A new version may of course revise an article — that is what publishing a
+   * new version is for. What must never happen is a revision nobody decided on:
+   * a stray edit to a carried-forward article reads to signers as text they
+   * already agreed to. So every intentional revision is declared here, and
+   * anything undeclared still fails.
+   *
+   * A version with no entry must carry every prior article over verbatim, which
+   * is the safe default for the common case (a release that only appends).
+   *
+   * Note what this does NOT license: changing an article's SENTENCE COUNT
+   * silently re-points comment anchors, because comments store `article-N-s-M`.
+   * Inserting a sentence mid-article shifts every later anchor in it. See the
+   * 0008 migration notes — that is a data question, not just a wording one.
+   */
+  const DECLARED_REVISIONS: Record<string, Set<string>> = {
+    // Erika's final copy. Each of these closes with its pull quote so the
+    // canonical text and the homepage finally say the same thing; 5 and 7 also
+    // gained a sentence of substance.
+    "0.1.0": new Set([
+      "article-1", // closing line -> 'The default is "No LLM training on my data."'
+      "article-2", // closing line -> "LLM memory built on your life is yours."
+      "article-4", // "persuasive dark patterns" -> "deceptive patterns"
+      "article-5", // + logging sentence, + closing line
+      "article-6", // closing line -> the AI-agent "license plate" sentence
+      "article-7", // + COPPA definition of a child
+    ]),
+  };
+
+  it("carries every article from the previous version over verbatim, unless the revision is declared", () => {
     const prev = previousVersion();
     if (prev === null) return; // first-ever version: nothing to carry over
     const previous = parseDocument(readVersionFile(prev, "md"));
+    const revised =
+      DECLARED_REVISIONS[versionsIndex.current] ?? new Set<string>();
     const textOf = (doc: typeof previous, id: string) =>
       doc.articles
         .find((a) => a.id === id)!
@@ -127,11 +159,42 @@ describe("current version document", () => {
 
     for (const prior of previous.articles) {
       const carried = parsed.articles.find((a) => a.id === prior.id);
+      // Dropping an article is never allowed, declared or not: people signed a
+      // document containing it.
       expect(carried, `${prior.id} was dropped`).toBeDefined();
+      if (revised.has(prior.id)) continue;
       expect(textOf(parsed, prior.id), `${prior.id} text drifted`).toBe(
         textOf(previous, prior.id),
       );
       expect(carried!.title, `${prior.id} title drifted`).toBe(prior.title);
+    }
+  });
+
+  it("keeps the revision list honest — every declared article really did change", () => {
+    // Mirrors the pull-quote exemption check below. Without this, a declaration
+    // outlives the revision it described and silently exempts that article from
+    // drift detection for every version after.
+    const prev = previousVersion();
+    if (prev === null) return;
+    const previous = parseDocument(readVersionFile(prev, "md"));
+    const revised =
+      DECLARED_REVISIONS[versionsIndex.current] ?? new Set<string>();
+    const textOf = (doc: typeof previous, id: string) =>
+      doc.articles
+        .find((a) => a.id === id)!
+        .paragraphs.flatMap((p) => p.sentences.map((s) => s.text))
+        .join(" ");
+
+    for (const id of revised) {
+      const prior = previous.articles.find((a) => a.id === id);
+      expect(
+        prior,
+        `${id} is declared revised but does not exist in v${prev} — remove it`,
+      ).toBeDefined();
+      expect(
+        textOf(parsed, id),
+        `${id} is declared revised but matches v${prev} — remove it from DECLARED_REVISIONS`,
+      ).not.toBe(textOf(previous, id));
     }
   });
 });
@@ -257,19 +320,19 @@ describe("homepage articles array", () => {
    * canonical text exactly — otherwise the homepage displays wording that is
    * not in the document people are actually signing.
    *
-   * Four articles predate this test and already diverge. They are listed here
-   * rather than silently tolerated, so the exemption is visible and shrinkable:
+   * This list is now EMPTY, and that is the point of it having existed.
    *
-   *   01 — canonical closes "The default is no."; homepage shows
-   *        'The default is "No LLM training on my data"'
-   *   02 — canonical "Memory built on your life is yours." vs "LLM memory ..."
-   *   05 — homepage pull quote is a paraphrase; canonical has no closing line
-   *   06 — homepage pull quote is about an AI agent "license plate", which
-   *        appears NOWHERE in the canonical document
+   * Four articles (01, 02, 05, 06) used to diverge: the homepage showed pull
+   * quotes that were paraphrases, or in 06's case an AI-agent "license plate"
+   * sentence appearing nowhere in the canonical document. Listing them rather
+   * than tolerating them kept the gap visible until v0.1.0 closed it — Erika's
+   * final copy adopts the homepage wording INTO the canonical text, so every
+   * article now closes with its own pull quote.
    *
-   * Do not add to this list. New articles must match exactly.
+   * Keep it empty. An article whose homepage wording is not in the document is
+   * an article people are signing something different from what they read.
    */
-  const KNOWN_PULLQUOTE_DIVERGENCES = new Set(["01", "02", "05", "06"]);
+  const KNOWN_PULLQUOTE_DIVERGENCES = new Set<string>([]);
 
   it("reproduces the canonical text as body + pullQuote", () => {
     homepageArticles.forEach((article, idx) => {

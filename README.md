@@ -99,7 +99,7 @@ Several things are scoped to a specific version row, so bumping `current` change
 - **Signatures do not migrate, and nothing ever deletes them.** A signature stays attached to the version that was signed — that is the record of what text the person actually agreed to, and it is not ours to rewrite. Every public surface is nevertheless version-agnostic: `getSignatureCount`, `listSignatures`, `listRecentSignersSince`, `/signers`, and `/signatories` all work in *distinct signers across all versions*, so publishing a new version removes nobody from any count or list, and re-signing never double-counts anyone.
 
   What publishing *does* change is per-person state, because `signatures` is unique on `(signer_id, version_id)`: someone who signed the old version has no row against the new one. `resolveSignatureStatus` (`src/lib/db/signature-status.ts`) reports that case as **`signed-earlier`**, distinct from `not-signed`, so `SignModal` acknowledges the signature they already have and offers a one-click re-affirm (`reaffirmMySignature`) instead of handing a prior signer a blank form. **Do not "fix" this by backfilling signature rows onto the new version** — that would record consent to Articles nobody read, on a document whose Article 1 says opt-out is not consent. The re-affirm writes a real, freshly hashed consent record and leaves the earlier signature intact.
-- **Comments do not migrate on their own.** `comments.base_version_id` points at the version a comment was written against, and the homepage only queries the current version — so without a migration step, publishing hides every existing thread. Ship a small SQL migration re-pointing them, as `drizzle/0008_repoint_comments_to_v0_1_0.sql` does for the 0.0.1 → 0.1.0 publish. **Run it after the deploy**, once `sync-versions` has created the new version row. Only do this when the articles the comments are anchored to are textually unchanged; otherwise the comment ends up attached to wording that moved under it.
+- **Comments do not migrate on their own.** `comments.base_version_id` points at the version a comment was written against, and the homepage only queries the current version — so without a migration step, publishing hides every existing thread. Ship a small SQL migration re-pointing them, as `drizzle/0008_repoint_comments_to_v0_1_0.sql` does for the 0.0.1 → 0.1.0 publish. **Run it after the deploy**, once `sync-versions` has created the new version row. Before writing one, diff the SENTENCE COUNTS of every article, not just the wording: comments are anchored to `article-N-s-M`, so a sentence inserted mid-article shifts every later anchor in it and silently re-attaches those comments to the wrong sentence — the anchor still resolves, which is why nothing complains. v0.1.0 does this once (Article 7 gains the COPPA definition as s-5), and 0008 remaps `article-7-s-5` → `article-7-s-6` to compensate.
 - **Endorsements are intentionally left behind.** Endorsing a version is a statement about that version's text.
 
 ### Post-deploy steps for the 0.1.0 publish
@@ -121,15 +121,19 @@ Reverting `current` in `versions.json` puts the site back on 0.0.1, but comments
 
 ```sql
 UPDATE "comments" AS c
-   SET "base_version_id" = b."base_version_id"
+   SET "base_version_id" = b."base_version_id",
+       "anchor_id" = b."anchor_id"
   FROM "comment_version_backup_0008" AS b
  WHERE c."id" = b."id";
 
 UPDATE "proposed_edits" AS p
-   SET "base_version_id" = b."base_version_id"
+   SET "base_version_id" = b."base_version_id",
+       "target_anchor_id" = b."anchor_id"
   FROM "proposed_edit_version_backup_0008" AS b
  WHERE p."id" = b."id";
 ```
+
+The anchor must be restored alongside the version, because 0008 remaps `article-7-s-5` → `article-7-s-6` as part of the move. Restoring only `base_version_id` would put the comments back on v0.0.1 while leaving them pointing one sentence past where they were written.
 
 This restores only the rows that were carried forward — comments genuinely written against v0.1.0 are not in the backup and are left where they are. The backups are populated inside the same statement that performs the move, so they always match what was actually moved, including on a re-run.
 

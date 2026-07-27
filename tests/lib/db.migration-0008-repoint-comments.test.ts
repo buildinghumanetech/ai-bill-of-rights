@@ -319,6 +319,64 @@ describe("0008 repoint comments to the new current version", () => {
     });
   });
 
+  it("remaps article-7-s-5 so a comment stays with its sentence", async () => {
+    // v0.1.0 inserts the COPPA definition of a child into Article 7 as the new
+    // s-5, pushing "Children's data is not a training asset." to s-6. Without
+    // the remap the anchor still RESOLVES — which is why this is silent — but
+    // it resolves to a definition nobody wrote a comment about.
+    const { db, currentId } = await seedPublishedUpgrade();
+    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", "article-7-s-5");
+    // A neighbour that must NOT move, so the CASE is shown to be selective
+    // rather than shifting every anchor in the article.
+    await seedCommentOnVersion(db, "0.0.1", "about-s-4", "article-7-s-4");
+
+    await applyMigration(db);
+
+    expect(await countCommentsByAnchor(db, currentId)).toEqual({
+      "article-1-s-1": 1,
+      "article-7-s-4": 1,
+      "article-7-s-6": 1,
+    });
+  });
+
+  it("does not walk the anchor further on a re-run", async () => {
+    // The remap is idempotent only because it is scoped to rows still on
+    // 0.0.1, which the same statement moves to 0.1.0. If that coupling ever
+    // broke, a second run would push s-6 to s-7 and land the comment on
+    // nothing at all.
+    const { db, currentId } = await seedPublishedUpgrade();
+    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", "article-7-s-5");
+
+    await applyMigration(db);
+    await applyMigration(db);
+
+    expect(await countCommentsByAnchor(db, currentId)).toEqual({
+      "article-1-s-1": 1,
+      "article-7-s-6": 1,
+    });
+  });
+
+  it("records the pre-remap anchor so the move can be reversed", async () => {
+    const { db } = await seedPublishedUpgrade();
+    await seedCommentOnVersion(db, "0.0.1", "about-the-closing-line", "article-7-s-5");
+
+    await applyMigration(db);
+
+    // The backup holds the ORIGINAL anchor, not the remapped one — otherwise
+    // the rollback SQL would restore the version scoping while leaving every
+    // comment pointing one sentence past where it was written.
+    const rows = await db.execute(
+      sql.raw(
+        `SELECT "anchor_id" FROM "comment_version_backup_0008" ORDER BY "anchor_id"`,
+      ),
+    );
+    const anchors = (
+      (rows as unknown as { rows?: { anchor_id: string }[] }).rows ??
+      (rows as unknown as { anchor_id: string }[])
+    ).map((r) => r.anchor_id);
+    expect(anchors).toEqual(["article-1-s-1", "article-7-s-5"]);
+  });
+
   it("moves proposed edits along with comments", async () => {
     const { db, currentId, editId } = await seedPublishedUpgrade();
     expect(await editVersionOf(db, editId)).not.toBe(currentId);
