@@ -37,8 +37,13 @@ export function readVersionsIndex(root: string = CONTENT_ROOT): VersionsIndex {
   let raw: string;
   try {
     raw = fs.readFileSync(indexPath, "utf-8");
-  } catch {
-    throw new Error(`Cannot read ${indexPath} — does the file exist?`);
+  } catch (err) {
+    // Keep the cause. A bare "does the file exist?" sends an operator hunting
+    // for a file that is sitting right there when the real problem is EACCES
+    // or EISDIR, and the discarded error was the only thing that knew.
+    const code = (err as NodeJS.ErrnoException)?.code;
+    const detail = code ?? (err instanceof Error ? err.message : String(err));
+    throw new Error(`Cannot read ${indexPath} (${detail})`);
   }
 
   let parsed: unknown;
@@ -55,6 +60,30 @@ export function readVersionsIndex(root: string = CONTENT_ROOT): VersionsIndex {
       `${indexPath} must be an object with a string "current" and an array "history"`,
     );
   }
+
+  // Validate every ENTRY, not just that history is an array. A `[null]` or a
+  // bare string after a hand-edit would otherwise throw a raw
+  // "Cannot read properties of null" from whichever caller scanned it first —
+  // precisely the three-frames-deeper failure this reader exists to prevent.
+  index.history.forEach((entry, i) => {
+    if (typeof (entry as VersionsIndexEntry)?.version !== "string") {
+      throw new Error(
+        `${indexPath}: history[${i}] must be an object with a string "version"`,
+      );
+    }
+  });
+
+  // `sync-versions` sets is_current purely from `entry.version === current`
+  // (scripts/sync-versions.ts). If `current` matches no history entry — a typo,
+  // or `current` bumped before its history entry was added — syncVersions
+  // clears is_current on every version and leaves NO current row at all. That
+  // is unrecoverable-by-re-sync, so it must not read as a well-formed index.
+  if (!index.history.some((h) => h.version === index.current)) {
+    throw new Error(
+      `${indexPath}: current is "${index.current}" but no history entry has that version, so a sync would leave no current version`,
+    );
+  }
+
   return index as VersionsIndex;
 }
 
@@ -63,14 +92,26 @@ export type Restorability =
   | { restorable: false; reason: string };
 
 /**
- * Could `pnpm sync-versions` put this version back after it is deleted?
+ * Could `pnpm sync-versions` put this version back **as the current version**
+ * after it is deleted?
  *
- * Only true when it is listed in `versions.json` history AND all three of its
- * files are on disk. Both halves matter: history membership alone lets a
- * version whose markdown was renamed pass, after which the delete succeeds and
- * the follow-up `sync-versions` throws ENOENT before inserting anything —
- * producing exactly the permanent no-current-version state this predicate
- * exists to prevent.
+ * The question is deliberately about the CURRENT row, not merely the row: this
+ * predicate guards a delete whose advertised remedy is "re-sync and the current
+ * version comes back". Three things must hold, and each covers a way the delete
+ * turns permanent:
+ *
+ * - listed in `versions.json` history — otherwise nothing seeds it at all;
+ * - all three files on disk — `sync-versions` reads `v<x>.md`, `v<x>.agents.md`
+ *   and `v<x>.spec.json` per entry, so a renamed markdown means the re-sync
+ *   throws ENOENT before inserting anything;
+ * - named as `current` — `sync-versions` derives is_current solely from
+ *   `entry.version === index.current`, so re-syncing a version the index does
+ *   not call current brings the row back with `is_current = false`.
+ *
+ * The index-level "current must exist in history" check lives in
+ * `readVersionsIndex`, and an unreadable index reports as not-restorable here
+ * rather than throwing: the caller is deciding whether a delete is safe, and
+ * "I could not tell" must never read as "yes".
  */
 export function versionRestorability(
   version: string,
@@ -90,6 +131,13 @@ export function versionRestorability(
     return {
       restorable: false,
       reason: `${version} is not in ${path.join(root, "versions.json")} history, so nothing on disk would restore it`,
+    };
+  }
+
+  if (index.current !== version) {
+    return {
+      restorable: false,
+      reason: `${path.join(root, "versions.json")} names "${index.current}" as current, not ${version}, so a re-sync would restore ${version} with is_current = false and make ${index.current} current instead`,
     };
   }
 

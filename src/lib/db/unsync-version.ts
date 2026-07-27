@@ -66,6 +66,29 @@ export type UnsyncReport =
     });
 
 /**
+ * A union, not one shape with two optional fields, so that **enabling
+ * `allowCurrent` without supplying `isRestorable` is a compile error.**
+ *
+ * `allowCurrent` is the only way to reach a delete of the row every page reads,
+ * and `isRestorable` is the only thing standing between that and an
+ * unrecoverable one. If the predicate were merely optional, omitting it would
+ * silently skip the check and delete successfully — the same
+ * omission-falls-through-to-permissive failure `UnsyncReport` was made a
+ * discriminated union to prevent.
+ */
+export type UnsyncOpts =
+  | {
+      dryRun?: boolean;
+      allowCurrent?: false;
+      isRestorable?: (version: string) => Restorability;
+    }
+  | {
+      dryRun?: boolean;
+      allowCurrent: true;
+      isRestorable: (version: string) => Restorability;
+    };
+
+/**
  * Delete an UNUSED version row so the next `sync-versions` re-inserts it from
  * the files on disk.
  *
@@ -101,11 +124,7 @@ export async function unsyncVersion(
   // the production client or a pglite test db.
   db: DbLike,
   versionString: string,
-  opts: {
-    dryRun?: boolean;
-    allowCurrent?: boolean;
-    isRestorable?: (version: string) => Restorability;
-  } = {},
+  opts: UnsyncOpts = {},
 ): Promise<UnsyncReport> {
   // Defaults to a DRY RUN. This function deletes a row that pages render from,
   // and `allowCurrent` makes the current version reachable — so the obvious way
@@ -206,8 +225,10 @@ export async function unsyncVersion(
       return {
         ...base,
         deleted: false,
+        // Joined with a space, not ". " — the reason is an arbitrary sentence
+        // from the predicate and may already end in its own punctuation.
         refusedBecause:
-          `${verdict.reason}. Deleting the current version would leave the ` +
+          `${verdict.reason} — deleting the current version would leave the ` +
           "database with no current version permanently, not the temporary " +
           "state --allow-current describes",
         refusedCode: "not_restorable",

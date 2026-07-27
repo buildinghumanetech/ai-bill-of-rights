@@ -60,6 +60,29 @@ describe("readVersionsIndex", () => {
     expect(() => readVersionsIndex(root)).toThrow(/not valid JSON/);
   });
 
+  it("rejects an index whose current is absent from history", () => {
+    // sync-versions clears is_current on EVERY version when nothing matches
+    // `current`, leaving no current row at all — a state no re-sync recovers.
+    // An index that would produce it is not well-formed.
+    const root = tmpContentRoot();
+    writeIndex(root, {
+      current: "0.2.0",
+      history: [{ version: "0.1.0", published_at: "2026-07-24" }],
+    });
+
+    expect(() => readVersionsIndex(root)).toThrow(/no history entry/);
+  });
+
+  it("rejects a history entry that is not an object with a version", () => {
+    // The membership scan runs outside versionRestorability's try/catch, so a
+    // `[null]` would otherwise throw "Cannot read properties of null" straight
+    // past it and land in the CLI as a raw stack.
+    const root = tmpContentRoot();
+    writeIndex(root, { current: "0.1.0", history: [null] });
+
+    expect(() => readVersionsIndex(root)).toThrow(/history\[0\]/);
+  });
+
   it("rejects a structurally wrong index instead of returning it", () => {
     // Without this, a missing `history` surfaces three frames later as
     // "…is not iterable" from whichever caller mapped over it.
@@ -83,11 +106,44 @@ describe("versionRestorability", () => {
 
   it("is not restorable when the version is absent from history", () => {
     const root = tmpContentRoot();
-    writeIndex(root, { current: "0.0.1", history: [] });
+    // A well-formed index — current IS in history — that simply does not list
+    // 0.1.0. Seeding an index whose current were missing too would make this
+    // pass via the reader's validation rather than the membership check.
+    writeIndex(root, {
+      current: "0.0.1",
+      history: [{ version: "0.0.1", published_at: "2026-05-18" }],
+    });
+    writeVersionFiles(root, "0.0.1");
     writeVersionFiles(root, "0.1.0");
 
     const verdict = versionRestorability("0.1.0", root);
     expect(verdict.restorable).toBe(false);
+    if (verdict.restorable) throw new Error("unreachable");
+    expect(verdict.reason).toMatch(/history/);
+  });
+
+  it("is not restorable when versions.json calls a DIFFERENT version current", () => {
+    // sync-versions derives is_current solely from `entry.version === current`.
+    // Restoring the ROW is not restoring the CURRENT row: re-syncing here would
+    // bring 0.1.0 back with is_current = false and hand current to 0.0.1 — so
+    // the delete this predicate guards would still be unrecoverable in the only
+    // sense that matters to the pages reading the current version.
+    const root = tmpContentRoot();
+    writeIndex(root, {
+      current: "0.0.1",
+      history: [
+        { version: "0.0.1", published_at: "2026-05-18" },
+        { version: "0.1.0", published_at: "2026-07-24" },
+      ],
+    });
+    writeVersionFiles(root, "0.0.1");
+    writeVersionFiles(root, "0.1.0");
+
+    const verdict = versionRestorability("0.1.0", root);
+    expect(verdict.restorable).toBe(false);
+    if (verdict.restorable) throw new Error("unreachable");
+    // Names what sync-versions would actually make current.
+    expect(verdict.reason).toContain("0.0.1");
   });
 
   it.each(versionFileNames("0.1.0"))(

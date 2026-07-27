@@ -30,6 +30,13 @@ const doc = (version: string, body: string, isCurrent = false) => ({
   gitCommitSha: null,
 });
 
+/**
+ * The predicate is REQUIRED whenever allowCurrent is set — omitting it is a
+ * compile error, so a test cannot accidentally exercise an unguarded delete.
+ * Use this where restorability is not what the test is about.
+ */
+const RESTORABLE = () => ({ restorable: true }) as const;
+
 async function seedSignerWithConsent(db: TestDb, name: string) {
   const [signer] = await db
     .insert(signers)
@@ -140,7 +147,7 @@ describe("unsyncVersion", () => {
     expect(await rowFor(db, "0.1.0")).toBeDefined();
 
     // Same for the allowCurrent-only shape, against the current version.
-    const current = await unsyncVersion(db, "0.0.1", { allowCurrent: true });
+    const current = await unsyncVersion(db, "0.0.1", { allowCurrent: true, isRestorable: RESTORABLE });
     expect(current.deleted).toBe(false);
     expect(refusal(current).refusedCode).toBe("dry_run");
     expect(await rowFor(db, "0.0.1")).toBeDefined();
@@ -188,6 +195,7 @@ describe("unsyncVersion", () => {
     const report = await unsyncVersion(db, "0.1.0", {
       dryRun: false,
       allowCurrent: true,
+      isRestorable: RESTORABLE,
     });
 
     expect(report.deleted).toBe(true);
@@ -221,6 +229,7 @@ describe("unsyncVersion", () => {
     const report = await unsyncVersion(db, "0.1.0", {
       dryRun: false,
       allowCurrent: true,
+      isRestorable: RESTORABLE,
     });
 
     expect(report.deleted).toBe(false);
@@ -293,6 +302,26 @@ describe("unsyncVersion", () => {
     expect(refusal(report).refusedCode).toBe("not_restorable");
     // The reason travels through, so the operator learns WHICH file to restore.
     expect(refusal(report).refusedBecause).toMatch(/v0\.1\.0\.spec\.json/);
+    expect(await rowFor(db, "0.1.0")).toBeDefined();
+  });
+
+  it("surfaces not_restorable on a DRY RUN, ahead of the dry_run code", async () => {
+    // Ordering is load-bearing and every other new test passes dryRun: false.
+    // The dry run is the step an operator hits FIRST, and the CLI prints
+    // "Dry run — safe to delete. Re-run with --yes to do it." for refusedCode
+    // "dry_run" — so if the dryRun check moved above the restorability check,
+    // the tool would actively recommend an unrecoverable delete, with nothing
+    // else in this file failing.
+    const db = await createTestDb();
+    await syncVersions(db, [doc("0.1.0", "live", true)]);
+
+    const report = await unsyncVersion(db, "0.1.0", {
+      dryRun: true,
+      allowCurrent: true,
+      isRestorable: () => ({ restorable: false, reason: "not on disk" }),
+    });
+
+    expect(refusal(report).refusedCode).toBe("not_restorable");
     expect(await rowFor(db, "0.1.0")).toBeDefined();
   });
 
