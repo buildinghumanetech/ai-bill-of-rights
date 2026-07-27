@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  mentionText,
+  pruneResolvedMentions,
+  type ResolvedMention,
+} from "@/lib/comments/resolved-mentions";
 
 interface Signer {
   id: string;
@@ -16,6 +21,14 @@ interface Props {
   autoFocus?: boolean;
   className?: string;
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /**
+   * Called with the signers the author has explicitly picked from the typeahead
+   * and whose inserted text is still in the body. The parent submits these ids
+   * so the server notifies exactly these people — see
+   * `src/lib/comments/resolved-mentions.ts` for why resolution happens here and
+   * not by re-reading the prose later.
+   */
+  onResolvedMentionsChange?: (mentions: ResolvedMention[]) => void;
 }
 
 interface MentionQuery {
@@ -37,6 +50,11 @@ const MAX_SUGGESTIONS = 6;
  *
  * The popup is anchored below the textarea — simple v1, no per-caret positioning.
  * Keyboard: arrow-up / arrow-down navigate, Enter / Tab select, Escape dismiss.
+ *
+ * Selecting a suggestion also **keeps the signer's id** and reports it through
+ * `onResolvedMentionsChange`, which is what the server notifies on. Typing a name
+ * by hand notifies nobody, by design — the "Notifying …" line under the textarea
+ * shows the author exactly who will be emailed so that is never a surprise.
  */
 export function MentionTextarea({
   value,
@@ -47,12 +65,15 @@ export function MentionTextarea({
   autoFocus,
   className,
   textareaRef: externalRef,
+  onResolvedMentionsChange,
 }: Props) {
   const internalRef = useRef<HTMLTextAreaElement | null>(null);
   const taRef = externalRef ?? internalRef;
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  /** Signers explicitly picked from the typeahead, in pick order. */
+  const [picked, setPicked] = useState<ResolvedMention[]>([]);
 
   // Compute filtered suggestions
   const suggestions = mentionQuery
@@ -67,6 +88,50 @@ export function MentionTextarea({
   useEffect(() => {
     setSelectedIdx(0);
   }, [suggestions.length, mentionQuery?.query]);
+
+  // A pick belongs to the body it was made in. When the parent replaces `value`
+  // wholesale — `setBody("")` after a successful submit, while this component
+  // stays mounted — the picks are for a comment that has already been sent, so
+  // they must go. Without this, one later change event containing the old
+  // mention text (a paste of the previous comment, or ctrl-Z) would re-arm it.
+  // Comparing props to state during render is the sanctioned way to do this;
+  // `locallyEdited` is the last value *we* produced, so anything else is external.
+  const [syncedValue, setSyncedValue] = useState(value);
+  const [locallyEdited, setLocallyEdited] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
+    if (value !== locallyEdited) {
+      setLocallyEdited(value);
+      setPicked([]);
+    }
+  }
+
+  const resolved = pruneResolvedMentions(value, picked);
+  // Signer ids are uuids, so joining on a comma is a unique key per set. Keying
+  // the effect on this primitive means the parent hears about a real change and
+  // not about every keystroke that leaves the set alone.
+  const resolvedKey = resolved.map((m) => m.signerId).join(",");
+
+  // The callback is read through a ref so an inline arrow prop can't retrigger
+  // the effect (parent setState -> new callback identity -> effect -> setState).
+  const notifyRef = useRef(onResolvedMentionsChange);
+  useEffect(() => {
+    notifyRef.current = onResolvedMentionsChange;
+  });
+  useEffect(() => {
+    // INVARIANT: this must recompute from exactly the inputs `resolvedKey` was
+    // derived from, or the parent gets told a set that isn't the one that
+    // triggered telling it. If you change either expression, change both.
+    //
+    // Recomputed rather than closed over so the effect depends on `resolvedKey`
+    // alone. Deliberately not memoising `resolved` for identity: React may drop a
+    // useMemo cache, which would refire this on an unchanged set. Handing the
+    // value over through a ref would be the obvious way to compute it once, but
+    // writing a ref during render trips `react-hooks` ("Cannot access refs during
+    // render"), so the duplication stays and the invariant is stated instead.
+    notifyRef.current?.(pruneResolvedMentions(value, picked));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedKey]);
 
   function detectMentionQuery(text: string, caretPos: number): MentionQuery | null {
     // Walk backwards from caret to find the last `@` that has no space between it and the caret
@@ -85,20 +150,42 @@ export function MentionTextarea({
     const caret = e.target.selectionStart ?? newValue.length;
     const q = detectMentionQuery(newValue, caret);
     setMentionQuery(q);
+    setLocallyEdited(newValue);
+    // Forget picks the author has edited away, so deleting a mention and then
+    // retyping the same name by hand does not silently re-arm the notification.
+    setPicked((prev) => pruneResolvedMentions(newValue, prev));
   }
 
   function selectSuggestion(signer: Signer) {
     if (!mentionQuery) return;
     const before = value.slice(0, mentionQuery.atIndex);
     const after = value.slice(mentionQuery.atIndex + 1 + mentionQuery.query.length);
-    const newValue = `${before}@${signer.displayName} ${after}`;
+    // Insert through `mentionText` rather than formatting `@name` a second time
+    // here. The text this writes has to be byte-identical to the needle that
+    // `pruneResolvedMentions` (below) and `resolveSubmittedMentions` (server side)
+    // search for, or a pick resolves in the composer and then vanishes at submit.
+    // Two copies of the format is how that drifts; behaviour is unchanged today.
+    const inserted = mentionText(signer.displayName);
+    const newValue = `${before}${inserted} ${after}`;
     onChange(newValue);
     setMentionQuery(null);
+    setLocallyEdited(newValue);
+    // Record the resolved id at the moment of the pick. This is the whole point:
+    // we know exactly who was meant here, and never have to guess it back out of
+    // the text afterwards.
+    setPicked((prev) =>
+      pruneResolvedMentions(newValue, [
+        ...prev,
+        { signerId: signer.id, displayName: signer.displayName },
+      ]),
+    );
 
     // Restore focus and place caret after the inserted mention
     const ta = taRef.current;
     if (ta) {
-      const newCaret = before.length + 1 + signer.displayName.length + 1; // +1 for @, +1 for trailing space
+      // Derived from what was actually inserted, so it stays correct if
+      // `mentionText` ever normalises the name. +1 for the trailing space.
+      const newCaret = before.length + inserted.length + 1;
       ta.focus();
       requestAnimationFrame(() => {
         ta.selectionStart = newCaret;
@@ -141,9 +228,30 @@ export function MentionTextarea({
         placeholder={placeholder}
         className={
           className ??
-          "w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          "w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         }
       />
+      {/* Who this comment will actually notify. Only an explicit pick from the
+          typeahead notifies anyone, so without this line an author who typed a
+          name by hand would get silence with no way to tell.
+
+          Shown only when a parent is listening for the resolution — a composer
+          that ignores it (the inline edit form, which sends no mail) must not
+          promise a notification it won't deliver. */}
+      {onResolvedMentionsChange !== undefined && resolved.length > 0 && (
+        <p
+          data-testid="mention-notify-list"
+          className="mt-1 text-xs text-zinc-500"
+        >
+          Notifying{" "}
+          {resolved.map((m, idx) => (
+            <span key={m.signerId}>
+              {idx > 0 ? ", " : ""}
+              <span className="font-medium text-zinc-700">@{m.displayName}</span>
+            </span>
+          ))}
+        </p>
+      )}
       {showPopup && (
         <div
           ref={popupRef}

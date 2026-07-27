@@ -13,7 +13,10 @@ import {
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { listSignersForMention } from "@/lib/db/queries";
-import { parseMentions } from "@/lib/comments/mentions";
+import {
+  readSubmittedMentions,
+  resolveSubmittedMentions,
+} from "@/lib/comments/resolved-mentions";
 import { mentionEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { getDb } from "@/lib/db/lazy";
@@ -46,6 +49,9 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   const body = sanitizeText(rawBody, 5000);
   const rawSelectedText = formData.get("selectedText")?.toString() ?? "";
   const selectedText = rawSelectedText ? sanitizeText(rawSelectedText, 1000) : null;
+  // Read these up front: the mention emails are sent from a detached async block
+  // that runs after this action returns, and shouldn't be holding onto formData.
+  const submittedMentions = readSubmittedMentions(formData);
 
   // Admin "post as" feature: if caller is admin and actAsSignerId is provided,
   // attribute the comment to that signer. Otherwise use the caller's own id.
@@ -91,8 +97,25 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
   // Fire mention emails asynchronously — don't let email failures block the response
   void (async () => {
     try {
+      // Notifications come only from write-time resolution: the composer knows
+      // exactly which signer the author picked. There is deliberately no prose-
+      // parsing fallback — inferring a recipient from free text repeatedly
+      // emailed the wrong person (see the header of resolved-mentions.ts), and a
+      // fallback selected by the *client* would just be an opt-out from the
+      // containment guarantee, since omitting the marker is trivial.
+      if (!submittedMentions.fromComposer) {
+        console.warn(
+          "[mention] Submission carried no resolved mentions — notifying nobody",
+          { commentId: insertedCommentId },
+        );
+        return;
+      }
       const knownSigners = await listSignersForMention(db);
-      const mentions = parseMentions(body, knownSigners);
+      const mentions = resolveSubmittedMentions(
+        body,
+        submittedMentions.signerIds,
+        knownSigners,
+      );
       // Filter self-mentions
       const others = mentions.filter((m) => m.signerId !== effectiveSignerId);
       if (others.length === 0) return;

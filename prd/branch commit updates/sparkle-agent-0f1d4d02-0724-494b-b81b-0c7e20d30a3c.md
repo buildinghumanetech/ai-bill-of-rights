@@ -1,5 +1,74 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-27 09:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Merged `origin/main` into the branch to clear a `CONFLICTING` PR. Main had moved
+a long way — PRs #44 through #53 landed a page-metadata centralization
+(`src/lib/site-metadata.ts`) that collided head-on with this branch's homepage
+OG work, plus a site-wide removal of dead `dark:` variants. Five conflicts, all
+resolved; the suite is now 81 files / 863 tests passing and `tsc --noEmit` is
+clean.
+
+### Detail of changes made:
+
+- `src/app/layout.tsx`: adopted main's `buildRootMetadata()` and deleted this
+  branch's hand-rolled metadata literal, keeping the `<SiteAnalytics />` mount.
+  Main's helper is strictly better than what we had — it validates the origin,
+  rejects `new URL("localhost:3000")`-style opaque bases that would throw during
+  render, and falls through to `VERCEL_URL` so preview deploys advertise
+  themselves instead of production.
+- `src/lib/site-metadata.ts`: added the OG image to `buildRootMetadata`
+  (`OG_IMAGE_URL = "/api/og"`, 1200x630, `twitter.card: summary_large_image`).
+  Main's helper had no image at all, which would have silently dropped item 1 of
+  this whole push. Documented why the image is safe to inherit while `og:url` is
+  not: `/api/og` renders the *document*, so a route inheriting it shares as the
+  site — correct for `/bill-of-rights` and `/signatories`, which still have no
+  card of their own.
+- `tests/lib/site-metadata.test.ts`: main's "sets a summary card" assertion now
+  expects `summary_large_image`, with a comment recording that it only said
+  `summary` because there was no image to show yet. Added a case pinning the
+  image URL and dimensions on both the OG and Twitter blocks.
+- `tests/app/root-metadata.test.ts`: rewritten. It previously pinned the OLD
+  site name (`"AI Bill of Rights"`), a `locale` main does not set, and a
+  description main deliberately replaced — it would have fought main's rename
+  rather than caught a regression. It now asserts the layout's export EQUALS the
+  shared constants, so its job is "the layout uses the helper and nobody
+  re-inlines it", with the shape itself owned by the lib test.
+- `src/app/account/revoke/page.tsx`: kept this branch's copy (the "Delete your
+  account" heading and the comment requiring the consent list to name everything
+  the cascade destroys) and took main's side on styling. Main's `a82d14c`
+  removed all 126 `dark:` variants across 17 files because dark mode is globally
+  inert (a class-based `@custom-variant` with no `.dark` ever applied), so those
+  utilities render nothing.
+- `src/app/page.tsx` and `src/app/signatories/[id]/page.tsx`: import-only
+  conflicts, both sides kept.
+- `pnpm-lock.yaml`: took main's and reinstalled. Main added
+  `@testing-library/react` and `@testing-library/dom`; five of its component
+  test files failed to COLLECT until the real install ran. Worth noting the
+  failure mode — vitest reported "5 failed | 76 passed" while every one of the
+  817 tests it could collect passed, so the summary line looked survivable and
+  was not.
+
+### Potential concerns to address:
+
+- This branch may still carry `dark:` variants in files it added or touched that
+  main's sweep never saw. They are inert, not broken, but they re-introduce the
+  dead code `a82d14c` set out to remove. Worth a grep before the next branch.
+- The five roborev findings from the 08:45 entry are still open and unfixed:
+  `hasRootGuard` ignoring ordering (verified false-pass), the line-anchored
+  required-`db` detector, the false `src/lib/db/lazy.ts` docstring, the optional
+  `whyISigned` prop, and the strict-`null` no-op guard. None is live exposure;
+  all are queued for the follow-up batch.
+- `buildRootMetadata`'s image is now inherited by every route that does not
+  define its own `openGraph`. That is deliberate and documented, but it does
+  mean adding a route with a genuinely unsuitable site card requires overriding
+  the block, not just the title.
+
+---
+
 ## Progress Update as of 2026-07-27 08:45 Pacific
 *(Most recent updates at top)*
 

@@ -26,7 +26,10 @@ export function renderBodyWithMentions(
         key={`${mention.signerId}-${mention.matchStart}`}
         className="rounded bg-blue-50 px-1 text-blue-700"
       >
-        @{mention.displayName}
+        {/* Render what the author typed, not the canonical display name —
+            matching is case-insensitive and accepts first names, so echoing
+            `displayName` here would silently rewrite their comment. */}
+        {body.slice(mention.matchStart, mention.matchEnd)}
       </span>,
     );
     cursor = mention.matchEnd;

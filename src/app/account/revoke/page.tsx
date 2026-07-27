@@ -15,13 +15,13 @@ export default async function RevokePage() {
         never described. If you widen the cascade, widen this list in the same
         commit.
       */}
-      <h1 className="text-3xl font-semibold tracking-tight text-red-700 dark:text-red-400">
+      <h1 className="text-3xl font-semibold tracking-tight text-red-700">
         Delete your account
       </h1>
-      <p className="mt-6 text-zinc-700 dark:text-zinc-300">
+      <p className="mt-6 text-zinc-700">
         This will permanently:
       </p>
-      <ul className="mt-3 list-disc pl-6 text-zinc-700 dark:text-zinc-300">
+      <ul className="mt-3 list-disc pl-6 text-zinc-700">
         <li>Delete your signature from every version of the AI Bill of Rights you signed.</li>
         <li>Delete your name, location, and affiliation from the public signers list.</li>
         <li>Delete the consent records and any private fingerprint fields we captured.</li>
@@ -38,7 +38,7 @@ export default async function RevokePage() {
         </li>
         <li>Free up your email/phone so you can sign again later if you want.</li>
       </ul>
-      <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-6 text-sm text-zinc-600">
         None of this can be undone. Are you sure?
       </p>
       <form action={submitRevokeAction} className="mt-8 flex gap-3">
@@ -50,7 +50,7 @@ export default async function RevokePage() {
         </button>
         <a
           href="/account"
-          className="rounded-full px-6 py-3 text-base font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="rounded-full px-6 py-3 text-base font-medium text-zinc-700 hover:bg-zinc-100"
         >
           Cancel
         </a>

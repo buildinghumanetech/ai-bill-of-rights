@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResource, listResourceSlugs } from "@/lib/resources";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
 export async function generateStaticParams() {
   return listResourceSlugs().map((slug) => ({ slug }));
@@ -14,11 +15,16 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const r = getResource(slug);
-  if (!r) return { title: "Resource not found" };
-  return {
-    title: `${r.title} — AI Bill of Rights`,
+  if (!r) {
+    return buildPageMetadata({
+      title: "Resource not found",
+      description: "That resource doesn't exist.",
+    });
+  }
+  return buildPageMetadata({
+    title: r.title,
     description: r.subtitle || r.title,
-  };
+  });
 }
 
 export default async function ResourcePage({

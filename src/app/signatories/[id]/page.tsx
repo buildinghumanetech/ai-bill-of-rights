@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { normalizeWhyISigned } from "@/lib/why-i-signed";
+import { SITE_NAME, buildPageMetadata } from "@/lib/site-metadata";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
 import { CommitmentsSummary } from "@/components/CommitmentsSummary";
@@ -24,26 +25,21 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const signer = await getSignerById(id);
-  if (!signer) return { title: "Signer not found" };
-  const title = `${signer.displayName} signed the AI Bill of Rights`;
-  const description = `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`;
-  const ogUrl = `/api/og/signer/${id}`;
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      type: "profile",
-      images: [{ url: ogUrl, width: 1200, height: 630 }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [ogUrl],
-    },
-  };
+  if (!signer) {
+    return buildPageMetadata({
+      title: "Signer not found",
+      description: "That signature doesn't exist or has been revoked.",
+    });
+  }
+  return buildPageMetadata({
+    // Already names the site in prose, so no suffix — "… signed The AI Bill of
+    // Rights — The AI Bill of Rights" would read as a bug.
+    title: `${signer.displayName} signed ${SITE_NAME}`,
+    description: `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`,
+    appendSiteName: false,
+    ogType: "profile",
+    imageUrl: `/api/og/signer/${id}`,
+  });
 }
 
 /**

@@ -1,7 +1,18 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* This app is light-only. Tailwind's `dark:` variant defaults to
+   `prefers-color-scheme: dark`, which would otherwise apply leftover dark:
+   utilities (light text, etc.) on top of our forced-light backgrounds when the
+   OS is in dark mode. Redefine `dark:` to be class-based — and since nothing
+   ever adds a `.dark` class, every `dark:` utility becomes inert. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  /* This app is light-only by design (no theme toggle / dark theme). Pin the
+     color scheme so OS dark mode doesn't flip the body to black or restyle
+     native controls (textareas, scrollbars, autofill) to dark. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -11,13 +22,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
