@@ -39,8 +39,15 @@ const SIGNER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 const ORIGIN = "https://ai-for-people.org";
 const SIGNER_PAGE = `${ORIGIN}/signatories/${SIGNER_ID}`;
 
-/** Every href in a rendered box, HTML-unescaped enough to compare queries. */
-function renderHrefs(whyISigned?: string | null): {
+/**
+ * Every href in a rendered box, HTML-unescaped enough to compare queries.
+ *
+ * Defaults to `null` rather than leaving the parameter optional: the prop it
+ * forwards is required now, so an omitted argument has to become an explicit
+ * "this signer wrote nothing" here rather than an `undefined` the component
+ * would have to tolerate.
+ */
+function renderHrefs(whyISigned: string | null = null): {
   html: string;
   hrefs: string[];
 } {

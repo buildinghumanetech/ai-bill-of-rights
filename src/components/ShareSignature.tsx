@@ -14,8 +14,14 @@ interface Props {
    * `buildShareText` leads with it when it exists — which is the whole point of
    * the feature, and this is the surface the signer is most likely to share
    * from, so it must not be dropped here.
+   *
+   * Required, not optional, and `| null` carries "this signer wrote nothing".
+   * As an optional prop it was silently omissible: a new render site that
+   * forgot it would compile clean and ship the generic share text, quietly
+   * undoing the feature. Making it required means the omission is a type error
+   * and the caller has to say `null` on purpose.
    */
-  whyISigned?: string | null;
+  whyISigned: string | null;
 }
 
 /**
