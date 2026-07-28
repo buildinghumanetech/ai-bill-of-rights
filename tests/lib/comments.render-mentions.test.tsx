@@ -197,6 +197,19 @@ describe("renderBodyWithMentions", () => {
     }
   });
 
+  it("walks back over an astral combining mark to reach the address", () => {
+    // U+E0100 is an astral \p{Mn}. Indexing the walk-back by UTF-16 unit stops
+    // dead on its low surrogate — \p{M} cannot match one — so the base character
+    // is never reached and `@Erik` highlights inside an email address. That is
+    // the OVER-highlighting direction, which this module treats as the unsafe
+    // one: it attributes an address to a person as though they were mentioned.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const body = "write alice\u{E0100}@Erik.com today";
+    const result = renderBodyWithMentions(body, erik, ["e1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(body);
+  });
+
   it("still highlights after a non-ASCII base character carrying a mark", () => {
     // The walk-back must not become a Unicode-wide guard by the back door.
     // Devanagari `मुझे` ends in a combining vowel sign over base `झ`, which is

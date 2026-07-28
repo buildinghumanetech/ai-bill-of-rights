@@ -70,9 +70,10 @@ export function renderBodyWithMentions(
  * local part is effectively ASCII, so this catches `alice@Erik.com` without
  * touching CJK.
  *
- * Being ASCII also removes the need to read whole code points on this edge: a
- * lone surrogate can never match, which is the same answer a full astral code
- * point would give.
+ * Being ASCII means this final test needs no code-point handling of its own: a
+ * lone surrogate can never match it, which is the same answer a full astral code
+ * point would give. That applies to THIS test only — the mark walk-back that
+ * feeds it has to read code points, and did not always; see `baseCharBefore`.
  *
  * KNOWN COST of including `.`, `%` and `+`: a mention immediately after one of
  * them is suppressed, so `Thanks.@Erik` renders plain. `.` is the likely one in
@@ -92,6 +93,8 @@ const EMAIL_LOCAL_CHAR = /[A-Za-z0-9._%+-]/;
  */
 const RUN_ON_CHAR = /[A-Za-z0-9\p{M}\p{Pc}]/u;
 
+const COMBINING_MARK = /\p{M}/u;
+
 /**
  * The base character before `index`, skipping any combining marks attached to it.
  *
@@ -100,16 +103,42 @@ const RUN_ON_CHAR = /[A-Za-z0-9\p{M}\p{Pc}]/u;
  * address through and highlight `@Erik` inside it. Walking back to the base `e`
  * gets the right answer, and it keeps Indic prose working: `मुझे@Erik` resolves
  * to base `झ`, which is non-ASCII and therefore allowed, exactly like CJK.
+ *
+ * The walk reads whole code points. Indexing by UTF-16 unit looks fine until the
+ * mark is astral — `\p{M}` cannot match a lone surrogate, so the loop stopped on
+ * the spot and `alice\u{E0100}@Erik.com` highlighted `@Erik` inside an address.
+ * That is the OVER-highlighting direction, the one this module calls unsafe.
+ *
+ * KNOWN COST: `\p{M}` covers variation selectors and enclosing marks too, not
+ * just diacritics, so `2️⃣@Erik` walks back to base `2` and is suppressed. Safe
+ * direction, and listed here rather than left as a surprise.
  */
 function baseCharBefore(body: string, index: number): string | undefined {
   let i = index;
-  while (i > 0 && /\p{M}/u.test(body[i - 1])) i--;
-  if (i <= 0) return undefined;
+  for (;;) {
+    const cp = codePointEndingAt(body, i);
+    if (cp === undefined || !COMBINING_MARK.test(String.fromCodePoint(cp))) break;
+    i -= cp > 0xffff ? 2 : 1;
+  }
+  const base = codePointEndingAt(body, i);
+  if (base === undefined) return undefined;
   // Decompose before answering, so the two spellings of the same address agree.
   // Walking back over marks only handles NFD; the NFC spelling of `andré` is a
   // single precomposed `é`, which is not ASCII and would be read as prose. One
   // string, two encodings, opposite answers is worse than either answer.
-  return body[i - 1].normalize("NFD")[0];
+  return String.fromCodePoint(base).normalize("NFD")[0];
+}
+
+/** The whole code point ending at `index`, or undefined at the start. */
+function codePointEndingAt(s: string, index: number): number | undefined {
+  if (index <= 0) return undefined;
+  const unit = s.charCodeAt(index - 1);
+  // Low surrogate: the code point actually starts one unit earlier.
+  if (unit >= 0xdc00 && unit <= 0xdfff && index >= 2) {
+    const high = s.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) return s.codePointAt(index - 2);
+  }
+  return unit;
 }
 
 /** Does a longer known display name also start at this position? */
