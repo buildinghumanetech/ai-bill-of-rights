@@ -99,12 +99,17 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
  * `bg-blue-600` like any other.
  *
  * Precondition: plain `variant:utility/opacity` tokens. A different shade
- * (`bg-blue-500`) or an arbitrary value (`bg-[#2563eb]`) is simply not caught,
- * and a `:` or `/` inside the *final* segment's brackets leaves a fragment
- * rather than a utility — `bg-[url(data:…)]` → `image`, `w-[calc(100%/3)]` →
- * `w-[calc(100%`. Neither can bite today, since every guard here targets a
- * plain utility; point one at an arbitrary-value class and replace this helper
- * rather than extend it.
+ * (`bg-blue-500`) or an arbitrary value (`bg-[#2563eb]`) is simply not caught.
+ * Two shapes leave a fragment rather than a utility:
+ *
+ * - the token's *last* `:` sits inside brackets, so the split lands mid-value:
+ *   `bg-[url(data:image/x)]` → `image`. (This is why `[&:hover]:bg-blue-600`
+ *   survives — its last `:` is outside the brackets.)
+ * - what survives contains a `/` that isn't an opacity modifier:
+ *   `w-[calc(100%/3)]` → `w-[calc(100%`.
+ *
+ * Neither can bite today, since every guard here targets a plain utility. Point
+ * one at an arbitrary-value class and replace this helper rather than extend it.
  */
 const baseClasses = (tokens: string[]) =>
   tokens.map((token) => token.split(":").pop()!.split("/")[0]);
