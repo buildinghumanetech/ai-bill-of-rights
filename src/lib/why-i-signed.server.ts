@@ -112,12 +112,20 @@ export async function saveWhyISignedForClerkUser(
   // below re-derives the same value, so the two cannot drift.
   const isRemoval = normalizeWhyISigned(raw) === null;
 
+  // Coalesce the same way `updateWhyISignedForClerkUser` does at line 49. This
+  // read used to compare `owner[0].whyISigned === null` directly, so a driver
+  // that surfaced an absent column as `undefined` — pglite and neon-http need
+  // not agree here — would miss the no-op and spend a pointless write plus a
+  // cache invalidation. Not a correctness bug, but the two siblings disagreeing
+  // about what "empty" looks like is how one of them ends up wrong later.
+  const stored = owner[0].whyISigned ?? null;
+
   // Nothing to take down: report success (the caller asked for an empty
   // statement and an empty statement is what they have) without spending a
   // write or a cache invalidation on it. Only `null` counts as already-empty —
   // a legacy row holding "" still gets rewritten to SQL NULL so the rest of the
   // app's null checks keep meaning what they say.
-  if (isRemoval && owner[0].whyISigned === null) {
+  if (isRemoval && stored === null) {
     return { ok: true, signerId: owner[0].id, whyISigned: null, changed: false };
   }
 

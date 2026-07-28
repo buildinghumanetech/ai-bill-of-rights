@@ -251,6 +251,41 @@ describe("saveWhyISignedForClerkUser — rate limited", () => {
     expect(await storedStatement(db)).toBeNull();
   });
 
+  it("treats an undefined stored statement as already-empty", async () => {
+    // pglite hands back `null` for an unset column, so the no-op check used to
+    // compare `=== null` and pass. Nothing guarantees every driver agrees —
+    // a client that omits the key, or surfaces it as `undefined`, would slip
+    // past a strict check and spend a write plus two revalidatePath calls
+    // undoing nothing. The sibling `updateWhyISignedForClerkUser` already
+    // coalesced with `?? null`; this pins that the two agree.
+    //
+    // Driven with a stub rather than pglite precisely because pglite cannot
+    // produce the shape under test. `update` throws, so "no write happened" is
+    // enforced rather than merely counted.
+    const stubDb = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ id: "signer-1", whyISigned: undefined }],
+          }),
+        }),
+      }),
+      update: () => {
+        throw new Error(
+          "wrote to the database for a removal that had nothing to remove",
+        );
+      },
+    };
+
+    const res = await saveWhyISignedForClerkUser(stubDb, CLERK_ID, "");
+    expect(res).toMatchObject({
+      ok: true,
+      signerId: "signer-1",
+      whyISigned: null,
+      changed: false,
+    });
+  });
+
   it("still writes a removal over a legacy empty-string row", async () => {
     // `normalizeWhyISigned` has always stored SQL NULL for "no statement", but
     // a row written before it existed can hold "". That is not already-empty as

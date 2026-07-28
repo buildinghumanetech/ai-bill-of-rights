@@ -1,12 +1,18 @@
 /**
  * Lazy access to the production database client.
  *
- * `src/lib/db/index.ts` throws at module-evaluation time when `DATABASE_URL`
- * is unset, so importing it at the top of a module makes that module
- * unimportable from a test — and the tests here run against pglite with their
- * own client. Every module that needs the production client only at CALL time
- * therefore grew its own copy of the same six-line
- * `let _db … function getDb()` block. There were nineteen of them. This is
+ * This docstring used to claim `src/lib/db/index.ts` throws at
+ * module-evaluation time when `DATABASE_URL` is unset. It does not: it exports
+ * `db` as a `Proxy` whose `get` trap calls `getDb()`, so importing the module
+ * is safe and only *touching a property* throws. Worth stating plainly, because
+ * the false version made this file look load-bearing for importability — and a
+ * future reader who checked would have found the claim didn't hold and been
+ * left unsure what else here was stale.
+ *
+ * The real reason is duplication, not import safety. A module that needs the
+ * production client at CALL time still has to defer resolution so tests can run
+ * against pglite with their own client, and nineteen modules had each grown a
+ * private copy of the same six-line `let _db … function getDb()` block. This is
  * that block, once.
  *
  * WHERE THIS BELONGS. On the `"use server"` wrappers in

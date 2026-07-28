@@ -760,9 +760,25 @@ describe("plain data-layer modules stay plain", () => {
       // reach now, so the fallback buys nothing and costs the reader the
       // ability to see at the call site which database an irreversible write
       // lands in. See src/lib/db/lazy.ts.
+      // Anchored to parameter POSITION, not to line position. The previous
+      // pattern was `/^\s*(db|dbClient)\s*:[^=\n]*=[^\n]*$/gm`, which only ever
+      // matched a parameter that Prettier had already broken onto its own line.
+      // A signature short enough to stay on one line —
+      // `function f(db: Db = getDb(), id: string)` — does not start with `db`,
+      // so it slipped through the exact check that exists to catch it. Whether
+      // a default is caught should not depend on how long the signature is.
+      //
+      // `[(,]\s*` is what makes it a parameter: `\s` spans newlines, so the
+      // multi-line form still matches. Two shapes count as optional — a default
+      // (`db: Db = getDb()`) and an optional marker (`db?: Db`), the second of
+      // which the old pattern could not express at all. `file.code` has comments
+      // and string literals blanked out already, so prose describing a default
+      // cannot trip this.
       const optional = [
-        ...file.code.matchAll(/^\s*(db|dbClient)\s*:[^=\n]*=[^\n]*$/gm),
-      ].map((m) => m[0].trim());
+        ...file.code.matchAll(
+          /[(,]\s*(db|dbClient)\s*(?:\?\s*:|:[^=)\n]*=)/g,
+        ),
+      ].map((m) => m[0].replace(/^[(,]\s*/, "").trim());
       expect(
         optional,
         optional.length === 0

@@ -1,5 +1,74 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-27 20:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Cleared four of the five long-standing roborev findings — the low-risk ones.
+Each was mutation-verified: the fix was reverted and the guard watched to go
+red, then restored. The fifth (the `hasRootGuard` ordering hole) is deliberately
+left open; see below. Suite 81 files / 870 tests, `tsc --noEmit` clean.
+
+### Detail of changes made:
+
+- **`src/lib/db/lazy.ts` docstring corrected.** It claimed
+  `src/lib/db/index.ts` "throws at module-evaluation time" when `DATABASE_URL`
+  is unset. It does not — `index.ts:21` exports `db` as a `Proxy` whose `get`
+  trap calls `getDb()`, so importing the module is safe and only *property
+  access* throws. The docstring now says so explicitly, and states the real
+  justification: nineteen modules had each grown a private copy of the same
+  `let _db … getDb()` block. Left the false claim visible-as-corrected rather
+  than silently deleting it, so a reader who remembers the old rationale knows
+  it was checked and not merely reworded.
+- **`whyISigned` is now a required prop on `<ShareSignature />`** (`string |
+  null`, where `null` means "wrote nothing"). As an optional prop a new render
+  site could omit it, compile clean, and ship the generic share text — quietly
+  undoing the feature. Exactly one production call site exists
+  (`src/app/signatories/[id]/page.tsx:151`) and it already passed the value.
+  Verified by deleting the prop there: `error TS2741: Property 'whyISigned' is
+  missing`. The test helper `renderHrefs` now defaults to `null` rather than
+  taking an optional param, so an omitted argument is an explicit empty.
+- **`src/lib/why-i-signed.server.ts` no-op guard coalesces.** It compared
+  `owner[0].whyISigned === null` while its sibling
+  `updateWhyISignedForClerkUser` (line 49) used `?? null`. A driver surfacing an
+  absent column as `undefined` would miss the no-op and spend a write plus two
+  `revalidatePath` calls undoing nothing. Now reads through
+  `const stored = owner[0].whyISigned ?? null`.
+- New test `treats an undefined stored statement as already-empty` drives this
+  with a **stub db**, not pglite — deliberately, because pglite returns `null`
+  and so cannot produce the shape under test. The stub's `update` *throws*, so
+  "no write happened" is enforced rather than counted.
+- **The required-`db` detector is anchored to parameter position, not line
+  position.** The old pattern was
+  `/^\s*(db|dbClient)\s*:[^=\n]*=[^\n]*$/gm`, which only matched a parameter
+  Prettier had already broken onto its own line. Now
+  `/[(,]\s*(db|dbClient)\s*(?:\?\s*:|:[^=)\n]*=)/g`. Measured against three
+  shapes: one-line default — old MISSED, new caught; multi-line default — both
+  caught (no regression); `db?: any` optional marker — old MISSED, new caught.
+  That last shape the old pattern could not express at all, despite the test
+  being named "never an optional one". Safe to unanchor because `file.code` has
+  comments and string literals blanked out already.
+
+### Potential concerns to address:
+
+- **The ordering hole (`hasRootGuard`) is still open, on purpose.** It slices
+  after the guard binding and searches the entire remainder, so an export that
+  deletes and only *then* checks `if (!userId)` passes all 83 cases. Fixing it
+  means bounding the search to "before the first effectful statement," which is
+  awkward against ~900 lines of deliberately regex-based scanning, and a
+  heuristic that is too tight produces false *positives* — reddening the suite
+  on correct code, which invites someone to weaken the guard. Not urgent: every
+  current action rejects on the line immediately following its `auth()` call, so
+  the hole is latent. Budget ~2–3 hours and mutation-test it hard.
+- The route inventory duplication noted in the 13:15 entry is unchanged. The
+  useful fix is a census — every `src/app/**/page.tsx` must appear in exactly
+  one of two lists, "owns a card" or "inherits deliberately" — *not* a glob
+  asserting every route owns a card, which would fail on the ~19 that inherit by
+  design. 25 page files, 6 of them dynamic and needing param fixtures.
+
+---
+
 ## Progress Update as of 2026-07-27 13:15 Pacific
 *(Most recent updates at top)*
 
