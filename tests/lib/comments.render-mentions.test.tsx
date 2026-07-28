@@ -124,6 +124,37 @@ describe("renderBodyWithMentions", () => {
     expect(result[0]).toBe("cc @Erika Anderson");
   });
 
+  it("does not highlight a picked name inside an email address", () => {
+    // `alice@Erik.com` contains "@Erik" and the next character is a dot, so a
+    // trailing-only boundary check waves it through. This is the `bob!@alice.com`
+    // family of false positive the whole write-time design exists to prevent —
+    // pinned on the delivery side in tests/server/comments.test.ts. A guard that
+    // checked only one edge would quietly reintroduce it on the display side.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const result = renderBodyWithMentions("write alice@Erik.com today", erik, ["e1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("write alice@Erik.com today");
+  });
+
+  it("does not slice a handle that starts with a picked name", () => {
+    // "_" is neither \p{L} nor \p{N}, so a class built from those two alone lets
+    // "@Erik_dev" render as a styled "@Erik" plus a plain "_dev".
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const result = renderBodyWithMentions("cc @Erik_dev please", erik, ["e1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("cc @Erik_dev please");
+  });
+
+  it("reads whole code points at the boundary, not UTF-16 units", () => {
+    // `body[i]` hands back a lone surrogate for an astral character, and a
+    // u-flagged class never matches one — so a mention butted against an astral
+    // letter would slip past a naive guard. 𝐀 (U+1D400) is \p{L} and astral.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const result = renderBodyWithMentions("cc @Erik\u{1D400}x", erik, ["e1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("cc @Erik\u{1D400}x");
+  });
+
   it("still highlights a picked name followed by punctuation or end of text", () => {
     // The boundary check above must not swallow ordinary endings.
     const overlapping = [{ id: "e1", displayName: "Erik" }];

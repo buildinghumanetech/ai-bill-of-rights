@@ -50,6 +50,33 @@ export function renderBodyWithMentions(
   return nodes;
 }
 
+/**
+ * Letters, digits and `_` — the characters that mean "this is still the same
+ * word". `_` is in the class deliberately: it is neither `\p{L}` nor `\p{N}`, so
+ * a class built from those two alone lets `@Erik_dev` slice into a styled
+ * `@Erik` and a plain `_dev`.
+ */
+const WORDISH = /[\p{L}\p{N}_]/u;
+
+function isWordish(codePoint: number | undefined): boolean {
+  // Compare whole code points, not UTF-16 units. `body[i]` hands back a lone
+  // surrogate for anything astral, which a `u`-flagged class never matches, so
+  // an emoji or an astral letter would slip past the guard.
+  return codePoint !== undefined && WORDISH.test(String.fromCodePoint(codePoint));
+}
+
+/** The code point ending at `index`, or undefined at the start of the string. */
+function codePointBefore(s: string, index: number): number | undefined {
+  if (index <= 0) return undefined;
+  const unit = s.charCodeAt(index - 1);
+  // Low surrogate: step back one more to read the pair as one code point.
+  if (unit >= 0xdc00 && unit <= 0xdfff && index >= 2) {
+    const high = s.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) return s.codePointAt(index - 2);
+  }
+  return unit;
+}
+
 interface MentionRange {
   start: number;
   end: number;
@@ -85,15 +112,23 @@ function findMentionRanges(
     // Plain `indexOf`, never a constructed regex: a display name containing
     // regex metacharacters needs no escaping and cannot change the semantics.
     for (let at = body.indexOf(needle); at !== -1; at = body.indexOf(needle, at + needle.length)) {
-      // Skip a match that stops in the middle of a longer word. Picking "Erik"
-      // and then hand-typing "@Erika Anderson" puts "@Erik" inside a name that
-      // was never picked; highlighting it would slice that name into a styled
-      // "@Erik" plus a plain "a Anderson" and visually attribute the text to the
-      // wrong person. Longest-wins below only helps when BOTH names have rows,
-      // so this is the case it cannot see. Under-highlighting is the safe
-      // direction: the mention is still delivered, it just is not dressed up.
-      const next = body[at + needle.length];
-      if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
+      // A match only counts when BOTH edges land on a word boundary.
+      //
+      // Trailing: picking "Erik" and hand-typing "@Erika Anderson" or "@Erik_dev"
+      // puts "@Erik" inside text that was never picked. Highlighting it slices
+      // that text into a styled "@Erik" plus a plain remainder and attributes it
+      // to the wrong person. Longest-wins below only helps when BOTH names have
+      // rows, so this is the case it cannot see.
+      //
+      // Leading: without it, "@Erik" matches inside `alice@Erik.com` — the
+      // `bob!@alice.com` family of false positive that this whole design exists
+      // to prevent, which the delivery side pins in tests/server/comments.test.ts
+      // and which a display-only guard would quietly reintroduce.
+      //
+      // Under-highlighting is the safe direction: the mention is still
+      // delivered, it just is not dressed up.
+      if (isWordish(codePointBefore(body, at))) continue;
+      if (isWordish(body.codePointAt(at + needle.length))) continue;
       found.push({ start: at, end: at + needle.length, signerId: id });
     }
   }
