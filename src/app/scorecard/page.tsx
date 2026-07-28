@@ -14,7 +14,7 @@ import { STATUS_CLASSES } from "./status-style";
 // Already names the site in prose, so `buildPageMetadata` must not append it.
 const TITLE = `${SITE_NAME} Scorecard`;
 const DESCRIPTION =
-  "Where AI companies stand against the nine commitments in the AI Bill of Rights — every assessment traced to a public source, with the date it was checked.";
+  "Where AI companies stand against the eleven commitments in the AI Bill of Rights — every assessment traced to a public source, with the date it was checked.";
 
 // Via getSiteUrl(), not a local `?? "https://ai-for-people.org"`: that copy of
 // the fallback ignored VERCEL_URL, so preview deploys advertised production.
@@ -55,7 +55,7 @@ export default function ScorecardIndexPage() {
           {TITLE}
         </h1>
         <p className="mt-4 max-w-2xl text-lg leading-relaxed text-zinc-700">
-          Nine commitments. One row per company. Every assessment on this page
+          Eleven commitments. One row per company. Every assessment on this page
           links to the public source it came from and the date a human read it —
           and anything nobody has looked at yet says so.
         </p>
@@ -168,7 +168,7 @@ export default function ScorecardIndexPage() {
               id="commitments-heading"
               className="text-lg font-semibold tracking-tight text-zinc-950"
             >
-              The nine commitments
+              The eleven commitments
             </h2>
             <ol className="mt-4 grid gap-x-8 gap-y-2 sm:grid-cols-2">
               {principles.map((p) => (

@@ -41,7 +41,7 @@ export const SITE_TAGLINE = "A People's Demand for Human-Centered AI";
 export const SITE_TITLE = `${SITE_NAME} — ${SITE_TAGLINE}`;
 
 export const SITE_DESCRIPTION =
-  "Nine commitments we're demanding from every AI company, backed by the signatures of real people. Read the document, sign it, or mark up the next draft.";
+  "Eleven commitments we're demanding from every AI company, backed by the signatures of real people. Read the document, sign it, or mark up the next draft.";
 
 export const PRODUCTION_ORIGIN = "https://ai-for-people.org";
 
@@ -100,7 +100,7 @@ export function getSiteUrl(): string {
  *
  * The image is the one thing here that inheritance makes *better* rather than
  * riskier. `/api/og` renders the document itself, not the homepage — it names
- * the site and its nine commitments and says nothing route-specific — so a
+ * the site and its eleven commitments and says nothing route-specific — so a
  * route that inherits it shares as the site, which is exactly right for the
  * ones that have no card of their own. That set currently includes
  * `/bill-of-rights` and `/signatories`, the two most shareable pages we have.
@@ -111,7 +111,7 @@ export function getSiteUrl(): string {
 export const OG_IMAGE_URL = "/api/og";
 
 const OG_IMAGE_ALT =
-  "The AI Bill of Rights — nine commitments demanded of every AI company";
+  "The AI Bill of Rights — eleven commitments demanded of every AI company";
 
 export function buildRootMetadata(): Metadata {
   return {

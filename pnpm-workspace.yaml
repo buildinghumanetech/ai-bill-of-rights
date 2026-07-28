@@ -1,3 +1,22 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+# Build scripts are DISABLED for all four of these, which is the state the
+# lockfile has always installed under — every `pnpm` script in this repo has
+# run against a tree where none of them executed a postinstall. This records
+# the existing behaviour; it does not change it.
+#
+# These values must be real booleans. pnpm writes this block with the literal
+# placeholder "set this to true or false" when it finds a dependency whose
+# build script has no recorded decision, and until you answer it, `pnpm` exits
+# non-zero from the deps-status check that runs BEFORE any script — which
+# breaks every `pnpm <script>` in the repo, `pnpm tsx
+# scripts/apply-migration.ts` included, with an error about ignored builds
+# that has nothing to do with the script you were trying to run. Answering
+# with `ignoredBuiltDependencies` alone is not enough: pnpm re-adds the
+# placeholder block on the next run.
+#
+# If one of these turns out to need its build step, flip it to `true` as a
+# deliberate change with its own verification.
+allowBuilds:
+  '@clerk/shared': false
+  esbuild: false
+  sharp: false
+  unrs-resolver: false

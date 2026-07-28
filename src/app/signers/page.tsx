@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  getSignerCount,
+  getSignatureCount,
   listSignatures,
   type SignerListItem,
 } from "@/lib/db/queries";
@@ -53,29 +53,28 @@ export default async function SignersPage({
   const pageNum = Math.max(1, Number(page) || 1);
   const limit = 100;
 
-  let rows: SignerListItem[] = [];
+  // `signers` here is already one row per person: listSignatures dedupes at
+  // the query level, so a page of `limit` rows is `limit` people and the
+  // offset lines up. (It used to be deduped after fetching, which could
+  // shrink a page below `limit` while the offset still advanced by `limit`.)
+  //
+  // The header count is getSignatureCount() — distinct people who have
+  // actually signed — not getSignerCount(), which counts rows in `signers`
+  // and so includes admin-added non-signers who never signed anything.
+  let signers: SignerListItem[] = [];
   let totalSignerCount = 0;
   let loadFailed = false;
   try {
-    [rows, totalSignerCount] = await Promise.all([
+    [signers, totalSignerCount] = await Promise.all([
       listSignatures(undefined, {
         limit,
         offset: (pageNum - 1) * limit,
       }),
-      getSignerCount(),
+      getSignatureCount(),
     ]);
   } catch {
     loadFailed = true;
   }
-
-  // Dedupe to one row per signer (the most recent signature wins because
-  // listSignatures orders by signed_at desc).
-  const seen = new Set<string>();
-  const signers = rows.filter((r) => {
-    if (seen.has(r.signerId)) return false;
-    seen.add(r.signerId);
-    return true;
-  });
 
   // Batch-fetch active approved selfies for the visible signers so the
   // table renders thumbnails without an N+1 query per row.

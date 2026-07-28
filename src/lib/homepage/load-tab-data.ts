@@ -43,7 +43,7 @@ function bumpPatch(version: string): string {
  */
 export async function loadHomepageTabData(): Promise<HomepageTabData> {
   const current = await getCurrentVersion().catch(() => null);
-  const currentVersion = current?.version ?? "0.0.1";
+  const currentVersion = current?.version ?? "0.1.0";
   const proposedVersion = bumpPatch(currentVersion);
   const baseVersionId = current?.id ?? null;
 

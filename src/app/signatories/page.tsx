@@ -31,7 +31,7 @@ export default async function SignatoriesPage({
         ) : (
           rows.map((item) => (
             <SignatureCard
-              key={item.signerId + item.version}
+              key={item.signerId}
               item={item}
               activeSelfies={activeSelfies}
             />

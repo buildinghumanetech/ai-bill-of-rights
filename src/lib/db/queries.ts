@@ -1,4 +1,4 @@
-import { eq, count, desc, gt, and, isNull, isNotNull, asc, sum, sql, inArray } from "drizzle-orm";
+import { eq, count, countDistinct, desc, gt, lt, or, and, isNull, isNotNull, asc, sum, sql, notExists, inArray, aliasedTable } from "drizzle-orm";
 import { versions, signatures, signers, comments, attestations, commentVotes, commentReports, commentMentions } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
@@ -27,8 +27,18 @@ export async function getVersionByString(versionString: string, db: any = getDef
   return rows[0] ?? null;
 }
 
+/**
+ * How many distinct people have signed — across all versions.
+ *
+ * Counts distinct signer_id rather than rows: `signatures` is unique on
+ * (signer_id, version_id), so one person who signs both v0.0.1 and v0.1.0
+ * produces two rows. This number is rendered as "N signatures" and "N other
+ * real people", so it has to count humans.
+ */
 export async function getSignatureCount(db: any = getDefaultDb()): Promise<number> {
-  const rows = await db.select({ value: count() }).from(signatures);
+  const rows = await db
+    .select({ value: countDistinct(signatures.signerId) })
+    .from(signatures);
   return Number(rows[0]?.value ?? 0);
 }
 
@@ -46,14 +56,24 @@ export async function getSignatureNumber(
   if (sigRow.length === 0) return 1;
   const signedAt = sigRow[0].signedAt;
 
-  // 2. Count how many signatures exist at or before that timestamp
+  // 2. Count how many distinct people signed at or before that timestamp.
+  //    Distinct for the same reason as getSignatureCount: a person who signs
+  //    more than one version must not advance everyone else's signer number.
   const rows = await db
-    .select({ value: count() })
+    .select({ value: countDistinct(signatures.signerId) })
     .from(signatures)
     .where(sql`${signatures.signedAt} <= ${signedAt}`);
   return Number(rows[0]?.value ?? 1);
 }
 
+/**
+ * Rows in `signers` — NOT the public signature count.
+ *
+ * This includes admin-added non-signers (see createNonSigner in
+ * server/actions/admin.ts), who have a signer row but have never signed
+ * anything. Public "how many people signed" surfaces want getSignatureCount().
+ * Kept for admin/reporting use; it has no callers in the app today.
+ */
 export async function getSignerCount(db: any = getDefaultDb()): Promise<number> {
   const rows = await db.select({ value: count() }).from(signers);
   return Number(rows[0]?.value ?? 0);
@@ -69,13 +89,27 @@ export interface SignerListItem {
   version: string;
 }
 
+/**
+ * One row per PERSON — their most recent signature — newest first.
+ *
+ * Deduplicated at the query level rather than by the callers. `signatures` is
+ * unique on (signer_id, version_id), so once more than one version exists a
+ * re-signer produces multiple rows. This list is rendered directly beneath
+ * counts from getSignatureCount(), which counts distinct signers, so per-row
+ * results would make the list contradict the number above it. Paging over
+ * duplicates is worse: filtering them out after the fact shrinks a page below
+ * `limit` while the offset still advances by `limit`, silently skipping people.
+ *
+ * DISTINCT ON (signer_id) needs its own ORDER BY starting with signer_id, so
+ * the newest-first ordering and the page window are applied in an outer query.
+ */
 export async function listSignatures(
   db: any = null,
   opts: { limit: number; offset: number },
 ): Promise<SignerListItem[]> {
   const client = db ?? getDefaultDb();
-  const rows = await client
-    .select({
+  const latestPerSigner = client
+    .selectDistinctOn([signatures.signerId], {
       signerId: signers.id,
       displayName: signers.displayName,
       locationText: signers.locationText,
@@ -87,7 +121,29 @@ export async function listSignatures(
     .from(signatures)
     .innerJoin(signers, eq(signers.id, signatures.signerId))
     .innerJoin(versions, eq(versions.id, signatures.versionId))
-    .orderBy(desc(signatures.signedAt))
+    .orderBy(
+      signatures.signerId,
+      desc(signatures.signedAt),
+      // Ties on signed_at are real: admin/bulk-created signatures and backfills
+      // stamp a fixed time. Break them on the VERSION's publish date, so the row
+      // that survives is the newer version — which is what this function
+      // promises ("their most recent signature") and what gets rendered next to
+      // the person's name. Ordering by signatures.id alone would be
+      // deterministic but arbitrary: id is a random uuid, so roughly half the
+      // time the OLDER version would win. id remains as a final tiebreaker to
+      // keep the result stable if two rows somehow share both timestamps.
+      desc(versions.publishedAt),
+      desc(signatures.id),
+    )
+    .as("latest_per_signer");
+
+  const rows = await client
+    .select()
+    .from(latestPerSigner)
+    // signerId breaks ties: OFFSET paging over rows with identical signed_at
+    // (bulk/admin-created signatures) is otherwise undefined-order, so a person
+    // could appear on two consecutive pages or on neither.
+    .orderBy(desc(latestPerSigner.signedAt), latestPerSigner.signerId)
     .limit(opts.limit)
     .offset(opts.offset);
   return rows as SignerListItem[];
@@ -186,12 +242,23 @@ export interface RecentSignerEvent {
 
 const SIXTY_MINUTES_MS = 60 * 60 * 1000;
 
+/**
+ * People who signed for the FIRST time since `cutoff`, newest first — the
+ * homepage ticker's feed.
+ *
+ * Re-signatures are excluded. `/api/signers/recent` returns this list next to
+ * getSignatureCount(), which counts distinct people, so announcing a re-sign
+ * would pop a name into the ticker as though someone just signed while the
+ * counter beside it did not move — and would announce the same person to the
+ * homepage twice. Publishing a new version is exactly what triggers re-signing.
+ */
 export async function listRecentSignersSince(
   since: Date | null,
   db: any = null,
 ): Promise<RecentSignerEvent[]> {
   const client = db ?? getDefaultDb();
   const cutoff = since ?? new Date(Date.now() - SIXTY_MINUTES_MS);
+  const earlier = aliasedTable(signatures, "earlier_signatures");
   const rows = await client
     .select({
       id: signers.id,
@@ -201,7 +268,38 @@ export async function listRecentSignersSince(
     })
     .from(signatures)
     .innerJoin(signers, eq(signers.id, signatures.signerId))
-    .where(and(gt(signatures.signedAt, cutoff), isNull(signers.softBannedAt)))
+    .where(
+      and(
+        gt(signatures.signedAt, cutoff),
+        isNull(signers.softBannedAt),
+        // No earlier signature by this person — i.e. this is their first.
+        //
+        // "Earlier" is a TOTAL order: ties on signed_at fall back to id.
+        // A strict `<` alone would let two rows with identical timestamps
+        // each see the other as not-earlier, so both would qualify as a
+        // first signature and the ticker would announce the same person
+        // twice — the exact failure this exclusion exists to prevent.
+        // Equal timestamps are not hypothetical: admin/bulk-created
+        // signatures and backfills stamp a fixed time.
+        notExists(
+          client
+            .select({ one: sql`1` })
+            .from(earlier)
+            .where(
+              and(
+                eq(earlier.signerId, signatures.signerId),
+                or(
+                  lt(earlier.signedAt, signatures.signedAt),
+                  and(
+                    eq(earlier.signedAt, signatures.signedAt),
+                    lt(earlier.id, signatures.id),
+                  ),
+                ),
+              ),
+            ),
+        ),
+      ),
+    )
     .orderBy(desc(signatures.signedAt));
   return rows as RecentSignerEvent[];
 }

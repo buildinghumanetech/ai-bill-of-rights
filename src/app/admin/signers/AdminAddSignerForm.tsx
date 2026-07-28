@@ -3,7 +3,7 @@
 import { FormEvent, useState, useTransition } from "react";
 import { adminAddSignerAction } from "@/server/actions/admin";
 
-const VERSION = "0.0.1";
+const VERSION = "0.1.0";
 
 type NameDisplayFormat = "initials" | "first-initial" | "full";
 

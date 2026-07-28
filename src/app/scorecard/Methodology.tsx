@@ -42,7 +42,7 @@ export function Methodology({
           <dd className="mt-1">
             A record of what{" "}
             {subject ? <strong>{subject}</strong> : "each company"} has said and
-            done <em>in public</em>, read against the nine commitments in the AI
+            done <em>in public</em>, read against the eleven commitments in the AI
             Bill of Rights. Each row is a human reading published sources —
             policies, documentation, filings, product behaviour — and writing
             down what those sources show.

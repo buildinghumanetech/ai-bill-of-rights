@@ -54,7 +54,7 @@ export async function GET() {
               color: "#27272a",
             }}
           >
-            Where AI companies stand against the nine commitments — with the
+            Where AI companies stand against the eleven commitments — with the
             source and the date behind every claim.
           </div>
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ARTICLES } from "@/app/api/og/articles";
+import { ARTICLES, GRID_PLACEHOLDER } from "@/app/api/og/articles";
 
 /**
  * Tripwire for the homepage OG card's hand-written article short-forms.
@@ -51,10 +51,14 @@ describe("homepage OG card article list", () => {
     expect(ARTICLES).toHaveLength(articleHeadings().length);
   });
 
-  it("renders exactly nine, which is what the 3x3 grid layout assumes", () => {
-    // The card lays the articles out in three rows of three. A count that
-    // isn't nine breaks the layout, not just the copy.
-    expect(ARTICLES).toHaveLength(9);
+  it("fills a 3-across, 4-down grid once the placeholder cell is counted", () => {
+    // The card lays the articles out in four rows of three. v0.1.0 took the
+    // document from nine to eleven, so the grid that used to be exactly full
+    // now has one cell spare — GRID_PLACEHOLDER occupies it deliberately.
+    // A count that is neither 11 nor 12-with-placeholder breaks the layout,
+    // not just the copy.
+    expect(ARTICLES).toHaveLength(11);
+    expect([...ARTICLES, GRID_PLACEHOLDER]).toHaveLength(12);
   });
 
   it("keeps the article numbers sequential with none skipped", () => {

@@ -1,11 +1,17 @@
 {
-  "current": "0.0.1",
+  "current": "0.1.0",
   "history": [
     {
       "version": "0.0.1",
       "published_at": "2026-05-18",
       "release_notes_pr": null,
       "changelog": "Initial MVP, transcribed from the working Google Doc."
+    },
+    {
+      "version": "0.1.0",
+      "published_at": "2026-07-24",
+      "release_notes_pr": null,
+      "changelog": "Adds Article 10 (Freedom From Algorithmic Discrimination) and Article 11 (A Right to Safe, Tested Systems), and revises the wording of Articles 1, 4, 5 and 7. Every article now closes with its pull quote, so the canonical text and the homepage say the same thing. Articles 5, 7 and 11 gained sentences; no article lost any."
     }
   ]
 }

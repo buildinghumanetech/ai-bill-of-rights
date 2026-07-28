@@ -1,7 +1,7 @@
 /**
- * Short forms of the nine articles, used by the homepage OG card.
+ * Short forms of the eleven articles, used by the homepage OG card.
  *
- * These live here rather than in `route.tsx` so the drift test can import nine
+ * These live here rather than in `route.tsx` so the drift test can import
  * plain strings without transitively loading `next/og`'s `ImageResponse`
  * runtime and `@/lib/db/queries` just to read them.
  *
@@ -32,4 +32,18 @@ export const ARTICLES = [
   "Children are not a market",
   "Builders are accountable",
   "Your attention is yours",
+  "Bias at scale is discrimination",
+  "Tested before it reaches you",
 ] as const;
+
+/**
+ * The card's grid is 3 across by 4 down — twelve cells for eleven articles.
+ *
+ * The twelfth is deliberately a question rather than blank space or a filler
+ * slogan. v0.1.0 took the document from nine to eleven, and the grid that used
+ * to be exactly full now has a hole in it; saying so out loud invites the
+ * answer instead of pretending the shape was always this.
+ *
+ * If a twelfth article ever lands, delete this and the cell fills itself.
+ */
+export const GRID_PLACEHOLDER = "What should go here?";

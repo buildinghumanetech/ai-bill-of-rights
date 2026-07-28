@@ -29,7 +29,7 @@ afterEach(() => {
 describe("principles", () => {
   it("derives the commitments from the published Bill of Rights", () => {
     const principles = listPrinciples();
-    expect(principles.length).toBe(9);
+    expect(principles.length).toBe(11);
     expect(principles.map((p) => p.id)).toEqual([
       "article-1",
       "article-2",
@@ -40,6 +40,8 @@ describe("principles", () => {
       "article-7",
       "article-8",
       "article-9",
+      "article-10",
+      "article-11",
     ]);
     // The `Article N:` prefix is stripped for display.
     expect(principles[0].title).not.toMatch(/^Article/);
@@ -56,9 +58,12 @@ describe("committed scorecard content", () => {
     expect(entry).not.toBeNull();
     expect(entry!.company).toBe("Example AI Labs");
     expect(entry!.fictional).toBe(true);
-    expect(entry!.assessments).toHaveLength(9);
+    // One entry per principle: the loader fills in every commitment the file
+    // does not speak to as `not-assessed`, so this tracks the document's
+    // article count rather than what the file happens to list.
+    expect(entry!.assessments).toHaveLength(11);
     expect(assessedCount(entry!)).toBeGreaterThan(0);
-    expect(assessedCount(entry!)).toBeLessThan(9);
+    expect(assessedCount(entry!)).toBeLessThan(11);
   });
 
   it("gives every committed assessment at least one citation", () => {

@@ -80,6 +80,13 @@ describe("enforceRateLimit", () => {
       }),
     ).rejects.toThrow(/rate/i);
   });
+
+  // A `RateLimitError` test lived here on this branch. `main` has since deleted
+  // the class — it had no consumers, and the two call sites that could have
+  // used it still catch every throw the same way — so the test went with it
+  // rather than being resurrected against an export that no longer exists.
+  // The distinction it argued for (over-the-limit vs the check itself failing)
+  // is still worth drawing; it needs a live consumer first.
 });
 
 /**

@@ -3,7 +3,7 @@ import path from "node:path";
 import { parseDocument } from "@/lib/markdown/parse";
 
 /**
- * The scorecard grades companies against the nine commitments in the AI Bill
+ * The scorecard grades companies against the eleven commitments in the AI Bill
  * of Rights. Rather than re-typing those commitments here (and letting the two
  * drift), we derive them from the published document itself: the same markdown
  * that `/v/<version>` renders. If the Bill gains a tenth article, the scorecard

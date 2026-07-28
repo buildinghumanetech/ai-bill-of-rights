@@ -32,7 +32,7 @@ async function main() {
   }
   const att = recent[0];
   const v = await db.select().from(versions).where(eq(versions.id, att.versionId)).limit(1);
-  const versionString = v[0]?.version ?? "0.0.1";
+  const versionString = v[0]?.version ?? "0.1.0";
 
   const adminRows = await db
     .select({ signerId: signers.id, displayName: signers.displayName, clerkUserId: signers.clerkUserId })

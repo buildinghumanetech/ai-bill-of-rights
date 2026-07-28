@@ -2,7 +2,7 @@ import Link from "next/link";
 import { articles, splitSentences } from "@/app/HomepageArticles";
 
 /**
- * A condensed, read-only rendering of the nine commitments.
+ * A condensed, read-only rendering of the eleven commitments.
  *
  * The signer page is a landing page for people who have never heard of this
  * project, so they need to see what they'd be signing without navigating away.
@@ -45,7 +45,7 @@ export function CommitmentsSummary({
         {heading}
       </h2>
       <p className="mt-3 text-lg leading-snug text-zinc-900 sm:text-xl">
-        The AI Bill of Rights is nine commitments we&apos;re demanding from
+        The AI Bill of Rights is eleven commitments we&apos;re demanding from
         every AI company.
       </p>
       <ol className="mt-6 flex flex-col gap-4">

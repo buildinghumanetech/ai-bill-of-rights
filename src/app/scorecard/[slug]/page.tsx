@@ -160,7 +160,7 @@ export default async function ScorecardCompanyPage({
   const total = listPrinciples().length;
   const assessed = assessedCount(entry);
   const shareUrl = `${SITE_URL}/scorecard/${entry.slug}`;
-  const shareText = `${entry.company} against the nine commitments in the AI Bill of Rights`;
+  const shareText = `${entry.company} against the eleven commitments in the AI Bill of Rights`;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-16 sm:py-24">

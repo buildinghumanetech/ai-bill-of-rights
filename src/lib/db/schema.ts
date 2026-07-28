@@ -123,6 +123,18 @@ export const signatures = pgTable(
   },
   (t) => [
     uniqueIndex("signatures_signer_version_unique").on(t.signerId, t.versionId),
+    // Supports the DISTINCT ON (signer_id) ... ORDER BY signer_id, signed_at DESC
+    // scan behind listSignatures (/signers, /signatories — both force-dynamic),
+    // and the earlier-signature NOT EXISTS probe in listRecentSignersSince.
+    // The unique index above leads with signer_id but has no signed_at, so
+    // neither sort could be satisfied by an index scan without this.
+    index("signatures_signer_signed_at_idx").on(
+      t.signerId,
+      t.signedAt.desc(),
+    ),
+    // The ticker's driving predicate is `signed_at > cutoff` with no signer_id
+    // restriction, so the index above (leading with signer_id) cannot serve it.
+    index("signatures_signed_at_idx").on(t.signedAt.desc()),
   ],
 );
 

@@ -1,6 +1,9 @@
 import { ImageResponse } from "next/og";
 import { getSignatureCount } from "@/lib/db/queries";
-import { ARTICLES } from "./articles";
+import { ARTICLES, GRID_PLACEHOLDER } from "./articles";
+
+/** Eleven articles plus the open twelfth cell — see GRID_PLACEHOLDER. */
+const CELLS = [...ARTICLES, GRID_PLACEHOLDER] as const;
 
 export const runtime = "nodejs";
 
@@ -10,7 +13,7 @@ export const runtime = "nodejs";
  * Same three-zone family as the per-signer card in
  * `src/app/api/og/signer/[id]/route.tsx` — emerald banner / white body / amber
  * CTA footer — but this one has to stand on its own for a stranger who has
- * never heard of the document. So the body carries the nine article titles:
+ * never heard of the document. So the body carries the eleven article titles:
  * they are the whole pitch, readable at a glance in a feed.
  */
 
@@ -82,7 +85,7 @@ export async function GET() {
           </div>
         </div>
 
-        {/* White body — the nine commitments, 3 rows x 3 columns */}
+        {/* White body — the eleven commitments, 4 rows x 3 columns */}
         <div
           style={{
             display: "flex",
@@ -102,57 +105,60 @@ export async function GET() {
               marginBottom: 26,
             }}
           >
-            Nine commitments we demand of every AI company
+            Eleven commitments we demand of every AI company
           </div>
 
-          {[0, 3, 6].map((rowStart) => (
+          {[0, 3, 6, 9].map((rowStart) => (
             <div
               key={rowStart}
               style={{
                 display: "flex",
                 flexDirection: "row",
-                marginBottom: rowStart === 6 ? 0 : 16,
+                marginBottom: rowStart === 9 ? 0 : 14,
               }}
             >
-              {ARTICLES.slice(rowStart, rowStart + 3).map((article, i) => (
-                <div
-                  key={article}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    width: 344,
-                    marginRight: i === 2 ? 0 : 12,
-                  }}
-                >
+              {CELLS.slice(rowStart, rowStart + 3).map((cell, i) => {
+                const isPlaceholder = cell === GRID_PLACEHOLDER;
+                return (
                   <div
+                    key={cell}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      width: 34,
-                      height: 34,
-                      borderRadius: 17,
-                      background: "#d1fae5",
-                      color: "#047857",
-                      fontSize: 18,
-                      fontWeight: 700,
-                      marginRight: 12,
-                      flexShrink: 0,
+                      width: 344,
+                      marginRight: i === 2 ? 0 : 12,
                     }}
                   >
-                    {rowStart + i + 1}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        background: isPlaceholder ? "#f3f4f6" : "#d1fae5",
+                        color: isPlaceholder ? "#9ca3af" : "#047857",
+                        fontSize: 18,
+                        fontWeight: 700,
+                        marginRight: 12,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {isPlaceholder ? "?" : rowStart + i + 1}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: 21,
+                        color: isPlaceholder ? "#9ca3af" : "#374151",
+                      }}
+                    >
+                      {cell}
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      fontSize: 21,
-                      color: "#374151",
-                    }}
-                  >
-                    {article}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </div>

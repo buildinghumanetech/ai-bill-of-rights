@@ -45,7 +45,7 @@ async function renderCompany(slug: string): Promise<string> {
 }
 
 describe("/scorecard index page", () => {
-  it("renders the nine commitments and the example company", async () => {
+  it("renders the eleven commitments and the example company", async () => {
     const html = await renderIndex();
     expect(html).toContain("The AI Bill of Rights Scorecard");
     expect(html).toContain("Example AI Labs");
@@ -119,7 +119,7 @@ describe("/scorecard/[slug] company page", () => {
 
   it("says out loud how many commitments are unassessed", async () => {
     const html = await renderCompany("example-ai-labs");
-    expect(html).toContain("3 of 9 commitments");
+    expect(html).toContain("3 of 11 commitments");
     expect(html).toContain("have not been assessed");
   });
 

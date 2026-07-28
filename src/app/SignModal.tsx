@@ -10,6 +10,7 @@ import {
 import { sendInvitationsAction } from "@/server/actions/invite";
 import {
   getMySignatureStatus,
+  reaffirmMySignature,
   removeMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
@@ -36,7 +37,7 @@ type Step = "form" | "otp" | "done";
 type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
 
-const VERSION = "0.0.1";
+const VERSION = "0.1.0";
 
 interface Country {
   id: string;
@@ -211,6 +212,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
     SignatureStatus | { state: "loading" } | null
   >(null);
   const [removing, setRemoving] = useState(false);
+  const [reaffirming, setReaffirming] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [shareLocation, setShareLocation] = useState(true);
   const [nameDisplayFormat, setNameDisplayFormat] = useState<
@@ -286,12 +288,13 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setInviteResult(null);
       setSignatureStatus(null);
       setRemoving(false);
+      setReaffirming(false);
       setConfirmingRemove(false);
     }
   }, [open, modeProp]);
 
   // When the modal opens with a signed-in user, fetch whether they've
-  // already signed v0.0.1 so we can show the "already signed" view instead
+  // already signed the current version so we can show the "already signed" view instead
   // of asking them to sign again.
   useEffect(() => {
     if (!open) return;
@@ -309,6 +312,34 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       cancelled = true;
     };
   }, [open, isSignedIn]);
+
+  /**
+   * One-click re-affirm for someone who signed an earlier version. Reuses the
+   * profile they already gave us — re-entering their name to say "yes, this
+   * one too" would be busywork — but writes a genuinely new signature row,
+   * stamped with the new version's markdown hash. Their earlier signature is
+   * left untouched.
+   */
+  async function handleReaffirm() {
+    setReaffirming(true);
+    setError(null);
+    try {
+      const res = await reaffirmMySignature(VERSION);
+      if (!res.success) {
+        setError(res.error ?? "We couldn't record your signature.");
+        return;
+      }
+      const status = await getMySignatureStatus(VERSION);
+      setSignatureStatus(status);
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "We couldn't record your signature.",
+      );
+    } finally {
+      setReaffirming(false);
+    }
+  }
 
   async function handleRemoveSignature() {
     setRemoving(true);
@@ -807,13 +838,24 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 <p className="text-sm font-semibold text-red-900">
                   Delete your account and everything in it?
                 </p>
+                {/*
+                  Says "every version" explicitly. removeMySignature deletes the
+                  signer row and EVERY signature it owns, and this view can be
+                  reached while looking at a specific version — someone reading
+                  "your signature" next to a version number reasonably takes it
+                  to mean that one. This is the same hazard that earned
+                  signed-other its own branch without a remove button; the
+                  wording is what fixes it for the branches that keep one.
+                */}
                 <p className="mt-1 text-sm text-red-800">
                   This is irreversible. It permanently deletes:
                 </p>
                 <ul className="mt-2 list-disc pl-5 text-sm text-red-800">
                   <li>
-                    Your signature, and your name, location and affiliation
-                    from the public signers list
+                    Your signature on{" "}
+                    <strong className="font-semibold">every version</strong> you
+                    have signed — not just the one you are viewing — and your
+                    name, location and affiliation from the public signers list
                   </li>
                   <li>Your profile photo, including all backup copies</li>
                   <li>
@@ -875,6 +917,194 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/*
+          They signed a different version and THIS one is not open for signing —
+          superseded, or simply archived. Its own branch rather than folded into
+          "signed", because that copy says "you've already signed *this*" and
+          shows the version they signed rather than the one being viewed, and
+          because it offers "Remove my signature" — which calls removeMySignature
+          and hard-deletes the signer row and EVERY signature. Someone on an
+          archive page would reasonably read that as removing just this one.
+        */}
+        {step === "form" && signatureStatus?.state === "signed-other" && (
+          <div>
+            <h2
+              id="sign-modal-title"
+              className="text-2xl font-semibold tracking-tight text-zinc-950"
+            >
+              You&apos;ve signed the AI Bill of Rights as:
+            </h2>
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+              <div className="text-xl font-semibold">
+                {signatureStatus.displayName}
+              </div>
+              <div className="mt-1 text-sm">
+                Verified by{" "}
+                {signatureStatus.verificationMethod === "sms"
+                  ? "Phone"
+                  : "Email"}{" "}
+                — v{signatureStatus.version} on{" "}
+                {formatSignedDate(signatureStatus.signedAt)}
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm text-zinc-600">
+              You&apos;re looking at v{signatureStatus.requestedVersion}, which
+              is no longer open for signing. Your signature on v
+              {signatureStatus.version} stands.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <a
+                href="/account"
+                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+              >
+                Manage my signature
+              </a>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/*
+          They signed, and the version this page asks about has no row at all —
+          the deployed VERSION constant is ahead of the database, or we are
+          mid-way through an unsync/re-sync. Separate from signed-other because
+          "no longer open for signing" would be FALSE here, and stating it about
+          the version the site is campaigning for is worse than saying nothing.
+
+          So this says nothing about the requested version — the one claim that
+          holds whatever the cause. resolveSignatureStatus logs the fault
+          server-side, which is where it can actually be acted on.
+        */}
+        {step === "form" &&
+          signatureStatus?.state === "signed-version-unknown" && (
+            <div>
+              <h2
+                id="sign-modal-title"
+                className="text-2xl font-semibold tracking-tight text-zinc-950"
+              >
+                You&apos;ve signed the AI Bill of Rights as:
+              </h2>
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+                <div className="text-xl font-semibold">
+                  {signatureStatus.displayName}
+                </div>
+                <div className="mt-1 text-sm">
+                  Verified by{" "}
+                  {signatureStatus.verificationMethod === "sms"
+                    ? "Phone"
+                    : "Email"}{" "}
+                  — v{signatureStatus.version} on{" "}
+                  {formatSignedDate(signatureStatus.signedAt)}
+                </div>
+              </div>
+
+              <p className="mt-5 text-sm text-zinc-600">
+                Your signature stands and still appears in the public list.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-2">
+                <a
+                  href="/account"
+                  className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+                >
+                  Manage my signature
+                </a>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+        {step === "form" && signatureStatus?.state === "signed-earlier" && (
+          <div>
+            <h2
+              id="sign-modal-title"
+              className="text-2xl font-semibold tracking-tight text-zinc-950"
+            >
+              You&apos;ve already signed the AI Bill of Rights as:
+            </h2>
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+              <div className="text-xl font-semibold">
+                {signatureStatus.displayName}
+              </div>
+              <div className="mt-1 text-sm">
+                Verified by{" "}
+                {signatureStatus.verificationMethod === "sms"
+                  ? "Phone"
+                  : "Email"}{" "}
+                — signing since{" "}
+                {formatSignedDate(signatureStatus.firstSignedAt)} (v
+                {signatureStatus.firstVersion})
+                {signatureStatus.version !== signatureStatus.firstVersion ? (
+                  <>
+                    , most recently v{signatureStatus.version} on{" "}
+                    {formatSignedDate(signatureStatus.signedAt)}
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            {/*
+              Deliberately does NOT name or count the new Articles. That copy
+              would be a second, unguarded transcription of the document text,
+              free to drift from content/bill-of-rights/ with no test to catch
+              it — and it would be wrong for any version pair other than the one
+              it was written for. The document itself is one click away.
+            */}
+            <p className="mt-5 text-sm text-zinc-600">
+              Your signature still counts and still appears in the public list —
+              nothing has changed. v{signatureStatus.requestedVersion} is a
+              newer version of the document than the one you signed. If you want
+              your name on it too, add it below.
+            </p>
+
+            {error ? (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleReaffirm}
+                disabled={reaffirming}
+                className="w-full rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {reaffirming
+                  ? "Adding your name…"
+                  : `Add my name to v${signatureStatus.requestedVersion}`}
+              </button>
+              <a
+                href={`/v/${signatureStatus.requestedVersion}`}
+                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
+              >
+                Read what changed first
+              </a>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+              >
+                Not now
+              </button>
+            </div>
           </div>
         )}
 
@@ -1115,7 +1345,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                     {
                       value: "minor",
                       label: "Minor revisions",
-                      hint: "v0.0.1 → v0.1.0",
+                      hint: "v0.1.0 → v0.2.0",
                     },
                     { value: "none", label: "None", hint: "" },
                   ] as const

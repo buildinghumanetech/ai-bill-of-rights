@@ -35,6 +35,40 @@ describe("syncVersions", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("throws if the agents.md for an existing version has changed", async () => {
+    // All three files are immutable, not just the markdown. Without this check
+    // the edit passes silently: syncVersions `continue`s without updating the
+    // stored hash, so /v/<version>/agents.md keeps serving the old content.
+    const db = await createTestDb();
+    await syncVersions(db, [sampleInput]);
+    await expect(
+      syncVersions(db, [{ ...sampleInput, agentsMd: "rewritten guidance" }]),
+    ).rejects.toThrow(/hash mismatch: agents\.md/);
+  });
+
+  it("throws if the spec.json for an existing version has changed", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sampleInput]);
+    await expect(
+      syncVersions(db, [{ ...sampleInput, specJson: '{"version":"changed"}' }]),
+    ).rejects.toThrow(/hash mismatch: spec\.json/);
+  });
+
+  it("names every file that changed, not just the first", async () => {
+    const db = await createTestDb();
+    await syncVersions(db, [sampleInput]);
+    await expect(
+      syncVersions(db, [
+        {
+          ...sampleInput,
+          markdown: SAMPLE_DOC + "\nappended content",
+          agentsMd: "rewritten guidance",
+          specJson: '{"version":"changed"}',
+        },
+      ]),
+    ).rejects.toThrow(/markdown .*; agents\.md .*; spec\.json/);
+  });
+
   it("throws if the markdown for an existing version has changed", async () => {
     const db = await createTestDb();
     await syncVersions(db, [sampleInput]);
