@@ -45,8 +45,9 @@ const MAX_SUGGESTIONS = 6;
  *
  * When the user types `@` we capture that position and filter the signers list
  * by prefix (case-insensitive) as they continue typing. Selecting a suggestion
- * replaces the `@partial` in the textarea with `@DisplayName ` (trailing space
- * so they can keep typing).
+ * replaces the `@partial` in the textarea with `@DisplayName`, followed by a
+ * space so they can keep typing — added only when the text after the caret does
+ * not already begin with one, so a mid-text pick does not double it.
  *
  * The popup is anchored below the textarea — simple v1, no per-caret positioning.
  * Keyboard: arrow-up / arrow-down navigate, Enter / Tab select, Escape dismiss.
@@ -161,12 +162,30 @@ export function MentionTextarea({
     const before = value.slice(0, mentionQuery.atIndex);
     const after = value.slice(mentionQuery.atIndex + 1 + mentionQuery.query.length);
     // Insert through `mentionText` rather than formatting `@name` a second time
-    // here. The text this writes has to be byte-identical to the needle that
+    // here. The NEEDLE — the `@Name` substring — has to be byte-identical to what
     // `pruneResolvedMentions` (below) and `resolveSubmittedMentions` (server side)
     // search for, or a pick resolves in the composer and then vanishes at submit.
     // Two copies of the format is how that drifts; behaviour is unchanged today.
+    //
+    // The trailing space is deliberately NOT part of `mentionText`: it is a
+    // typing affordance for the composer, not part of what anything matches on.
+    // It is also conditional, but only on the `after` side: picking mid-text
+    // where `after` already starts with a space would otherwise leave a visible
+    // double space behind.
+    //
+    // Bounded claim, because there are two other sources of an ugly gap and
+    // neither is handled here:
+    //   - `inserted` itself ending in a space, when `displayName` is padded. That
+    //     is the `"agreed @Padded Name  "` value pinned in
+    //     `tests/components/comment-node.mentions.test.tsx`, and it goes away with
+    //     the deferred `mentionText` trim rather than with a wider condition here.
+    //   - `after` starting with punctuation (`"hey @Ali, thanks"`), which still
+    //     yields `"@Alice Nguyen , thanks"`. Gating on a punctuation class would
+    //     fix it, but that is a typography decision rather than a defect fix, so
+    //     it is left alone deliberately.
     const inserted = mentionText(signer.displayName);
-    const newValue = `${before}${inserted} ${after}`;
+    const sep = after.startsWith(" ") ? "" : " ";
+    const newValue = `${before}${inserted}${sep}${after}`;
     onChange(newValue);
     setMentionQuery(null);
     setLocallyEdited(newValue);
@@ -184,7 +203,9 @@ export function MentionTextarea({
     const ta = taRef.current;
     if (ta) {
       // Derived from what was actually inserted, so it stays correct if
-      // `mentionText` ever normalises the name. +1 for the trailing space.
+      // `mentionText` ever normalises the name. The +1 steps past the single
+      // space that now follows the mention — whether `sep` supplied it or the
+      // text after the caret already had one.
       const newCaret = before.length + inserted.length + 1;
       ta.focus();
       requestAnimationFrame(() => {
@@ -247,7 +268,20 @@ export function MentionTextarea({
           {resolved.map((m, idx) => (
             <span key={m.signerId}>
               {idx > 0 ? ", " : ""}
-              <span className="font-medium text-zinc-700">@{m.displayName}</span>
+              {/* Rendered through `mentionText` so the name shown here is the
+                  same string the notification resolves on. If that ever
+                  normalises the name, promising "@Padded Name " while
+                  delivering on "@Padded Name" would be a lie of exactly the
+                  kind this line exists to prevent.
+
+                  UNVERIFIABLE BY CONSTRUCTION, stated rather than hidden: while
+                  `mentionText` is the identity, no assertion can tell this from
+                  an inline `@{m.displayName}`, so reverting this site — or the
+                  suggestion button below — would be caught by nothing until the
+                  trim lands. Both are load-bearing only from that point on. */}
+              <span className="font-medium text-zinc-700">
+                {mentionText(m.displayName)}
+              </span>
             </span>
           ))}
         </p>
@@ -276,7 +310,9 @@ export function MentionTextarea({
                   : "text-zinc-700 hover:bg-zinc-50"
               }`}
             >
-              @{s.displayName}
+              {/* Same reasoning as the notify line: the suggestion should read
+                  as the text picking it will insert. */}
+              {mentionText(s.displayName)}
             </button>
           ))}
         </div>

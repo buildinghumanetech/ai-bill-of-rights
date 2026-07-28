@@ -257,10 +257,15 @@ describe("CommentNode reply mention wiring", () => {
     // and that call is not mine to make unilaterally.
     //
     // What pins the defect is the PAIR: notify-list populated, submitted ids
-    // empty. Neither assertion says anything on its own. When the fix is taken,
-    // this one still passes unchanged — the trimmed needle "@Padded Name" is
-    // present in the untrimmed composer value too — and it is the
-    // MENTION_IDS_FIELD assertion below that flips to ["sig-padded"].
+    // empty. Neither assertion says anything on its own — and it is THIS one,
+    // the notify-list, that passes either way, because "@Padded Name" is present
+    // in the padded composer value too.
+    //
+    // Two assertions move when the fix is taken, and the first is above, not
+    // below: `selectSuggestion` inserts `mentionText(...)`, so trimming there
+    // also trims what the composer writes. The value assertion becomes
+    // "agreed @Padded Name " (one trailing space, not two) and fails FIRST, then
+    // MENTION_IDS_FIELD below flips to ["sig-padded"]. Measured, post-refactor.
     expect(screen.getByTestId("mention-notify-list").textContent).toContain(
       "Padded Name",
     );
@@ -272,7 +277,7 @@ describe("CommentNode reply mention wiring", () => {
     expect(fd.getAll(MENTION_IDS_FIELD)).toEqual([]);
   });
 
-  it("submits the admin post-as signer", async () => {
+  it("submits the admin post-as signer, and clears it after the send", async () => {
     renderNode({ isAdmin: true });
     toggle();
 
