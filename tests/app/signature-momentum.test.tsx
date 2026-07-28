@@ -107,10 +107,17 @@ describe("SignatureHeadline", () => {
 });
 
 describe("SignatureMomentumPanel", () => {
+  /**
+   * Deliberately longer than the chip cap: the panel is handed an over-pulled
+   * sample (see `loadSignerSample` in `src/app/page.tsx`) so that signers with
+   * a blank display name can be filtered out without shrinking the row.
+   */
   const sample: MomentumSigner[] = [
     { displayName: "Ada Lovelace", affiliation: "Analytical Engines", locationText: "London, UK" },
     { displayName: "Grace Hopper", affiliation: null, locationText: "Arlington, VA" },
     { displayName: "Alan Turing", affiliation: null, locationText: null },
+    { displayName: "Katherine Johnson", affiliation: "NASA", locationText: "Hampton, VA" },
+    { displayName: "Barbara Liskov", affiliation: null, locationText: "Cambridge, MA" },
   ];
 
   it("shows a goal, a gap and a progress bar below the threshold", () => {
@@ -145,6 +152,36 @@ describe("SignatureMomentumPanel", () => {
     // A signer with neither still renders, without a dangling separator.
     expect(copy).toContain("Alan Turing");
     expect(copy).not.toContain("Alan Turing ·");
+  });
+
+  it("shows at most three signers, so the row stays on one line", () => {
+    const html = render(
+      <SignatureMomentumPanel count={SMALL_COUNT} sample={sample} />,
+    );
+    const copy = text(
+      <SignatureMomentumPanel count={SMALL_COUNT} sample={sample} />,
+    );
+
+    expect(copy).toContain("Ada Lovelace");
+    expect(copy).toContain("Grace Hopper");
+    expect(copy).toContain("Alan Turing");
+    // The 4th and 5th of an over-pulled sample never render.
+    expect(copy).not.toContain("Katherine Johnson");
+    expect(copy).not.toContain("Barbara Liskov");
+    expect(html.match(/<li /g) ?? []).toHaveLength(3);
+  });
+
+  it("skips signers with a blank display name without shrinking the row", () => {
+    const withBlanks: MomentumSigner[] = [
+      { displayName: "  ", affiliation: null, locationText: null },
+      ...sample,
+    ];
+    const copy = text(
+      <SignatureMomentumPanel count={SMALL_COUNT} sample={withBlanks} />,
+    );
+    expect(copy).toContain("Ada Lovelace");
+    expect(copy).toContain("Alan Turing");
+    expect(copy).not.toContain("Katherine Johnson");
   });
 
   it("renders without a signer sample", () => {

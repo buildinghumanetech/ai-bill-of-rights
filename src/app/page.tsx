@@ -16,6 +16,10 @@ export const dynamic = "force-dynamic";
  * A handful of the most recent signers, shown as proof-of-quality while the
  * raw count is still small (see `@/components/SignatureMomentum`). Best-effort:
  * a DB hiccup just drops the chips, it never breaks the homepage.
+ *
+ * The panel only renders three of these. The over-pull is deliberate: it drops
+ * signers who left their display name blank, and fetching exactly three would
+ * let two anonymous signers collapse the row to a single chip.
  */
 async function loadSignerSample(): Promise<MomentumSigner[]> {
   try {
