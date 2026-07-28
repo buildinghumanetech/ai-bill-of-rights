@@ -26,8 +26,11 @@ const pillClasses = (html: string) =>
     .map((attrs) => ({
       slug: /href="\/resources\/([^"]+)"/.exec(attrs)?.[1],
       // No `?? ""` default: an empty class string would satisfy this file's
-      // negative assertions (`not.toContain("bg-zinc-50")`) vacuously. A
-      // class-less anchor is dropped instead, so the `length > 20` guard fires.
+      // negative assertions (`not.toContain("bg-zinc-50")`) vacuously, so a
+      // class-less anchor is dropped rather than defaulted. Dropping alone
+      // does not make the tests safe — each one that iterates asserts its own
+      // non-emptiness, because an empty array satisfies a `for` loop just as
+      // quietly as an empty string satisfies a negative assertion.
       className: /class="([^"]*)"/.exec(attrs)?.[1],
     }))
     .filter(
@@ -41,6 +44,7 @@ describe("Connects-to pills across both tabs", () => {
 
   it("renders the same pills in the same order in both modes", () => {
     expect(staticPills.length).toBeGreaterThan(20);
+    expect(interactivePills.length).toBeGreaterThan(20);
     expect(interactivePills.map((p) => p.slug)).toEqual(
       staticPills.map((p) => p.slug),
     );
@@ -51,13 +55,16 @@ describe("Connects-to pills across both tabs", () => {
   });
 
   it("no longer renders any pill as zinc grayscale", () => {
-    for (const pill of [...staticPills, ...interactivePills]) {
+    const pills = [...staticPills, ...interactivePills];
+    expect(pills.length).toBeGreaterThan(20);
+    for (const pill of pills) {
       expect(pill.className).not.toContain("bg-zinc-50");
       expect(pill.className).not.toContain("text-zinc-700");
     }
   });
 
   it("colours each pill by its category in the rendered markup", () => {
+    expect(interactivePills.length).toBeGreaterThan(20);
     for (const pill of interactivePills) {
       expect(pill.className).toContain(pillColor(pill.slug));
     }

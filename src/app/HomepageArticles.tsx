@@ -15,7 +15,7 @@ import type { CommentWithSelection } from "@/lib/db/queries";
  * Tailwind's JIT only sees full class strings, so these are written out in full
  * rather than composed — do not refactor them into `border-${hue}-200`.
  */
-export const US_LAW_SLUGS = new Set([
+export const US_LAW_SLUGS: ReadonlySet<string> = new Set([
   "california-bot-disclosure-act-sb-1001",
   "consumer-protection-law",
   "coppa",
@@ -31,14 +31,27 @@ export type PillCategory = {
   id: string;
   matches: (slug: string) => boolean;
   className: string;
+  /**
+   * Set only when the rule is a hand-maintained list rather than a prefix, so
+   * the overlap test can enumerate the rule's domain instead of importing each
+   * such list by name. Without this, a *new* category with its own slug list
+   * silently escapes that test until someone remembers to widen it.
+   */
+  slugs?: ReadonlySet<string>;
 };
+
+/** A category whose domain is an explicit list — see `PillCategory.slugs`. */
+const bySlugSet = (slugs: ReadonlySet<string>) => ({
+  slugs,
+  matches: (slug: string) => slugs.has(slug),
+});
 
 /**
  * Also the last entry of `PILL_CATEGORIES`, and the `??` fallback below, so
  * that reordering or narrowing the array degrades to a rose pill instead of
  * throwing at render time and taking the homepage down with it.
  */
-export const FALLBACK_CATEGORY: PillCategory = {
+export const FALLBACK_CATEGORY: Readonly<PillCategory> = {
   id: "research-advocacy",
   matches: () => true,
   className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
@@ -50,7 +63,7 @@ export const FALLBACK_CATEGORY: PillCategory = {
  * category deliberately` in the tests keeps that from becoming a silent
  * catch-all for slugs nobody classified.
  */
-export const PILL_CATEGORIES: readonly PillCategory[] = [
+export const PILL_CATEGORIES: readonly Readonly<PillCategory>[] = [
   {
     id: "humanebench",
     matches: (slug) => slug.startsWith("humanebench"),
@@ -63,7 +76,7 @@ export const PILL_CATEGORIES: readonly PillCategory[] = [
   },
   {
     id: "us-law",
-    matches: (slug) => US_LAW_SLUGS.has(slug),
+    ...bySlugSet(US_LAW_SLUGS),
     className: "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
   },
   {

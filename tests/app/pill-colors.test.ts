@@ -91,14 +91,20 @@ describe("pill categories", () => {
     // it match two rules and take whichever sits higher.
     //
     // Checked over the *rule set*, not just the slugs that currently render.
-    // Registering a slug in US_LAW_SLUGS before wiring it into an article's
-    // `connects` is the natural order when preparing a resource page, and
-    // iterating `allSlugs` alone would let that pass clean, surfacing later as
-    // a mis-coloured pill.
+    // Registering a slug in a category's list before wiring it into an
+    // article's `connects` is the natural order when preparing a resource
+    // page, and iterating `allSlugs` alone would let that pass clean,
+    // surfacing later as a mis-coloured pill.
     //
+    // The domain is derived from `PillCategory.slugs` rather than importing
+    // US_LAW_SLUGS by name, so a *new* category with its own hand-maintained
+    // list is covered here without anyone remembering to widen this test.
+    const enumerable = PILL_CATEGORIES.flatMap((c) => [...(c.slugs ?? [])]);
+    expect(enumerable).toEqual(expect.arrayContaining([...US_LAW_SLUGS]));
+
     // The catch-all is excluded by identity — matching everything is its job.
     const specific = PILL_CATEGORIES.filter((c) => c !== FALLBACK_CATEGORY);
-    for (const slug of new Set([...allSlugs, ...US_LAW_SLUGS])) {
+    for (const slug of new Set([...allSlugs, ...enumerable])) {
       const claimants = specific.filter((c) => c.matches(slug)).map((c) => c.id);
       expect(claimants.length, `${slug} claimed by ${claimants.join(" and ")}`).toBeLessThan(2);
     }
