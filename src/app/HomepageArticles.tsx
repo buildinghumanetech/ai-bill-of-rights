@@ -105,6 +105,12 @@ export const PILL_CATEGORIES: readonly Readonly<PillCategory>[] = [
     // own nearest neighbour (amber): the -50 backgrounds are close, as all
     // Tailwind -50s are, but the text a reader actually reads is 52.6 apart
     // and the border 23.2.
+    //
+    // All figures in CIE Lab from Tailwind v4 `theme.css` (oklch), against the
+    // *inactive* `cyan-100` highlight — the closest of the three highlight
+    // states — taking the nearer of the pill's resting `-50` and hovered `-100`
+    // shade. Stated because three earlier revisions of this analysis turned on
+    // exactly these two ambiguities: v3 hexes vs v4 oklch, and which state.
     className: "border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100",
   },
   FALLBACK_CATEGORY,
