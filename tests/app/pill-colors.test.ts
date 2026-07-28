@@ -64,36 +64,38 @@ describe("pill categories", () => {
     );
   });
 
-  it("keeps the UK pills off the cyan-adjacent hues", () => {
-    // Teal read at ~7.7 ΔE against the cyan comment highlights on the Proposed
-    // tab — the weakest pairing on the page. Pinned so a later palette tidy
-    // cannot quietly move it back next to cyan.
+  it("pins the UK pill class", () => {
+    // Exact string, and *only* the exact string — a `not.toMatch(/-teal-/)`
+    // loop alongside this could never fail, which is the trap the previous
+    // revision of this test fell into twice.
     //
-    // Driven off the rendered set, not a hardcoded slug: probing one slug
-    // through the `uk-` prefix would still pass if UK pills stopped rendering
-    // entirely, while reading as a claim about pills a visitor sees.
+    // Why exact rather than per-token: `-50` shades are near-white, so
+    // `border-*-200` and `text-*-900` carry the hue a reader perceives. A
+    // partial revert (`border-teal-200 bg-lime-50 text-teal-900`) is the
+    // realistic regression and a background-only check waves it through.
+    //
+    // Why lime: teal sat ~7.7 ΔE from the inactive cyan comment highlights on
+    // the Proposed tab, the weakest pairing on the page; lime is 18.4.
+    //
+    // Driven off the rendered set, not a hardcoded slug, so it cannot keep
+    // passing about a category that renders nowhere.
     const ukSlugs = slugsIn("uk-regulation");
     expect(ukSlugs.length).toBeGreaterThan(0);
+    expect(new Set(ukSlugs.map(pillColor)).size).toBe(1);
+    expect(pillColor(ukSlugs[0])).toBe(
+      "border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100",
+    );
+  });
 
-    for (const slug of ukSlugs) {
-      // Every hue token, not just the background. `-50` shades are near-white,
-      // so `border-*-200` and `text-*-900` are what actually carry the hue —
-      // a partial revert like `border-teal-200 bg-lime-50 text-teal-900` is the
-      // realistic regression, and a background-only check passes it.
-      expect(pillColor(slug)).toBe(
-        "border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100",
-      );
-      for (const cyanAdjacent of ["teal", "cyan", "emerald"]) {
-        expect(pillColor(slug)).not.toMatch(new RegExp(`-${cyanAdjacent}-`));
-      }
-    }
-
-    // Lime was chosen on two axes: far from cyan (above) and still separable
-    // from its nearest neighbour, amber. Only the first is inherently pinned —
-    // `gives each category a distinct colour` compares class strings, so it is
-    // satisfied by any two distinct hue names. Pin the pair so the one movement
-    // the analysis flagged as risky has to be deliberate.
+  it("keeps UK separable from its nearest neighbour, amber", () => {
+    // Lime was chosen on two axes: far from cyan (pinned above) and still
+    // separable from amber, which is the closest remaining category. Only the
+    // first is implied by that pin — `gives each category a distinct colour`
+    // compares class strings, so it is satisfied by any two distinct hue names
+    // including a future lime vs yellow. Pinning the pair means the one
+    // movement the analysis flagged as risky has to be deliberate.
     expect(pillColor("coppa")).toContain("amber");
+    expect(pillColor("uk-age-appropriate-design-code")).toContain("lime");
   });
 
   it("groups the regulatory families", () => {
