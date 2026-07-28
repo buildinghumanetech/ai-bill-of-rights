@@ -33,16 +33,28 @@ const proposed = (commentCount: number) => (
 );
 
 /**
- * Class assertions are scoped to the element under test. A bare
+ * Class list of the single classed `<tag>` in `html`.
+ *
+ * Class assertions are scoped to the element under test: a bare
  * `html.toContain("text-center")` would fire on any nested element picking up
- * the class, which is a different change than the one being guarded.
+ * the class, which is a different change than the one being guarded. Throws
+ * unless the match is unique, so a rename or an inserted sibling fails the
+ * test rather than silently retargeting it.
  */
 const classesOf = (html: string, tag: string) => {
   // `(?=[\s>])` delimits the tag name: without it, "p" matches <path>, <pre>
   // and <param>, and a wrong element's class list satisfies the assertion.
-  const match = new RegExp(`<${tag}(?=[\\s>])[^>]*\\sclass="([^"]*)"`).exec(html);
-  if (match === null) throw new Error(`no <${tag}> with a class attribute in markup`);
-  return match[1];
+  const pattern = new RegExp(`<${tag}(?=[\\s>])[^>]*\\sclass="([^"]*)"`, "g");
+  const matches = [...html.matchAll(pattern)];
+  // Uniqueness, not first-match. The pattern skips unclassed tags, so without
+  // this an inserted *classed* sibling would silently retarget the assertion
+  // at a different element while still matching.
+  if (matches.length !== 1) {
+    throw new Error(
+      `expected exactly one classed <${tag}> in markup, found ${matches.length}`,
+    );
+  }
+  return matches[0][1];
 };
 
 describe("FeedbackInvite (current)", () => {
@@ -109,11 +121,10 @@ describe("FeedbackInvite (proposed)", () => {
     expect(text(proposed(12))).toContain("Select any text");
     expect(text(proposed(12))).toContain("Drag across a sentence. On a phone, press and hold.");
     expect(html).toContain("sm:grid-cols-3");
-    // Anchor the lookup before negating: this is the suite's only guard that
-    // the step grid stays left-aligned, so it must fail on a structural
-    // rename rather than quietly stop guarding.
-    const section = classesOf(html, "section");
-    expect(section).toContain("rounded-xl");
-    expect(section).not.toContain("text-center");
+    // This is the suite's only guard that the step grid stays left-aligned, so
+    // it has to fail on a structural change rather than quietly stop guarding.
+    // `classesOf` throwing on anything but a unique match is what supplies that;
+    // a decorative positive assertion here would only add a false-failure surface.
+    expect(classesOf(html, "section")).not.toContain("text-center");
   });
 });
