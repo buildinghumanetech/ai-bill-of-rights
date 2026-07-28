@@ -33,28 +33,34 @@ const proposed = (commentCount: number) => (
 );
 
 /**
- * Class list of the single classed `<tag>` in `html`.
+ * Class list of the single classed `<tag>` in `html`, optionally narrowed to
+ * the one carrying `discriminator`.
  *
  * Class assertions are scoped to the element under test: a bare
  * `html.toContain("text-center")` would fire on any nested element picking up
  * the class, which is a different change than the one being guarded. Throws
- * unless the match is unique, so a rename or an inserted sibling fails the
- * test rather than silently retargeting it.
+ * unless exactly one *classed* element matches, so a rename or an inserted
+ * classed sibling fails the test rather than silently retargeting it. An
+ * inserted element with no class attribute at all is invisible to this and
+ * does not trip the check.
  */
-const classesOf = (html: string, tag: string) => {
+const classesOf = (html: string, tag: string, discriminator?: string) => {
   // `(?=[\s>])` delimits the tag name: without it, "p" matches <path>, <pre>
   // and <param>, and a wrong element's class list satisfies the assertion.
   const pattern = new RegExp(`<${tag}(?=[\\s>])[^>]*\\sclass="([^"]*)"`, "g");
-  const matches = [...html.matchAll(pattern)];
-  // Uniqueness, not first-match. The pattern skips unclassed tags, so without
-  // this an inserted *classed* sibling would silently retarget the assertion
-  // at a different element while still matching.
-  if (matches.length !== 1) {
+  const classLists = [...html.matchAll(pattern)]
+    .map((m) => m[1])
+    .filter((c) => discriminator === undefined || c.includes(discriminator));
+
+  // Uniqueness, not first-match: the pattern skips unclassed tags and advances,
+  // so without this a classed sibling still matches and quietly shifts the target.
+  if (classLists.length !== 1) {
+    const which = discriminator === undefined ? "" : ` carrying "${discriminator}"`;
     throw new Error(
-      `expected exactly one classed <${tag}> in markup, found ${matches.length}`,
+      `expected exactly one classed <${tag}>${which}, found ${classLists.length}`,
     );
   }
-  return matches[0][1];
+  return classLists[0];
 };
 
 describe("FeedbackInvite (current)", () => {
@@ -63,15 +69,19 @@ describe("FeedbackInvite (current)", () => {
     expect(text(current(12))).not.toContain("—");
   });
 
-  it("centers the whole box, paragraph included", () => {
-    const html = render(current(0));
-    expect(classesOf(html, "section")).toContain("text-center");
-    // A width-capped paragraph stays pinned to the left edge of a centered box
-    // unless it is also horizontally centered.
-    const paragraph = classesOf(html, "p");
-    expect(paragraph).toContain("max-w-3xl");
-    expect(paragraph).toContain("mx-auto");
-  });
+  // Both states, not just the empty one: with a count the banner renders a
+  // second classed <p>, which is the state it is normally in.
+  it.each([0, 12])(
+    "centers the whole box, paragraph included (count %i)",
+    (count) => {
+      const html = render(current(count));
+      expect(classesOf(html, "section")).toContain("text-center");
+      // A width-capped paragraph stays pinned to the left edge of a centered
+      // box unless it is also horizontally centered.
+      const paragraph = classesOf(html, "p", "max-w-3xl");
+      expect(paragraph).toContain("mx-auto");
+    },
+  );
 
   it("states the mechanism in two sentences", () => {
     const copy = text(current(0));
