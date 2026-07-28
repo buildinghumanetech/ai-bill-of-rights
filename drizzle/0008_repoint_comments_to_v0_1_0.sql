@@ -45,8 +45,11 @@
 --       only to a sentence: HomepageArticles builds the anchor as
 --       `article-NN-connect-<slug>`. v0.1.0 renames the HumaneBench pages to
 --       the benchmark's own eight principle names (humanebench.ai/principles),
---       so those slugs change and the anchors change with them. Remapped below,
---       one branch per rename.
+--       so those slugs change and the anchors change with them.
+--
+--       Every pill rename is handled by the LAST TWO statements, not by the
+--       move — see the note there. The move's own CASE therefore carries only
+--       the (c) sentence shift.
 --
 --       NOT remapped, deliberately: `article-06-connect-humanebench-principle-
 --       empowerment`. Article 6's HumaneBench pill was REMOVED, not renamed —
@@ -54,6 +57,14 @@
 --       reattaching it to an unrelated principle would misrepresent what
 --       someone said. It is recoverable from the backup if that is the wrong
 --       call.
+--
+--       Three more are excluded for the same reason, and they are only visible
+--       if you look at the branch's EARLIER draft states rather than at `main`:
+--       52690a7 and 447c41c pointed Article 10 at `humanebench-principle-
+--       dignity` and Article 11 at `humanebench-principle-honesty` /
+--       `humanebench-as-measurement-infrastructure`. Those pills were SWAPPED
+--       for different principles at 293640f, not renamed, so a draft-tab
+--       comment on one of them stays where it is.
 --
 --       Note the PAGE and the PILL part ways here, and next.config.ts looks
 --       like it contradicts this comment but does not. The page was renamed
@@ -70,9 +81,11 @@
 -- `article-7-s-5` matches no row that has ever existed. An earlier revision of
 -- this migration used the unpadded form throughout, which made every remap
 -- branch a silent no-op: the rows still moved to v0.1.0, the stale anchor still
--- "resolved", and nothing errored. The rename set itself is derived from
--- `git show main:src/app/HomepageArticles.tsx` vs HEAD rather than from the
--- working tree, so branches are not written for pills that never shipped.
+-- "resolved", and nothing errored. The rename sets themselves are derived from
+-- `git show <commit>:src/app/HomepageArticles.tsx` vs HEAD rather than from the
+-- working tree, so no mapping is written for a pill that never existed. WHICH
+-- commit differs per statement — `main` for the move, `main` UNION 293640f for
+-- the repair statements. See the note above each.
 --
 -- TRADEOFF (decided deliberately): re-pointing loses the record of which
 -- version's text each comment was written against. The backup tables below
@@ -194,16 +207,6 @@ WITH "tgt" AS (
      SET "base_version_id" = (SELECT "id" FROM "tgt"),
          "anchor_id" = CASE
            WHEN "anchor_id" = 'article-07-s-5' THEN 'article-07-s-6'
-           WHEN "anchor_id" = 'article-01-connect-humanebench-principle-dignity'
-             THEN 'article-01-connect-humanebench-principle-protect-dignity-and-safety'
-           WHEN "anchor_id" = 'article-03-connect-humanebench-principle-honesty'
-             THEN 'article-03-connect-humanebench-principle-be-transparent-and-honest'
-           WHEN "anchor_id" = 'article-04-connect-humanebench-principle-non-manipulation'
-             THEN 'article-04-connect-humanebench-principle-enable-meaningful-choices'
-           WHEN "anchor_id" = 'article-05-connect-humanebench-principle-transparency'
-             THEN 'article-05-connect-humanebench-principle-be-transparent-and-honest'
-           WHEN "anchor_id" = 'article-09-connect-humanebench-respect-user-attention'
-             THEN 'article-09-connect-humanebench-principle-respect-user-attention'
            ELSE "anchor_id"
          END
    WHERE "base_version_id" = (SELECT "id" FROM "src")
@@ -214,16 +217,6 @@ UPDATE "proposed_edits"
    SET "base_version_id" = (SELECT "id" FROM "tgt"),
        "target_anchor_id" = CASE
          WHEN "target_anchor_id" = 'article-07-s-5' THEN 'article-07-s-6'
-         WHEN "target_anchor_id" = 'article-01-connect-humanebench-principle-dignity'
-           THEN 'article-01-connect-humanebench-principle-protect-dignity-and-safety'
-         WHEN "target_anchor_id" = 'article-03-connect-humanebench-principle-honesty'
-           THEN 'article-03-connect-humanebench-principle-be-transparent-and-honest'
-         WHEN "target_anchor_id" = 'article-04-connect-humanebench-principle-non-manipulation'
-           THEN 'article-04-connect-humanebench-principle-enable-meaningful-choices'
-         WHEN "target_anchor_id" = 'article-05-connect-humanebench-principle-transparency'
-           THEN 'article-05-connect-humanebench-principle-be-transparent-and-honest'
-         WHEN "target_anchor_id" = 'article-09-connect-humanebench-respect-user-attention'
-           THEN 'article-09-connect-humanebench-principle-respect-user-attention'
          ELSE "target_anchor_id"
        END
  WHERE "base_version_id" = (SELECT "id" FROM "src")
@@ -247,87 +240,81 @@ UPDATE "proposed_edits"
 --    old slugs are gone from the app, so a row carrying one is orphaned by
 --    definition and there is nothing for a re-run to match a second time.
 --
---    THE RENAME SET HERE IS WIDER THAN THE ONE ABOVE, and deliberately so.
---    The src->tgt move derives its set from `main` vs HEAD, because only a
---    pill that shipped on main can carry a v0.0.1 comment. That is the WRONG
---    test for this statement: the rows it targets were authored against the
---    v0.1.0 DRAFT, so they can be anchored to pills that only ever existed on
---    this branch. Four such renames landed between 293640f (the state the
---    preview served while /proposed was live) and 343918d — articles 07, 08,
---    10 and 11 — and none of them appear in the `main` diff. So this set is
---    `main` vs HEAD UNION 293640f vs HEAD.
+--    THESE TWO STATEMENTS OWN EVERY PILL REMAP, including for the rows the
+--    move above carries forward. A moved row lands on `0.1.0 AND is_current`
+--    still holding its old slug, which is exactly what these match on, so a
+--    duplicate CASE up there would be dead weight — and a fifth and sixth copy
+--    of a mapping that has already been mis-transcribed twice. The backup is
+--    unaffected: it snapshots the anchor BEFORE the move, so it holds the
+--    original slug either way and the rollback still reverses the rename.
 --
---    article-06-connect-…-empowerment is again absent on purpose — see (d).
-UPDATE "comments"
-   SET "anchor_id" = CASE
-         WHEN "anchor_id" = 'article-01-connect-humanebench-principle-dignity'
-           THEN 'article-01-connect-humanebench-principle-protect-dignity-and-safety'
-         WHEN "anchor_id" = 'article-03-connect-humanebench-principle-honesty'
-           THEN 'article-03-connect-humanebench-principle-be-transparent-and-honest'
-         WHEN "anchor_id" = 'article-04-connect-humanebench-principle-non-manipulation'
-           THEN 'article-04-connect-humanebench-principle-enable-meaningful-choices'
-         WHEN "anchor_id" = 'article-05-connect-humanebench-principle-transparency'
-           THEN 'article-05-connect-humanebench-principle-be-transparent-and-honest'
-         WHEN "anchor_id" = 'article-07-connect-humanebench-principle-dignity'
-           THEN 'article-07-connect-humanebench-principle-protect-dignity-and-safety'
-         WHEN "anchor_id" = 'article-08-connect-humanebench-principle-long-term-wellbeing'
-           THEN 'article-08-connect-humanebench-principle-prioritize-long-term-wellbeing'
-         WHEN "anchor_id" = 'article-09-connect-humanebench-respect-user-attention'
-           THEN 'article-09-connect-humanebench-principle-respect-user-attention'
-         WHEN "anchor_id" = 'article-10-connect-humanebench-principle-equity-inclusion'
-           THEN 'article-10-connect-humanebench-principle-design-for-equity-and-inclusion'
-         WHEN "anchor_id" = 'article-11-connect-humanebench-principle-dignity'
-           THEN 'article-11-connect-humanebench-principle-protect-dignity-and-safety'
-         ELSE "anchor_id"
-       END
- WHERE "base_version_id" IN (
+--    THE RENAME SET IS DERIVED FROM TWO STARTING POINTS, and using only the
+--    first is what made an earlier revision of these statements incomplete.
+--    `main` vs HEAD is right for the move — only a pill that shipped on main
+--    can carry a v0.0.1 comment — but it is the WRONG test here: the rows
+--    these statements target were authored against the v0.1.0 DRAFT, so they
+--    can be anchored to pills that only ever existed on this branch. Four such
+--    renames landed between 293640f (the state the preview served while
+--    /proposed was live) and 343918d — articles 07, 08, 10 and 11 — and none
+--    of them appear in the `main` diff. So this set is `main` vs HEAD UNION
+--    293640f vs HEAD.
+--
+--    Absent on purpose: article-06-…-empowerment, plus the three Article 10/11
+--    pills the branch SWAPPED before 293640f — see (d) for both.
+WITH "renames"("old", "new") AS (
+  VALUES
+    ('article-01-connect-humanebench-principle-dignity'::text,
+     'article-01-connect-humanebench-principle-protect-dignity-and-safety'::text),
+    ('article-03-connect-humanebench-principle-honesty',
+     'article-03-connect-humanebench-principle-be-transparent-and-honest'),
+    ('article-04-connect-humanebench-principle-non-manipulation',
+     'article-04-connect-humanebench-principle-enable-meaningful-choices'),
+    ('article-05-connect-humanebench-principle-transparency',
+     'article-05-connect-humanebench-principle-be-transparent-and-honest'),
+    ('article-07-connect-humanebench-principle-dignity',
+     'article-07-connect-humanebench-principle-protect-dignity-and-safety'),
+    ('article-08-connect-humanebench-principle-long-term-wellbeing',
+     'article-08-connect-humanebench-principle-prioritize-long-term-wellbeing'),
+    ('article-09-connect-humanebench-respect-user-attention',
+     'article-09-connect-humanebench-principle-respect-user-attention'),
+    ('article-10-connect-humanebench-principle-equity-inclusion',
+     'article-10-connect-humanebench-principle-design-for-equity-and-inclusion'),
+    ('article-11-connect-humanebench-principle-dignity',
+     'article-11-connect-humanebench-principle-protect-dignity-and-safety')
+)
+UPDATE "comments" AS c
+   SET "anchor_id" = r."new"
+  FROM "renames" AS r
+ WHERE c."anchor_id" = r."old"
+   AND c."base_version_id" IN (
          SELECT "id" FROM "versions" WHERE "version" = '0.1.0' AND "is_current"
-       )
-   AND "anchor_id" IN (
-         'article-01-connect-humanebench-principle-dignity',
-         'article-03-connect-humanebench-principle-honesty',
-         'article-04-connect-humanebench-principle-non-manipulation',
-         'article-05-connect-humanebench-principle-transparency',
-         'article-07-connect-humanebench-principle-dignity',
-         'article-08-connect-humanebench-principle-long-term-wellbeing',
-         'article-09-connect-humanebench-respect-user-attention',
-         'article-10-connect-humanebench-principle-equity-inclusion',
-         'article-11-connect-humanebench-principle-dignity'
        );
 --> statement-breakpoint
-UPDATE "proposed_edits"
-   SET "target_anchor_id" = CASE
-         WHEN "target_anchor_id" = 'article-01-connect-humanebench-principle-dignity'
-           THEN 'article-01-connect-humanebench-principle-protect-dignity-and-safety'
-         WHEN "target_anchor_id" = 'article-03-connect-humanebench-principle-honesty'
-           THEN 'article-03-connect-humanebench-principle-be-transparent-and-honest'
-         WHEN "target_anchor_id" = 'article-04-connect-humanebench-principle-non-manipulation'
-           THEN 'article-04-connect-humanebench-principle-enable-meaningful-choices'
-         WHEN "target_anchor_id" = 'article-05-connect-humanebench-principle-transparency'
-           THEN 'article-05-connect-humanebench-principle-be-transparent-and-honest'
-         WHEN "target_anchor_id" = 'article-07-connect-humanebench-principle-dignity'
-           THEN 'article-07-connect-humanebench-principle-protect-dignity-and-safety'
-         WHEN "target_anchor_id" = 'article-08-connect-humanebench-principle-long-term-wellbeing'
-           THEN 'article-08-connect-humanebench-principle-prioritize-long-term-wellbeing'
-         WHEN "target_anchor_id" = 'article-09-connect-humanebench-respect-user-attention'
-           THEN 'article-09-connect-humanebench-principle-respect-user-attention'
-         WHEN "target_anchor_id" = 'article-10-connect-humanebench-principle-equity-inclusion'
-           THEN 'article-10-connect-humanebench-principle-design-for-equity-and-inclusion'
-         WHEN "target_anchor_id" = 'article-11-connect-humanebench-principle-dignity'
-           THEN 'article-11-connect-humanebench-principle-protect-dignity-and-safety'
-         ELSE "target_anchor_id"
-       END
- WHERE "base_version_id" IN (
+WITH "renames"("old", "new") AS (
+  VALUES
+    ('article-01-connect-humanebench-principle-dignity'::text,
+     'article-01-connect-humanebench-principle-protect-dignity-and-safety'::text),
+    ('article-03-connect-humanebench-principle-honesty',
+     'article-03-connect-humanebench-principle-be-transparent-and-honest'),
+    ('article-04-connect-humanebench-principle-non-manipulation',
+     'article-04-connect-humanebench-principle-enable-meaningful-choices'),
+    ('article-05-connect-humanebench-principle-transparency',
+     'article-05-connect-humanebench-principle-be-transparent-and-honest'),
+    ('article-07-connect-humanebench-principle-dignity',
+     'article-07-connect-humanebench-principle-protect-dignity-and-safety'),
+    ('article-08-connect-humanebench-principle-long-term-wellbeing',
+     'article-08-connect-humanebench-principle-prioritize-long-term-wellbeing'),
+    ('article-09-connect-humanebench-respect-user-attention',
+     'article-09-connect-humanebench-principle-respect-user-attention'),
+    ('article-10-connect-humanebench-principle-equity-inclusion',
+     'article-10-connect-humanebench-principle-design-for-equity-and-inclusion'),
+    ('article-11-connect-humanebench-principle-dignity',
+     'article-11-connect-humanebench-principle-protect-dignity-and-safety')
+)
+UPDATE "proposed_edits" AS p
+   SET "target_anchor_id" = r."new"
+  FROM "renames" AS r
+ WHERE p."target_anchor_id" = r."old"
+   AND p."base_version_id" IN (
          SELECT "id" FROM "versions" WHERE "version" = '0.1.0' AND "is_current"
-       )
-   AND "target_anchor_id" IN (
-         'article-01-connect-humanebench-principle-dignity',
-         'article-03-connect-humanebench-principle-honesty',
-         'article-04-connect-humanebench-principle-non-manipulation',
-         'article-05-connect-humanebench-principle-transparency',
-         'article-07-connect-humanebench-principle-dignity',
-         'article-08-connect-humanebench-principle-long-term-wellbeing',
-         'article-09-connect-humanebench-respect-user-attention',
-         'article-10-connect-humanebench-principle-equity-inclusion',
-         'article-11-connect-humanebench-principle-dignity'
        );

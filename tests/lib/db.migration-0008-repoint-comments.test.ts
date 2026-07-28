@@ -69,6 +69,35 @@ function migrationStatements(): string[] {
   return splitMigrationSql(fs.readFileSync(MIGRATION, "utf-8"));
 }
 
+/**
+ * Every (from, to) anchor mapping the migration performs, in both of the
+ * forms it writes them: the `WHEN … THEN` arm the sentence shift uses, and
+ * the joined `VALUES (old, new)` list the pill renames use.
+ *
+ * Reading the pairs — rather than just grepping for the source literal —
+ * is what makes a misspelled DESTINATION detectable. A typo there passes
+ * every other check in this file: the article number is still valid, the
+ * source anchor is still present, and the comment still orphans.
+ */
+function anchorRemaps(sqlText: string): { from: string; to: string }[] {
+  const cases = sqlText.matchAll(
+    /=\s*'(article-[^']+)'\s*THEN\s*'(article-[^']+)'/g,
+  );
+  const values = sqlText.matchAll(
+    /\(\s*'(article-[^']+)'(?:::text)?,\s*'(article-[^']+)'(?:::text)?\s*\)/g,
+  );
+  return [...cases, ...values].map((m) => ({ from: m[1], to: m[2] }));
+}
+
+/** The pill anchors HomepageArticles renders TODAY. */
+function livePillAnchors(): Set<string> {
+  return new Set(
+    articles.flatMap((a) =>
+      (a.connects ?? []).map((p) => `article-${a.number}-connect-${p.slug}`),
+    ),
+  );
+}
+
 async function applyMigration(db: TestDb) {
   for (const statement of migrationStatements()) {
     await db.execute(sql.raw(statement));
@@ -270,6 +299,20 @@ describe("0008 repoint comments to the new current version", () => {
     expect(statements[4]).toMatch(/AND "is_current"/);
     expect(statements[5]).toMatch(/UPDATE "proposed_edits"/);
     expect(statements[5]).toMatch(/AND "is_current"/);
+    // Each carries its rename map ONCE, as a joined VALUES list. The earlier
+    // form spelled the same set out twice per statement — as CASE arms and
+    // again as an `anchor_id IN (…)` filter — where a rename added to one and
+    // not the other is a branch that silently matches nothing.
+    expect(statements[4]).toMatch(/WITH "renames"\("old", "new"\) AS/);
+    expect(statements[5]).toMatch(/WITH "renames"\("old", "new"\) AS/);
+    // ...and ONCE means once: each rename source appears a single time per
+    // statement. The earlier form named it twice, and a set that has to be
+    // kept in sync with itself is the bug this migration keeps re-shipping.
+    const timesNamed = (statement: string) =>
+      (statement.match(/'article-01-connect-humanebench-principle-dignity'/g) ??
+        []).length;
+    expect(timesNamed(statements[4])).toBe(1);
+    expect(timesNamed(statements[5])).toBe(1);
   });
 
   it("survives POPULATED backup tables left over from the earlier keyless form", async () => {
@@ -469,13 +512,14 @@ describe("0008 repoint comments to the new current version", () => {
 
   it("covers every pill slug that changed, from either starting point", () => {
     // The scan above only validates article NUMBERS. It cannot catch a rename
-    // with no branch at all, which is the error this migration shipped twice:
-    // first four branch-only renames omitted, then a branch written for a pill
-    // that never existed. This asserts coverage of the rename SET itself.
+    // with no mapping at all, nor a mapping whose DESTINATION is wrong — and
+    // this migration has shipped both, each using perfectly valid numbers.
+    // So this asserts the rename SET in both directions.
     //
     // Two starting points matter, and using only the first is what caused the
     // omission: `main` is where v0.0.1 comments come from, but /proposed
-    // comments were written against the v0.1.0 draft as it stood at 293640f.
+    // comments were written against the v0.1.0 draft, which changed shape more
+    // than once while the preview was live.
     // Snapshots rather than `git show` so the test needs no repo history.
     const HISTORICAL_PILL_ANCHORS = [
       // on `main` (v0.0.1) and renamed since
@@ -490,36 +534,69 @@ describe("0008 repoint comments to the new current version", () => {
       "article-08-connect-humanebench-principle-long-term-wellbeing",
       "article-10-connect-humanebench-principle-equity-inclusion",
       "article-11-connect-humanebench-principle-dignity",
+      // the draft as 52690a7 and 447c41c served it, before 293640f pointed
+      // Articles 10 and 11 at different principles
+      "article-10-connect-humanebench-principle-dignity",
+      "article-11-connect-humanebench-principle-honesty",
+      "article-11-connect-humanebench-as-measurement-infrastructure",
     ];
-    // Article 6's HumaneBench pill was REMOVED, not renamed — there is no
-    // successor to move a comment to, so leaving it stale is the correct
-    // behaviour and it must NOT appear in the SQL.
+    // REMOVED or SWAPPED rather than renamed. There is no successor pill to
+    // move a comment to, so leaving the anchor stale is the correct behaviour
+    // and these must NOT appear in the SQL: Article 6 lost its HumaneBench
+    // pill outright, and Articles 10 and 11 were re-pointed at different
+    // principles, which is a different reference, not a new name for the same
+    // one. Reattaching either would misrepresent what someone said.
     const DELIBERATELY_NOT_REMAPPED = new Set([
       "article-06-connect-humanebench-principle-empowerment",
+      "article-10-connect-humanebench-principle-dignity",
+      "article-11-connect-humanebench-principle-honesty",
+      "article-11-connect-humanebench-as-measurement-infrastructure",
     ]);
 
-    const live = new Set(
-      articles.flatMap((a) =>
-        (a.connects ?? []).map((p) => `article-${a.number}-connect-${p.slug}`),
-      ),
-    );
+    const live = livePillAnchors();
     const sqlText = fs.readFileSync(MIGRATION, "utf-8");
+    const needsCarrying = HISTORICAL_PILL_ANCHORS.filter(
+      (anchor) => !live.has(anchor) && !DELIBERATELY_NOT_REMAPPED.has(anchor),
+    ).sort();
 
-    const uncovered = HISTORICAL_PILL_ANCHORS.filter(
-      (anchor) =>
-        !live.has(anchor) &&
-        !DELIBERATELY_NOT_REMAPPED.has(anchor) &&
-        !sqlText.includes(`'${anchor}'`),
-    );
-    expect(
-      uncovered,
-      `pill slug(s) renamed with no remap branch — comments on them will orphan: ${uncovered.join(", ")}`,
-    ).toEqual([]);
+    // Checked PER STATEMENT, not against the file as a whole: comments and
+    // proposed_edits each carry their own copy of the map, and a rename added
+    // to one but not the other would pass a whole-file scan while orphaning
+    // every proposed edit on that pill.
+    const repairStatements = migrationStatements().slice(4);
+    expect(repairStatements).toHaveLength(2);
+    for (const statement of repairStatements) {
+      const table = statement.includes('UPDATE "comments"')
+        ? "comments"
+        : "proposed_edits";
+      const pillRemaps = anchorRemaps(statement).filter((r) =>
+        r.to.includes("-connect-"),
+      );
+
+      // EXACTLY the set that needs carrying — an equality, not a subset, so it
+      // fails in both directions: an omission orphans a comment, and an extra
+      // is a mapping for a pill that never existed, which is dead code that
+      // reads as coverage. Both have shipped here.
+      expect(
+        [...new Set(pillRemaps.map((r) => r.from))].sort(),
+        `${table}: pill rename sources must be exactly the renamed-and-not-superseded set`,
+      ).toEqual(needsCarrying);
+
+      // Every DESTINATION has to be an anchor the app renders TODAY, or the
+      // remap just moves the comment from one dead anchor to another.
+      const deadTargets = [
+        ...new Set(pillRemaps.map((r) => r.to).filter((to) => !live.has(to))),
+      ];
+      expect(
+        deadTargets,
+        `${table}: remap destination(s) that no pill renders: ${deadTargets.join(", ")}`,
+      ).toEqual([]);
+    }
 
     for (const anchor of DELIBERATELY_NOT_REMAPPED) {
       expect(
         sqlText.includes(`'${anchor}'`),
-        `${anchor} was removed, not renamed — it must not be remapped`,
+        `${anchor} was removed or swapped, not renamed — it must not be remapped`,
       ).toBe(false);
     }
   });
@@ -530,7 +607,8 @@ describe("0008 repoint comments to the new current version", () => {
     // carry NULL. The published rollback must not write that NULL over a live
     // anchor — a comment with neither an anchor nor a proposal is orphaned,
     // and the proposed_edits half would then violate NOT NULL.
-    const { db, currentId, editId } = await seedPublishedUpgrade();
+    const { db, editId } = await seedPublishedUpgrade();
+    const oldId = await versionId(db, "0.0.1");
     await applyMigration(db);
     await db.execute(
       sql.raw(`UPDATE "comment_version_backup_0008" SET "anchor_id" = NULL`),
@@ -541,14 +619,34 @@ describe("0008 repoint comments to the new current version", () => {
       ),
     );
 
-    await expect(rollback(db)).resolves.not.toThrow();
+    // Plain await, not `expect(...).resolves.not.toThrow()`: vitest's toThrow
+    // short-circuits to a pass when the subject is a non-function under
+    // `resolves` + negation, so that spelling asserts nothing. A rejection
+    // here — the NOT NULL violation on proposed_edits — fails the test.
+    await rollback(db);
 
-    const [row] = await db
-      .select({ anchorId: comments.anchorId })
+    // The version is restored from the backup, and the anchor is KEPT rather
+    // than nulled. It is the v0.1.0 slug, which cannot be helped: the backup
+    // has no original to restore. Keeping a stale anchor beats a comment with
+    // neither an anchor nor a proposal.
+    const [comment] = await db
+      .select({
+        anchorId: comments.anchorId,
+        baseVersionId: comments.baseVersionId,
+      })
       .from(comments)
+      .orderBy(comments.anchorId)
       .limit(1);
-    expect(row.anchorId).not.toBeNull();
-    expect(await editVersionOf(db, editId)).not.toBe(currentId);
+    expect(comment.anchorId).toBe(sentenceAnchor(1, 1));
+    expect(comment.baseVersionId).toBe(oldId);
+
+    const [edit] = await db
+      .select({ targetAnchorId: proposedEdits.targetAnchorId })
+      .from(proposedEdits)
+      .where(eq(proposedEdits.id, editId))
+      .limit(1);
+    expect(edit.targetAnchorId).toBe(sentenceAnchor(1, 1));
+    expect(await editVersionOf(db, editId)).toBe(oldId);
   });
 
   it("does not walk the anchor further on a re-run", async () => {
