@@ -93,6 +93,17 @@ export function getSignatureFraming(count: number): SignatureFraming {
 
 const fmt = (n: number) => n.toLocaleString();
 
+/**
+ * How many signer chips the momentum panel renders. Three sit on one line at
+ * desktop width; more wrap into a ragged block that reads as clutter rather
+ * than as proof.
+ *
+ * Exported so callers can size their query off it: the panel drops signers with
+ * a blank display name, so a caller must over-fetch or two anonymous signers
+ * collapse the row to a single chip. See `loadSignerSample` in `src/app/page.tsx`.
+ */
+export const RECENT_SIGNER_CHIPS = 3;
+
 /** A signer shown as proof-of-quality while the raw count is still small. */
 export type MomentumSigner = {
   displayName: string;
@@ -208,7 +219,9 @@ export function SignatureMomentumPanel({
     );
   }
 
-  const named = sample.filter((s) => s.displayName.trim().length > 0).slice(0, 6);
+  const named = sample
+    .filter((s) => s.displayName.trim().length > 0)
+    .slice(0, RECENT_SIGNER_CHIPS);
 
   return (
     <div className="mx-auto max-w-3xl text-center">

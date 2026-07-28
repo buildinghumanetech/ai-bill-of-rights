@@ -5,7 +5,10 @@ import {
   LiveSignatureMomentumPanel,
 } from "./SignatureCount";
 import { TabbedDocument } from "@/components/TabbedDocument";
-import type { MomentumSigner } from "@/components/SignatureMomentum";
+import {
+  RECENT_SIGNER_CHIPS,
+  type MomentumSigner,
+} from "@/components/SignatureMomentum";
 import { loadHomepageTabData } from "@/lib/homepage/load-tab-data";
 import { listSignatures } from "@/lib/db/queries";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site-metadata";
@@ -16,10 +19,17 @@ export const dynamic = "force-dynamic";
  * A handful of the most recent signers, shown as proof-of-quality while the
  * raw count is still small (see `@/components/SignatureMomentum`). Best-effort:
  * a DB hiccup just drops the chips, it never breaks the homepage.
+ *
+ * The over-pull is deliberate and tied to `RECENT_SIGNER_CHIPS`: the panel drops
+ * signers who left their display name blank, so fetching exactly the number of
+ * chips would let two anonymous signers collapse the row to a single chip.
  */
 async function loadSignerSample(): Promise<MomentumSigner[]> {
   try {
-    const rows = await listSignatures(null, { limit: 6, offset: 0 });
+    const rows = await listSignatures(null, {
+      limit: RECENT_SIGNER_CHIPS * 2,
+      offset: 0,
+    });
     return rows.map((row) => ({
       displayName: row.displayName,
       affiliation: row.affiliation,

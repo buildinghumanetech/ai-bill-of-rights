@@ -24,7 +24,7 @@ type Props =
 const STEPS = [
   {
     title: "Select any text",
-    detail: "Drag across a sentence — on a phone, press and hold.",
+    detail: "Drag across a sentence. On a phone, press and hold.",
   },
   {
     title: "Say what you'd change",
@@ -42,7 +42,7 @@ const STEPS = [
  * Feedback here happens by highlighting text inside the Proposed draft, which
  * is close to invisible if nobody tells you: readers were treating the document
  * as finished and assuming their only options were to sign or not. This states
- * the mechanism in plain language on both tabs — an invitation with a button on
+ * the mechanism in plain language on both tabs — a short centered invitation on
  * Current, the three concrete steps on Proposed.
  */
 export function FeedbackInvite(props: Props) {
@@ -51,34 +51,34 @@ export function FeedbackInvite(props: Props) {
   if (variant === "current") {
     const { currentVersion, onOpenDraft } = props;
     return (
-      <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 px-5 py-5 sm:px-7 sm:py-6">
+      <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 px-5 py-5 text-center sm:px-7 sm:py-6">
         <h2 className="text-lg font-semibold tracking-tight text-zinc-950 sm:text-xl">
-          This is a living document — you can change it.
+          This is a living document. You can change it.
         </h2>
-        <p className="mt-2 max-w-3xl text-pretty text-sm leading-relaxed text-zinc-700 sm:text-base">
+        {/* `mx-auto` matters: a width-capped paragraph stays pinned to the left
+            edge of a centered box without it. */}
+        <p className="mx-auto mt-2 max-w-3xl text-pretty text-sm leading-relaxed text-zinc-700 sm:text-base">
           You&apos;re reading v{currentVersion}, the version people are signing.
-          v{proposedVersion} is the open draft, and anyone can mark it up:
-          highlight a line, then leave a comment or suggest different wording.
-          Comments are public and can be voted up or down, and the ones that
-          hold up get folded into the next version. Disagreeing with a line is a
-          reason to say so here — not a reason to walk away.
+          v{proposedVersion} is the open draft: highlight any line to comment or
+          suggest wording, and the comments that hold up shape the next version.
         </p>
-        {/* One control, not two — a second button doing the identical thing
-            reads to a screen reader as a distinct action that isn't. The count
-            is supporting copy beneath it instead. */}
-        <div className="mt-5">
+        {/* One control, not two: a second element doing the identical thing
+            reads to a screen reader as a distinct action that isn't. Still a
+            button, not a link — it switches tabs in place rather than
+            navigating; only the styling is link-like. */}
+        <div className="mt-4">
           <button
             type="button"
             onClick={onOpenDraft}
-            className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+            className="text-sm font-semibold text-blue-600 underline underline-offset-4 transition-colors hover:text-blue-700 sm:text-base"
           >
-            Give feedback on the v{proposedVersion} draft →
+            Mark up the v{proposedVersion} draft →
           </button>
-          <p className="mt-2.5 text-sm text-zinc-600">
-            {commentCount > 0
-              ? `${commentCountLabel(commentCount)} already on the draft.`
-              : "No comments yet — yours would be the first."}
-          </p>
+          {commentCount > 0 && (
+            <p className="mt-2 text-sm text-zinc-600">
+              {`${commentCountLabel(commentCount)} already on it.`}
+            </p>
+          )}
         </div>
       </section>
     );
@@ -87,7 +87,7 @@ export function FeedbackInvite(props: Props) {
   return (
     <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 px-5 py-5 sm:px-7 sm:py-6">
       <h2 className="text-lg font-semibold tracking-tight text-zinc-950 sm:text-xl">
-        You&apos;re in the draft — this is where feedback happens.
+        You&apos;re in the draft. This is where feedback happens.
       </h2>
       <p className="mt-2 max-w-3xl text-pretty text-sm leading-relaxed text-zinc-700 sm:text-base">
         Nothing on this tab is final. v{proposedVersion} is being written in the
