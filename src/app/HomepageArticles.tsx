@@ -99,7 +99,13 @@ export const PILL_CATEGORIES: readonly Readonly<PillCategory>[] = [
   {
     id: "uk-regulation",
     prefixes: ["uk-"],
-    className: "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
+    // Lime, not teal. Teal sat ~7.7 ΔE from the cyan comment highlights on the
+    // Proposed tab — the weakest pairing on the page, worse even than the
+    // HumaneBench blue. Lime is 18.4 from cyan, and stays legible against its
+    // own nearest neighbour (amber): the -50 backgrounds are close, as all
+    // Tailwind -50s are, but the text a reader actually reads is 52.6 apart
+    // and the border 23.2.
+    className: "border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100",
   },
   FALLBACK_CATEGORY,
 ];
