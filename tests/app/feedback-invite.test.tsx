@@ -94,16 +94,22 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
  * `expected false to be true`.
  *
  * Reach: *all* variant prefixes — not just responsive, but interaction states
- * and `dark:` too — plus opacity modifiers. Two limits worth knowing, and they
- * fail differently:
+ * and `dark:` too — plus opacity modifiers. `[&:hover]:bg-blue-600` is fine:
+ * only the last `:` segment survives, so a bracketed variant normalizes to
+ * `bg-blue-600` like any other.
  *
- * - Out of scope, simply not caught: a different shade (`bg-blue-500`) or an
- *   arbitrary value (`bg-[#2563eb]`).
- * - Actively mangled: the split on `:` is unconditional, so a token with a
- *   colon inside brackets — `[&:hover]:bg-blue-600`, `bg-[url(data:…)]` —
- *   reduces to a fragment rather than a utility and quietly disarms the guard
- *   for the very class it was aimed at. This assumes plain
- *   `variant:utility/opacity` tokens.
+ * Precondition: plain `variant:utility/opacity` tokens. A different shade
+ * (`bg-blue-500`) or an arbitrary value (`bg-[#2563eb]`) is simply not caught.
+ * Two shapes leave a fragment rather than a utility:
+ *
+ * - the token's *last* `:` sits inside brackets, so the split lands mid-value:
+ *   `bg-[url(data:image/x)]` → `image`. (This is why `[&:hover]:bg-blue-600`
+ *   survives — its last `:` is outside the brackets.)
+ * - what survives contains a `/` that isn't an opacity modifier:
+ *   `w-[calc(100%/3)]` → `w-[calc(100%`.
+ *
+ * Neither can bite today, since every guard here targets a plain utility. Point
+ * one at an arbitrary-value class and replace this helper rather than extend it.
  */
 const baseClasses = (tokens: string[]) =>
   tokens.map((token) => token.split(":").pop()!.split("/")[0]);
