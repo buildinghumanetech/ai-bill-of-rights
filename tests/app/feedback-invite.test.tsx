@@ -103,8 +103,7 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
  * Two shapes leave a fragment rather than a utility:
  *
  * - the token's *last* `:` sits inside brackets, so the split lands mid-value:
- *   `bg-[url(data:image/x)]` → `image`. (This is why `[&:hover]:bg-blue-600`
- *   survives — its last `:` is outside the brackets.)
+ *   `bg-[url(data:x)]` → `x)]`.
  * - what survives contains a `/` that isn't an opacity modifier:
  *   `w-[calc(100%/3)]` → `w-[calc(100%`.
  *
