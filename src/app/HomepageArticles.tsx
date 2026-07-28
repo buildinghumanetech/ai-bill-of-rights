@@ -27,24 +27,29 @@ export const US_LAW_SLUGS: ReadonlySet<string> = new Set([
   "white-house-ai-bill-of-rights-2022",
 ]);
 
-export type PillCategory = {
-  id: string;
-  matches: (slug: string) => boolean;
-  className: string;
-  /**
-   * Set only when the rule is a hand-maintained list rather than a prefix, so
-   * the overlap test can enumerate the rule's domain instead of importing each
-   * such list by name. Without this, a *new* category with its own slug list
-   * silently escapes that test until someone remembers to widen it.
-   */
-  slugs?: ReadonlySet<string>;
-};
+/**
+ * How a category claims a slug. A union rather than a `matches` callback with
+ * an optional `slugs` field: a callback lets a list-based rule be written as
+ * `matches: (s) => MY_SET.has(s)` without declaring its domain, which compiles
+ * fine and then escapes the overlap test silently. Here a list-based rule
+ * *cannot* be expressed without `slugs`, so the test can always enumerate it.
+ */
+type PillCategoryRule =
+  | { prefixes: readonly string[]; slugs?: undefined }
+  | { slugs: ReadonlySet<string>; prefixes?: undefined }
+  /** Matches everything; exactly one category may use it. */
+  | { catchAll: true; prefixes?: undefined; slugs?: undefined };
 
-/** A category whose domain is an explicit list — see `PillCategory.slugs`. */
-const bySlugSet = (slugs: ReadonlySet<string>) => ({
-  slugs,
-  matches: (slug: string) => slugs.has(slug),
-});
+export type PillCategory = { id: string; className: string } & PillCategoryRule;
+
+export function categoryMatches(
+  category: Readonly<PillCategory>,
+  slug: string,
+): boolean {
+  if (category.slugs) return category.slugs.has(slug);
+  if (category.prefixes) return category.prefixes.some((p) => slug.startsWith(p));
+  return true;
+}
 
 /**
  * Also the last entry of `PILL_CATEGORIES`, and the `??` fallback below, so
@@ -53,7 +58,7 @@ const bySlugSet = (slugs: ReadonlySet<string>) => ({
  */
 export const FALLBACK_CATEGORY: Readonly<PillCategory> = {
   id: "research-advocacy",
-  matches: () => true,
+  catchAll: true,
   className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
 };
 
@@ -66,33 +71,40 @@ export const FALLBACK_CATEGORY: Readonly<PillCategory> = {
 export const PILL_CATEGORIES: readonly Readonly<PillCategory>[] = [
   {
     id: "humanebench",
-    matches: (slug) => slug.startsWith("humanebench"),
+    prefixes: ["humanebench"],
     className: "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
   },
   {
     id: "eu-regulation",
-    matches: (slug) => slug.startsWith("eu-ai-act") || slug.startsWith("gdpr"),
+    prefixes: ["eu-ai-act", "gdpr"],
     className: "border-violet-200 bg-violet-50 text-violet-900 hover:bg-violet-100",
   },
   {
     id: "us-law",
-    ...bySlugSet(US_LAW_SLUGS),
+    slugs: US_LAW_SLUGS,
     className: "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
   },
   {
     id: "uk-regulation",
-    matches: (slug) => slug.startsWith("uk-"),
+    prefixes: ["uk-"],
     className: "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
   },
   FALLBACK_CATEGORY,
 ];
 
-export function pillCategory(slug: string): PillCategory {
+export function pillCategory(slug: string): Readonly<PillCategory> {
   // `??`, not `!`: the non-null assertion would have relied on
   // FALLBACK_CATEGORY staying last in an array that is exactly the kind of
   // thing someone alphabetises. Getting that wrong should cost a rose pill,
   // not a render-time crash on the homepage.
-  return PILL_CATEGORIES.find((c) => c.matches(slug)) ?? FALLBACK_CATEGORY;
+  //
+  // `Readonly<>` on the return type, not just on the array: TypeScript ignores
+  // `readonly` property modifiers in assignability, so returning the mutable
+  // alias would let `pillCategory("coppa").className = …` typecheck and mutate
+  // the shared module literal for every later render.
+  return (
+    PILL_CATEGORIES.find((c) => categoryMatches(c, slug)) ?? FALLBACK_CATEGORY
+  );
 }
 
 export function pillColor(slug: string): string {

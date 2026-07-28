@@ -51,6 +51,10 @@ describe("Connects-to pills across both tabs", () => {
   });
 
   it("gives the Proposed tab the same colours as the Current tab", () => {
+    // Guarded even though it does not iterate: two empty arrays compare equal
+    // just as quietly as an empty loop body runs, and this is the assertion
+    // the whole suite exists for.
+    expect(staticPills.length).toBeGreaterThan(20);
     expect(interactivePills).toEqual(staticPills);
   });
 

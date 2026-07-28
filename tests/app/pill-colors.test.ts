@@ -4,6 +4,7 @@ import {
   PILL_CATEGORIES,
   US_LAW_SLUGS,
   articles,
+  categoryMatches,
   pillCategory,
   pillColor,
 } from "@/app/HomepageArticles";
@@ -96,16 +97,21 @@ describe("pill categories", () => {
     // page, and iterating `allSlugs` alone would let that pass clean,
     // surfacing later as a mis-coloured pill.
     //
-    // The domain is derived from `PillCategory.slugs` rather than importing
-    // US_LAW_SLUGS by name, so a *new* category with its own hand-maintained
-    // list is covered here without anyone remembering to widen this test.
+    // The iteration domain is derived from `PillCategory.slugs`, which the
+    // type makes mandatory for any list-based rule — so a *new* category with
+    // its own list is covered here without anyone widening this test. The
+    // assertion below pins that derivation against the one list we know about
+    // today, so dropping `slugs` from the us-law entry fails rather than
+    // quietly shrinking the domain.
     const enumerable = PILL_CATEGORIES.flatMap((c) => [...(c.slugs ?? [])]);
     expect(enumerable).toEqual(expect.arrayContaining([...US_LAW_SLUGS]));
 
     // The catch-all is excluded by identity — matching everything is its job.
     const specific = PILL_CATEGORIES.filter((c) => c !== FALLBACK_CATEGORY);
     for (const slug of new Set([...allSlugs, ...enumerable])) {
-      const claimants = specific.filter((c) => c.matches(slug)).map((c) => c.id);
+      const claimants = specific
+        .filter((c) => categoryMatches(c, slug))
+        .map((c) => c.id);
       expect(claimants.length, `${slug} claimed by ${claimants.join(" and ")}`).toBeLessThan(2);
     }
   });
