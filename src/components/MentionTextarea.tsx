@@ -169,14 +169,15 @@ export function MentionTextarea({
     //
     // The trailing space is deliberately NOT part of `mentionText`: it is a
     // typing affordance for the composer, not part of what anything matches on.
-    // `sep` guards exactly ONE source of a doubled space: `after` already
-    // starting with one. Two others are live and out of scope here — a padded
-    // `displayName` (waits on the deferred `mentionText` trim) and `after`
-    // starting with punctuation (a typography call nobody has made). Both are
-    // asserted by tests that explain them at their own sites; deliberately not
-    // restated here, so there is one copy to keep true rather than four.
+    // `sep` suppresses it whenever `after` already opens with something that
+    // should sit tight against the name — existing whitespace, or closing
+    // punctuation. One source of an ugly gap is deliberately NOT handled here: a
+    // padded `displayName` makes `inserted` itself end in a space, and that
+    // resolves with the deferred `mentionText` trim rather than a wider test on
+    // this side. It is pinned in `tests/components/comment-node.mentions.test.tsx`;
+    // the cases below are pinned in `tests/components/mention-textarea.test.tsx`.
     const inserted = mentionText(signer.displayName);
-    const sep = after.startsWith(" ") ? "" : " ";
+    const sep = /^[\s,.;:!?)]/.test(after) ? "" : " ";
     const newValue = `${before}${inserted}${sep}${after}`;
     onChange(newValue);
     setMentionQuery(null);
@@ -195,10 +196,11 @@ export function MentionTextarea({
     const ta = taRef.current;
     if (ta) {
       // Derived from what was actually inserted, so it stays correct if
-      // `mentionText` ever normalises the name. The +1 steps past the single
-      // space that now follows the mention — whether `sep` supplied it or the
-      // text after the caret already had one.
-      const newCaret = before.length + inserted.length + 1;
+      // `mentionText` ever normalises the name. Step past a following space —
+      // whether `sep` supplied it or `after` already had one — but not past
+      // punctuation: the author's next keystroke belongs before the comma.
+      const spaceFollows = sep === " " || after.startsWith(" ");
+      const newCaret = before.length + inserted.length + (spaceFollows ? 1 : 0);
       ta.focus();
       requestAnimationFrame(() => {
         ta.selectionStart = newCaret;

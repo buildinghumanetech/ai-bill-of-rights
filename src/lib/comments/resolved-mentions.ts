@@ -1,15 +1,20 @@
 /**
  * Write-time mention resolution.
  *
- * `parseMentions` (see `./mentions.ts`) infers *who* an author meant by reading
- * their prose after the fact. That inference has no well-defined answer — six
- * consecutive review rounds each found another body where it emailed the wrong
- * signer, because a bare `@` in a URL or an email address is indistinguishable
- * from a mention without guessing.
+ * There used to be a `parseMentions` that inferred *who* an author meant by
+ * reading their prose after the fact. That inference has no well-defined answer —
+ * six consecutive review rounds each found another body where it emailed the
+ * wrong signer, because a bare `@` in a URL or an email address is
+ * indistinguishable from a mention without guessing. It has since been deleted
+ * outright, along with the 96 tests that pinned its guesses.
  *
  * This module removes the guess. When the author picks a name from the composer
  * typeahead we already know the exact `signerId`; we keep it and submit it with
  * the comment. The server then notifies *that* signer and nobody else.
+ *
+ * `mentionText` below is also what drives mention *highlighting*
+ * (`./render-mentions.tsx`), so a comment shows exactly the mentions it
+ * delivered. A hand-typed name notifies nobody and is styled as nobody.
  *
  * Two functions, both pure and both deliberately using exact string containment
  * rather than pattern matching:

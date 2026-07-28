@@ -66,13 +66,15 @@ const COMMENT: ThreadedComment = {
   score: 0,
   myVote: null,
   myReport: false,
+  // This body mentions nobody. Highlighting reads these rows, not the prose.
+  mentionedSignerIds: [],
   replies: [],
 };
 
-function renderNode({ isAdmin = false } = {}) {
+function renderNode({ isAdmin = false, comment = COMMENT } = {}) {
   return render(
     <CommentNode
-      comment={COMMENT}
+      comment={comment}
       viewerSignerId="sig-me"
       isAdmin={isAdmin}
       signersForAdmin={isAdmin ? ADMIN_SIGNERS : []}
@@ -318,5 +320,41 @@ describe("CommentNode reply mention wiring", () => {
 
     toggle();
     expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("");
+  });
+});
+
+describe("CommentNode mention highlighting", () => {
+  /** The highlight spans in the rendered body, by their text. */
+  function highlighted(): string[] {
+    return Array.from(document.querySelectorAll("p .bg-blue-50")).map(
+      (el) => el.textContent ?? "",
+    );
+  }
+
+  it("does not style a name the author typed by hand", () => {
+    // The decision this whole change implements: a hand-typed name notifies
+    // nobody, so it must not LOOK like it notified anybody. Styling it was a
+    // promise the delivery path never kept — the reader could not tell a real
+    // mention from a string that merely looked like one.
+    renderNode({
+      comment: { ...COMMENT, body: "thanks @Alice Nguyen", mentionedSignerIds: [] },
+    });
+
+    expect(screen.getByText("thanks @Alice Nguyen")).toBeTruthy();
+    expect(highlighted()).toEqual([]);
+  });
+
+  it("styles a name the author picked from the typeahead", () => {
+    // Same body, same signers — only the stored rows differ. That is the entire
+    // input to highlighting now, which is what keeps display and delivery honest.
+    renderNode({
+      comment: {
+        ...COMMENT,
+        body: "thanks @Alice Nguyen",
+        mentionedSignerIds: ["sig-alice"],
+      },
+    });
+
+    expect(highlighted()).toEqual(["@Alice Nguyen"]);
   });
 });
