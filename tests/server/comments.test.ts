@@ -402,9 +402,21 @@ describe("write-time mention resolution (data layer)", () => {
 
   /**
    * Mirror of the notification block in `submitCommentAction`: resolve, drop
-   * self-mentions, insert rows. Kept in the test rather than exercising the
-   * action itself because that path needs Clerk and Resend; what matters here is
-   * that the ids reaching `comment_mentions` come from the composer.
+   * record EVERY mention, and report the mailed subset separately. The
+   * self-filter is delivery-only: a self-mention gets a row (highlighting reads
+   * the rows) but no email.
+   *
+   * Kept in the test rather than exercising the action itself because that path
+   * needs Clerk and Resend; what matters here is that the ids reaching
+   * `comment_mentions` come from the composer.
+   *
+   * KNOWN WEAKNESS OF A MIRROR: it drifts, silently. This docstring described
+   * "drop self-mentions, insert rows" for a while after the action stopped doing
+   * that, and the mirror kept the old behaviour green — which is how the
+   * self-mention bug hid here. A mirror also cannot test *when* the action
+   * writes, and the ordering of that write is what makes highlighting correct.
+   * The fix is a real `submitCommentAction` harness; until then, treat agreement
+   * between this helper and the action as unverified.
    */
   async function recordMentions(
     db: TestDb,
