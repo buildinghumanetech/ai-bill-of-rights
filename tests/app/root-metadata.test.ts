@@ -4,6 +4,7 @@ import {
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_TITLE,
+  getSiteUrl,
 } from "@/lib/site-metadata";
 
 // The root layout pulls in fonts, Clerk and global CSS; none of that matters
@@ -31,14 +32,17 @@ import { metadata } from "@/app/layout";
  * than against literals, and go red if anyone re-inlines it.
  */
 describe("root metadata", () => {
-  it("sets metadataBase so relative OG image URLs never resolve to a *.vercel.app host", () => {
+  it("sets metadataBase from the shared helper, not a re-derived origin", () => {
+    // Compare against `getSiteUrl()` rather than re-deriving from the env var.
+    // The helper has a fallback chain this file has no business duplicating —
+    // it prefers VERCEL_URL off-production, and degrades an unparseable value
+    // to the production origin. A hand-rolled expectation disagreed with it in
+    // both cases, so the test failed on a *correctly behaving* build.
+    // `tests/lib/site-metadata.test.ts` owns that chain; this file only proves
+    // the layout goes through it.
     const base = metadata.metadataBase;
     if (!(base instanceof URL)) throw new Error("metadataBase is not a URL");
-    expect(base.origin).toBe(
-      process.env.NEXT_PUBLIC_SITE_URL
-        ? new URL(process.env.NEXT_PUBLIC_SITE_URL).origin
-        : "https://ai-for-people.org",
-    );
+    expect(base.origin).toBe(new URL(getSiteUrl()).origin);
   });
 
   it("comes from the shared helper rather than a hand-rolled literal", () => {

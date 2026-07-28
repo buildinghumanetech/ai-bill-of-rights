@@ -1,5 +1,88 @@
 # Branch Progress: sparkle/agent-0f1d4d02-0724-494b-b81b-0c7e20d30a3c
 
+## Progress Update as of 2026-07-27 13:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Read roborev job 110, the review of the `origin/main` merge commit (`0db264e`),
+which had been left unread when PR #54 landed. It found a real share-card
+regression that the merge itself introduced, plus three smaller issues; all four
+are now fixed. `/about` and `/resources/[slug]` had been unfurling as bare text
+cards since the merge — on a branch whose entire purpose was share-surface
+quality. Suite is 81 files / 868 tests passing, `tsc --noEmit` clean.
+
+### Detail of changes made:
+
+- **The regression (Medium).** Before the merge, `/about` and
+  `/resources/[slug]` defined no `openGraph` at all, so Next's shallow merge
+  handed them the root's card *including* `images: ["/api/og"]` and
+  `summary_large_image`. The merge adopted main's `buildPageMetadata()` at both
+  call sites; that helper defines its own `openGraph` with no images and
+  `twitter.card: "summary"`, which **replaces** the root block wholesale. Net
+  effect: adopting the helper silently cost both routes their picture. Fixed in
+  `src/lib/site-metadata.ts` by defaulting `imageUrl` to `OG_IMAGE_URL`, so a
+  page can only lose the site card by deliberately passing a different one.
+  This is the correct place for the fix rather than the two call sites — it
+  makes the safe thing automatic for routes added later.
+- The contract change is deliberate and reverses a test main wrote
+  (`tests/lib/site-metadata.test.ts`, "upgrades to a large image card only when
+  an image is supplied"). That test was written when the root had **no** image
+  either, so there was nothing to fall back to. There is now. The replacement
+  test records that reasoning inline so the next reader doesn't "restore" it.
+- **Scorecard routes routed through `buildPageMetadata` (Low).** Both
+  `src/app/scorecard/page.tsx` and `src/app/scorecard/[slug]/page.tsx`
+  hand-wrote their metadata: dropping `openGraph.siteName`, and each keeping a
+  private `process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org"`.
+  That local fallback ignores `VERCEL_URL`, so **preview deploys advertised
+  production URLs and production OG images**. Both now use `getSiteUrl()`.
+  Required widening the helper: `ogType` accepts `"article"`, and a new optional
+  `url` sets `og:url`. `url` is safe here in a way it is not on the root — the
+  root's hazard is *inheritance*, and a page stating its own url is the correct
+  use. `robots`/`alternates` stay spread at the call sites.
+- `/scorecard/[slug]`'s title hardcoded `"AI Bill of Rights"` — one word off
+  `SITE_NAME` (`"The AI Bill of Rights"`), exactly the drift the module exists
+  to stop. Now `${entry.company} — ${SITE_NAME} Scorecard`. Its not-found branch
+  returned a bare `{ title }`, which defines no `openGraph` and so unfurled as
+  **the homepage**; it now gets a real card.
+- **Guard widened (Low).** `tests/app/route-metadata.test.ts` covered three
+  routes and missed the two scorecard ones — the only two that failed its
+  assertions. Both added, and `expectOwnCard` now requires an OG image and
+  `summary_large_image`.
+- **`tests/app/root-metadata.test.ts` (Low).** Its `metadataBase` assertion
+  re-derived the expected origin from `NEXT_PUBLIC_SITE_URL`, duplicating a
+  fallback chain it does not own. It disagreed with `getSiteUrl()` in two cases
+  the helper explicitly handles (preview `VERCEL_URL`; an unparseable value,
+  where `new URL()` *inside the test* throws) — i.e. it failed on a correctly
+  behaving build. Now compares against `getSiteUrl()` directly.
+
+### Potential concerns to address:
+
+- **Mutation testing caught a hole in my own new guard, and this is the lesson
+  worth keeping.** The first version asserted `images` was defined and had
+  length 1. Reverting the helper fix produces
+  `[{ url: undefined, width: 1200, height: 630 }]` — a defined array of length
+  one — so `/about` stayed **green against the exact regression the test was
+  written to catch**; only one unrelated test went red. The assertion now looks
+  inside at `ogImage.url`. Re-run under mutation, all five imageless routes go
+  red and restore to green. A test that asserts a container's shape rather than
+  its contents is not a guard.
+- Five findings from the earlier batch remain open and unfixed (see the
+  2026-07-27 08:45 entry): the `hasRootGuard` ordering hole, the line-anchored
+  required-`db` detector, the false `src/lib/db/lazy.ts` docstring, the optional
+  `whyISigned` prop, and the strict `=== null` no-op guard. None is live
+  exposure; the ordering hole is latent because every current action rejects on
+  the line immediately following its `auth()` call.
+- The route inventory in `src/lib/site-metadata.ts`'s docstring went stale once
+  (it claimed three routes when the branch had five). It is now duplicated in
+  `tests/app/route-metadata.test.ts`, which enumerates the same set — but
+  neither is generated, so a sixth route can still be added without either
+  noticing. Driving the suite off a glob of `src/app/**/page.tsx`, the way
+  `tests/server/actions.guarded.test.ts` already does for server actions, is the
+  real fix.
+
+---
+
 ## Progress Update as of 2026-07-27 09:15 Pacific
 *(Most recent updates at top)*
 

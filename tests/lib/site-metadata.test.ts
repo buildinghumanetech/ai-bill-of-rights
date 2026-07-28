@@ -264,11 +264,28 @@ describe("buildPageMetadata", () => {
     }
   });
 
-  it("upgrades to a large image card only when an image is supplied", () => {
+  // This asserted `card: "summary"` and no images for a page that supplies no
+  // image of its own. That was written when the root had no image either, so
+  // there was nothing to fall back TO. There is now, and the old contract had
+  // a sharp edge: a route that previously defined no `openGraph` at all was
+  // *inheriting* the root card, so merely adopting this helper silently
+  // downgraded it to a bare text card. `/about` and `/resources/[slug]` both
+  // regressed exactly that way. Falling back to the site card means opting
+  // into the helper can never cost a route its picture.
+  it("falls back to the site card so no route ships an imageless preview", () => {
     const plain = buildPageMetadata({ title: "T", description: "D" });
-    expect((plain.twitter as { card?: string }).card).toBe("summary");
-    expect((plain.openGraph as { images?: unknown }).images).toBeUndefined();
+    expect((plain.openGraph as { images?: unknown }).images).toEqual([
+      { url: OG_IMAGE_URL, width: 1200, height: 630 },
+    ]);
+    expect((plain.twitter as { card?: string }).card).toBe(
+      "summary_large_image",
+    );
+    expect((plain.twitter as { images?: unknown }).images).toEqual([
+      OG_IMAGE_URL,
+    ]);
+  });
 
+  it("prefers the page's own image over the site card", () => {
     const withImage = buildPageMetadata({
       title: "T",
       description: "D",
