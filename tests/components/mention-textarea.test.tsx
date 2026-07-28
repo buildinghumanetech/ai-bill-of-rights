@@ -215,13 +215,8 @@ describe("MentionTextarea write-time resolution", () => {
       const inserted = mentionText("Alice Nguyen");
       // One space after the mention, not two: `after` already began with one, so
       // `selectSuggestion` adds none. Picking at the end of the text is the other
-      // case, covered by the tests above.
-      //
-      // NOT covered, and deliberately so: `after` beginning with punctuation.
-      // "hey @Ali, thanks" still becomes "@Alice Nguyen , thanks", because the
-      // condition is a bare leading space rather than a punctuation class.
-      // Choosing that class is typography, not a defect fix — see the comment in
-      // `selectSuggestion`.
+      // case, covered by the tests above; punctuation is covered by the case
+      // below.
       expect(ta.value).toBe("hey @Alice Nguyen and more");
       // Just past the mention and the space that follows it — where the author's
       // next keystroke goes, which is well short of `value.length`.
@@ -231,6 +226,29 @@ describe("MentionTextarea write-time resolution", () => {
     } finally {
       raf.mockRestore();
     }
+  });
+
+  it("still spaces before punctuation, which is accepted for now", () => {
+    // ACCEPTED OUTPUT, NOT A DESIRED ONE. `sep` is gated on `after` starting with
+    // a space, so picking before punctuation leaves "@Alice Nguyen , thanks".
+    // Gating on a punctuation class would fix it, but picking which characters
+    // belong in that class is a typography decision nobody has made.
+    //
+    // This is asserted rather than left as a prose note so that the decision has
+    // teeth: whoever makes the typography call gets a loud, obvious failure here
+    // instead of a comment that quietly became untrue.
+    //
+    // Measured, so the cost of that call is known rather than guessed: gating
+    // `sep` on `/^[\s,.;:!?)]/` instead of `after.startsWith(" ")` fails THIS
+    // assertion and no other in the suite. One line, one test.
+    render(<Harness onResolved={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "hey @Ali, thanks", selectionStart: 8 },
+    });
+    fireEvent.mouseDown(screen.getByRole("option", { name: "@Alice Nguyen" }));
+
+    expect(textareaValue()).toBe("hey @Alice Nguyen , thanks");
   });
 
   it("clears its picks when the parent resets the body", () => {

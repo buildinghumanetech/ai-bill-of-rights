@@ -169,20 +169,12 @@ export function MentionTextarea({
     //
     // The trailing space is deliberately NOT part of `mentionText`: it is a
     // typing affordance for the composer, not part of what anything matches on.
-    // It is also conditional, but only on the `after` side: picking mid-text
-    // where `after` already starts with a space would otherwise leave a visible
-    // double space behind.
-    //
-    // Bounded claim, because there are two other sources of an ugly gap and
-    // neither is handled here:
-    //   - `inserted` itself ending in a space, when `displayName` is padded. That
-    //     is the `"agreed @Padded Name  "` value pinned in
-    //     `tests/components/comment-node.mentions.test.tsx`, and it goes away with
-    //     the deferred `mentionText` trim rather than with a wider condition here.
-    //   - `after` starting with punctuation (`"hey @Ali, thanks"`), which still
-    //     yields `"@Alice Nguyen , thanks"`. Gating on a punctuation class would
-    //     fix it, but that is a typography decision rather than a defect fix, so
-    //     it is left alone deliberately.
+    // `sep` guards exactly ONE source of a doubled space: `after` already
+    // starting with one. Two others are live and out of scope here — a padded
+    // `displayName` (waits on the deferred `mentionText` trim) and `after`
+    // starting with punctuation (a typography call nobody has made). Both are
+    // asserted by tests that explain them at their own sites; deliberately not
+    // restated here, so there is one copy to keep true rather than four.
     const inserted = mentionText(signer.displayName);
     const sep = after.startsWith(" ") ? "" : " ";
     const newValue = `${before}${inserted}${sep}${after}`;
