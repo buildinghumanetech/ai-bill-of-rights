@@ -96,11 +96,13 @@ const fmt = (n: number) => n.toLocaleString();
 /**
  * How many signer chips the momentum panel renders. Three sit on one line at
  * desktop width; more wrap into a ragged block that reads as clutter rather
- * than as proof. Callers deliberately pass a *longer* sample than this so that
- * signers with a blank display name can be filtered out without shrinking the
- * row — see `loadSignerSample` in `src/app/page.tsx`.
+ * than as proof.
+ *
+ * Exported so callers can size their query off it: the panel drops signers with
+ * a blank display name, so a caller must over-fetch or two anonymous signers
+ * collapse the row to a single chip. See `loadSignerSample` in `src/app/page.tsx`.
  */
-const RECENT_SIGNER_CHIPS = 3;
+export const RECENT_SIGNER_CHIPS = 3;
 
 /** A signer shown as proof-of-quality while the raw count is still small. */
 export type MomentumSigner = {

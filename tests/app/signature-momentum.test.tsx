@@ -168,7 +168,7 @@ describe("SignatureMomentumPanel", () => {
     // The 4th and 5th of an over-pulled sample never render.
     expect(copy).not.toContain("Katherine Johnson");
     expect(copy).not.toContain("Barbara Liskov");
-    expect(html.match(/<li /g) ?? []).toHaveLength(3);
+    expect(html.match(/<li[ >]/g) ?? []).toHaveLength(3);
   });
 
   it("skips signers with a blank display name without shrinking the row", () => {
@@ -176,12 +176,17 @@ describe("SignatureMomentumPanel", () => {
       { displayName: "  ", affiliation: null, locationText: null },
       ...sample,
     ];
+    const html = render(
+      <SignatureMomentumPanel count={SMALL_COUNT} sample={withBlanks} />,
+    );
     const copy = text(
       <SignatureMomentumPanel count={SMALL_COUNT} sample={withBlanks} />,
     );
     expect(copy).toContain("Ada Lovelace");
     expect(copy).toContain("Alan Turing");
     expect(copy).not.toContain("Katherine Johnson");
+    // The point of the over-pull: the blank one is dropped, the row is still full.
+    expect(html.match(/<li[ >]/g) ?? []).toHaveLength(3);
   });
 
   it("renders without a signer sample", () => {

@@ -32,6 +32,14 @@ const proposed = (commentCount: number) => (
   <FeedbackInvite variant="proposed" proposedVersion="1.1" commentCount={commentCount} />
 );
 
+/**
+ * Class assertions are scoped to the element under test. A bare
+ * `html.toContain("text-center")` would fire on any nested element picking up
+ * the class, which is a different change than the one being guarded.
+ */
+const classesOf = (html: string, tag: string) =>
+  new RegExp(`<${tag}[^>]*\\sclass="([^"]*)"`).exec(html)?.[1] ?? "";
+
 describe("FeedbackInvite (current)", () => {
   it("uses no em dashes", () => {
     expect(text(current(0))).not.toContain("—");
@@ -40,10 +48,10 @@ describe("FeedbackInvite (current)", () => {
 
   it("centers the whole box, paragraph included", () => {
     const html = render(current(0));
-    expect(html).toContain("text-center");
+    expect(classesOf(html, "section")).toContain("text-center");
     // A width-capped paragraph stays pinned to the left edge of a centered box
     // unless it is also horizontally centered.
-    const paragraph = /<p class="([^"]*)"/.exec(html)?.[1] ?? "";
+    const paragraph = classesOf(html, "p");
     expect(paragraph).toContain("max-w-3xl");
     expect(paragraph).toContain("mx-auto");
   });
@@ -61,9 +69,13 @@ describe("FeedbackInvite (current)", () => {
   it("offers the draft as a text link, not a button-styled control", () => {
     const html = render(current(0));
     expect(text(current(0))).toContain("Mark up the v1.1 draft");
-    expect(html).toContain("underline");
-    // The old filled pill button is gone.
-    expect(html).not.toContain("bg-blue-600");
+
+    const button = classesOf(html, "button");
+    expect(button).toContain("underline");
+    // The old filled pill button is gone: no fill, no pill.
+    expect(button).not.toContain("bg-blue-600");
+    expect(button).not.toContain("rounded-full");
+
     expect(text(current(0))).not.toContain("Give feedback on");
   });
 
@@ -73,8 +85,8 @@ describe("FeedbackInvite (current)", () => {
     // The old empty state is gone entirely.
     expect(empty).not.toContain("No comments yet");
 
-    expect(text(current(12))).toContain("12 comments already.");
-    expect(text(current(1))).toContain("1 comment already.");
+    expect(text(current(12))).toContain("12 comments already on it.");
+    expect(text(current(1))).toContain("1 comment already on it.");
   });
 });
 
@@ -92,6 +104,6 @@ describe("FeedbackInvite (proposed)", () => {
     expect(text(proposed(12))).toContain("Select any text");
     expect(text(proposed(12))).toContain("Drag across a sentence. On a phone, press and hold.");
     expect(html).toContain("sm:grid-cols-3");
-    expect(html).not.toContain("text-center");
+    expect(classesOf(html, "section")).not.toContain("text-center");
   });
 });

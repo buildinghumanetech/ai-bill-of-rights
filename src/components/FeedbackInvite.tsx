@@ -76,7 +76,7 @@ export function FeedbackInvite(props: Props) {
           </button>
           {commentCount > 0 && (
             <p className="mt-2 text-sm text-zinc-600">
-              {`${commentCountLabel(commentCount)} already.`}
+              {`${commentCountLabel(commentCount)} already on it.`}
             </p>
           )}
         </div>
