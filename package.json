@@ -12,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "sync-versions": "tsx scripts/sync-versions.ts",
+    "anchors:snapshot": "tsx scripts/update-anchor-map.ts",
     "postbuild": "tsx scripts/sync-versions.ts"
   },
   "dependencies": {
