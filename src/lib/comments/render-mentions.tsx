@@ -73,30 +73,55 @@ export function renderBodyWithMentions(
  * Being ASCII also removes the need to read whole code points on this edge: a
  * lone surrogate can never match, which is the same answer a full astral code
  * point would give.
+ *
+ * KNOWN COST of including `.`, `%` and `+`: a mention immediately after one of
+ * them is suppressed, so `Thanks.@Erik` renders plain. `.` is the likely one in
+ * real prose. Accepted rather than trimmed, because under-highlighting is the
+ * safe direction and dropping `.` would let `first.last@Erik.com` through.
  */
 const EMAIL_LOCAL_CHAR = /[A-Za-z0-9._%+-]/;
 
 /**
  * Characters that mean the mention "runs on" into a longer word on the trailing
- * edge. `\p{M}` catches a grapheme ending in a combining mark (NFD `andré`, or
- * Devanagari `मुझे`); `\p{Pc}` covers `_` and its lookalikes.
+ * edge: ASCII word characters, plus combining marks and connector punctuation in
+ * ANY script. `\p{Pc}` subsumes `_` and its lookalikes.
  *
- * ASCII-only, deliberately, for the same reason as above — see the run-on check
- * below for why the non-ASCII case is handled by name lookup instead.
+ * The ASCII half is deliberate — see the run-on check below for why a
+ * Unicode-wide letter class cannot go here, and how the non-ASCII case is
+ * handled by name lookup instead.
  */
 const RUN_ON_CHAR = /[A-Za-z0-9\p{M}\p{Pc}]/u;
+
+/**
+ * The base character before `index`, skipping any combining marks attached to it.
+ *
+ * NFD `andré@Erik.com` puts U+0301 immediately before the `@`. That is not an
+ * `EMAIL_LOCAL_CHAR`, so testing `body[at - 1]` directly would let the whole
+ * address through and highlight `@Erik` inside it. Walking back to the base `e`
+ * gets the right answer, and it keeps Indic prose working: `मुझे@Erik` resolves
+ * to base `झ`, which is non-ASCII and therefore allowed, exactly like CJK.
+ */
+function baseCharBefore(body: string, index: number): string | undefined {
+  let i = index;
+  while (i > 0 && /\p{M}/u.test(body[i - 1])) i--;
+  if (i <= 0) return undefined;
+  // Decompose before answering, so the two spellings of the same address agree.
+  // Walking back over marks only handles NFD; the NFC spelling of `andré` is a
+  // single precomposed `é`, which is not ASCII and would be read as prose. One
+  // string, two encodings, opposite answers is worse than either answer.
+  return body[i - 1].normalize("NFD")[0];
+}
 
 /** Does a longer known display name also start at this position? */
 function longerNameStartsHere(
   body: string,
   at: number,
   needleLength: number,
-  knownSigners: readonly { id: string; displayName: string }[],
+  knownNeedles: readonly string[],
 ): boolean {
-  return knownSigners.some((s) => {
-    const other = mentionText(s.displayName);
-    return other.length > needleLength && body.startsWith(other, at);
-  });
+  return knownNeedles.some(
+    (other) => other.length > needleLength && body.startsWith(other, at),
+  );
 }
 
 interface MentionRange {
@@ -121,6 +146,10 @@ function findMentionRanges(
   mentionedSignerIds: readonly string[],
 ): MentionRange[] {
   const byId = new Map(knownSigners.map((s) => [s.id, s]));
+  // Computed once rather than per match position: the run-on check below asks
+  // about every known name at every match, which would otherwise rebuild the
+  // whole needle set inside the scan loop.
+  const knownNeedles = knownSigners.map((s) => mentionText(s.displayName));
   const found: MentionRange[] = [];
 
   for (const id of new Set(mentionedSignerIds)) {
@@ -139,7 +168,8 @@ function findMentionRanges(
       // false positive this whole design exists to prevent, pinned on the
       // delivery side in tests/server/comments.test.ts and easy to reintroduce
       // on the display side alone.
-      if (at > 0 && EMAIL_LOCAL_CHAR.test(body[at - 1])) continue;
+      const before = baseCharBefore(body, at);
+      if (before !== undefined && EMAIL_LOCAL_CHAR.test(before)) continue;
 
       // TRAILING EDGE — does the match stop in the middle of something longer?
       // Picking "Erik" and hand-typing "@Erika Anderson" puts "@Erik" inside text
@@ -163,7 +193,7 @@ function findMentionRanges(
       const next = body.codePointAt(at + needle.length);
       const runsOn =
         next !== undefined && RUN_ON_CHAR.test(String.fromCodePoint(next));
-      if (runsOn || longerNameStartsHere(body, at, needle.length, knownSigners)) {
+      if (runsOn || longerNameStartsHere(body, at, needle.length, knownNeedles)) {
         continue;
       }
 
