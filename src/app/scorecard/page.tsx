@@ -7,43 +7,31 @@ import {
   loadAllScorecardEntries,
   STATUS_SHORT_LABELS,
 } from "@/lib/scorecard";
+import { SITE_NAME, buildPageMetadata, getSiteUrl } from "@/lib/site-metadata";
 import { Methodology } from "./Methodology";
 import { STATUS_CLASSES } from "./status-style";
 
-const TITLE = "The AI Bill of Rights Scorecard";
+// Already names the site in prose, so `buildPageMetadata` must not append it.
+const TITLE = `${SITE_NAME} Scorecard`;
 const DESCRIPTION =
   "Where AI companies stand against the nine commitments in the AI Bill of Rights — every assessment traced to a public source, with the date it was checked.";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+// Via getSiteUrl(), not a local `?? "https://ai-for-people.org"`: that copy of
+// the fallback ignored VERCEL_URL, so preview deploys advertised production.
+const SITE_URL = getSiteUrl();
 
 export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
+  ...buildPageMetadata({
+    title: TITLE,
+    description: DESCRIPTION,
+    appendSiteName: false,
+    url: `${SITE_URL}/scorecard`,
+    imageUrl: `${SITE_URL}/api/og/scorecard`,
+  }),
   alternates: { canonical: `${SITE_URL}/scorecard` },
   // Unlisted until the project owner decides to publish. Remove this block
   // (and add the nav link) when the scorecard goes public.
   robots: { index: false, follow: false },
-  openGraph: {
-    type: "website",
-    title: TITLE,
-    description: DESCRIPTION,
-    url: `${SITE_URL}/scorecard`,
-    images: [
-      {
-        url: `${SITE_URL}/api/og/scorecard`,
-        width: 1200,
-        height: 630,
-        alt: TITLE,
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: TITLE,
-    description: DESCRIPTION,
-    images: [`${SITE_URL}/api/og/scorecard`],
-  },
 };
 
 export default function ScorecardIndexPage() {

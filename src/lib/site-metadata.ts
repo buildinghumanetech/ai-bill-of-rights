@@ -9,11 +9,17 @@ import type { Metadata } from "next";
  * the *site* title stands alone with no surrounding context — the tab, the
  * search result, the link-preview card. That is what `SITE_TITLE` is for; keep
  * the two attached there. Note this is not only the homepage: *every route
- * other than `/about`, `/resources/[slug]`, and `/signatories/[id]`* — the only
- * three that define their own metadata — inherits the root's and renders
- * `SITE_TITLE` in the tab and in search. That set is the missing-own-card
- * backlog, and it includes `/bill-of-rights` and `/signatories`, the document
- * itself and the signer directory: the two most shareable pages on the site.
+ * other than `/about`, `/resources/[slug]`, `/signatories/[id]`, `/scorecard`,
+ * and `/scorecard/[slug]`* — the only five that define their own metadata —
+ * inherits the root's and renders `SITE_TITLE` in the tab and in search. That
+ * set is the missing-own-card backlog, and it includes `/bill-of-rights` and
+ * `/signatories`, the document itself and the signer directory: the two most
+ * shareable pages on the site.
+ *
+ * Keep that inventory honest. It went stale once already, when the scorecard
+ * routes landed on a branch while this comment was written against another —
+ * `tests/app/route-metadata.test.ts` now enumerates the same set, so the two
+ * drift together or not at all.
  *
  * Subpage titles are the other case and deliberately do not carry the tagline:
  * "About — The AI Bill of Rights — A People's Demand for Human-Centered AI"
@@ -152,12 +158,19 @@ export function buildPageMetadata({
   description,
   ogType = "website",
   imageUrl,
+  url,
   appendSiteName = true,
 }: {
   title: string;
   description: string;
-  ogType?: "website" | "profile";
+  ogType?: "website" | "profile" | "article";
   imageUrl?: string;
+  /**
+   * Absolute `og:url` for this page. Safe here in a way it is not on the root:
+   * the hazard the root avoids is *inheritance* — one url leaking onto every
+   * route that defines no card. A page stating its own url is the correct use.
+   */
+  url?: string;
   appendSiteName?: boolean;
 }): Metadata {
   if (
@@ -179,9 +192,13 @@ export function buildPageMetadata({
     );
   }
   const title = appendSiteName ? `${pageTitle} — ${SITE_NAME}` : pageTitle;
-  const images = imageUrl
-    ? [{ url: imageUrl, width: 1200, height: 630 }]
-    : undefined;
+  // Fall back to the site card rather than shipping no image. A route that
+  // defines no `openGraph` at all inherits the root's — image included — so
+  // without this default, merely *adopting this helper* would downgrade such a
+  // route to a bare text card. That is not hypothetical: `/about` and
+  // `/resources/[slug]` regressed exactly that way. `/api/og` describes the
+  // document rather than any one page, so it is always a truthful fallback.
+  const image = imageUrl ?? OG_IMAGE_URL;
   return {
     title,
     description,
@@ -190,13 +207,14 @@ export function buildPageMetadata({
       description,
       siteName: SITE_NAME,
       type: ogType,
-      ...(images ? { images } : {}),
+      ...(url ? { url } : {}),
+      images: [{ url: image, width: 1200, height: 630 }],
     },
     twitter: {
-      card: imageUrl ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title,
       description,
-      ...(imageUrl ? { images: [imageUrl] } : {}),
+      images: [image],
     },
   };
 }

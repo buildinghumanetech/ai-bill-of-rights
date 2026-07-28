@@ -11,11 +11,13 @@ import {
   type ScorecardAssessment,
 } from "@/lib/scorecard";
 import { withShareParams } from "@/lib/share/urls";
+import { SITE_NAME, buildPageMetadata, getSiteUrl } from "@/lib/site-metadata";
 import { FictionalBanner, Methodology } from "../Methodology";
 import { StatusPill } from "../StatusPill";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+// Via getSiteUrl(), not a local `?? "https://ai-for-people.org"`: that copy of
+// the fallback ignored VERCEL_URL, so preview deploys advertised production.
+const SITE_URL = getSiteUrl();
 
 export function generateStaticParams() {
   return listScorecardSlugs().map((slug) => ({ slug }));
@@ -28,36 +30,42 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const entry = getScorecardEntry(slug);
-  if (!entry) return { title: "Scorecard entry not found" };
+  if (!entry) {
+    // Even the miss gets a real card. A bare `{ title }` defines no openGraph,
+    // so Next's shallow merge would hand this route the *homepage's* card —
+    // a 404 unfurling as the site's front door.
+    return {
+      ...buildPageMetadata({
+        title: "Scorecard entry not found",
+        description: `This company has no entry in the ${SITE_NAME} Scorecard.`,
+      }),
+      robots: { index: false, follow: false },
+    };
+  }
 
   const n = assessedCount(entry);
   const total = entry.assessments.length;
-  const title = `${entry.company} — AI Bill of Rights Scorecard`;
+  // Names the site in prose via SITE_NAME, so nothing is appended. This used to
+  // hardcode "AI Bill of Rights" — one word off the canonical name, and exactly
+  // the drift buildPageMetadata exists to stop.
+  const title = `${entry.company} — ${SITE_NAME} Scorecard`;
   const description = entry.fictional
     ? `${entry.company} is a fictional example used to demonstrate the scorecard format.`
     : `${n} of ${total} commitments assessed, each traced to a public source. Last reviewed ${entry.lastReviewed}.`;
   const url = `${SITE_URL}/scorecard/${entry.slug}`;
-  const image = `${SITE_URL}/api/og/scorecard/${entry.slug}`;
 
   return {
-    title,
-    description,
+    ...buildPageMetadata({
+      title,
+      description,
+      appendSiteName: false,
+      ogType: "article",
+      url,
+      imageUrl: `${SITE_URL}/api/og/scorecard/${entry.slug}`,
+    }),
     alternates: { canonical: url },
     // Unlisted until the project owner decides to publish.
     robots: { index: false, follow: false },
-    openGraph: {
-      type: "article",
-      title,
-      description,
-      url,
-      images: [{ url: image, width: 1200, height: 630, alt: title }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [image],
-    },
   };
 }
 

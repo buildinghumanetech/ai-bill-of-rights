@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { getResource, listResourceSlugs } from "@/lib/resources";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site-metadata";
+import { getScorecardEntry, listScorecardSlugs } from "@/lib/scorecard";
+import {
+  OG_IMAGE_URL,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+} from "@/lib/site-metadata";
 
 /**
  * Guards the shallow-merge hazard at the route level.
@@ -88,7 +94,24 @@ function expectOwnCard(meta: {
   // ...while still keeping the fields a child block would otherwise drop.
   expect(og!.siteName).toBe(SITE_NAME);
   expect(og!.type).toBeDefined();
-  expect(tw!.card).toBeDefined();
+
+  // Every route must ship a picture. Defining an own `openGraph` *replaces* the
+  // root's, so a route that had been inheriting the site card loses it the
+  // moment it defines one — which is how /about and /resources/[slug] silently
+  // became bare text cards. `summary` renders a thumbnail even when an image is
+  // present, so the card type is part of the same assertion.
+  //
+  // Assert the URL itself, not just that `images` exists: an entry of
+  // `[{ url: undefined, width: 1200, height: 630 }]` is a defined array of
+  // length 1 and satisfies both of those weaker checks while shipping no
+  // picture at all. Dropping the helper's fallback produces exactly that shape,
+  // and this file stayed green against it until the assertion looked inside.
+  expect(og!.images, "route ships no OG image — it will unfurl as text").toBeDefined();
+  expect(og!.images).toHaveLength(1);
+  const [ogImage] = og!.images as Array<{ url?: unknown }>;
+  expect(typeof ogImage.url, "OG image has no url").toBe("string");
+  expect(String(ogImage.url).length).toBeGreaterThan(0);
+  expect(tw!.card).toBe("summary_large_image");
 }
 
 describe("/about metadata", () => {
@@ -153,6 +176,57 @@ describe("/signatories/[id] metadata", () => {
 
     expectOwnCard(meta);
     expect(meta.title).toBe(`Signer not found — ${SITE_NAME}`);
-    expect((meta.openGraph as Og).images).toBeUndefined();
+    // No signer, so no signer card — but it falls back to the site image
+    // rather than to nothing. A missing-signer link still unfurls as the
+    // project, which is the most useful thing a dead link can do.
+    expect((meta.openGraph as Og).images).toEqual([
+      { url: OG_IMAGE_URL, width: 1200, height: 630 },
+    ]);
+  });
+});
+
+// These two routes are `robots: noindex` while the scorecard is unpublished,
+// which suppresses *search*, not link previews — a pasted URL still unfurls.
+// They were also the routes this file used to miss entirely, and the only two
+// that failed its assertions when it was widened to cover them.
+describe("/scorecard metadata", () => {
+  it("carries its own share card", async () => {
+    const { metadata } = await import("@/app/scorecard/page");
+    expectOwnCard(metadata);
+    expect(metadata.title).toBe(`${SITE_NAME} Scorecard`);
+    expect((metadata.openGraph as Og).images).toEqual([
+      expect.objectContaining({ url: expect.stringContaining("/api/og/scorecard") }),
+    ]);
+  });
+
+  it("stays out of the index while unpublished", async () => {
+    const { metadata } = await import("@/app/scorecard/page");
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+});
+
+describe("/scorecard/[slug] metadata", () => {
+  it("carries its own share card for a real entry", async () => {
+    const [slug] = listScorecardSlugs();
+    expect(slug, "no scorecard entries to test against").toBeDefined();
+    const entry = getScorecardEntry(slug)!;
+
+    const { generateMetadata } = await import("@/app/scorecard/[slug]/page");
+    const meta = await generateMetadata({ params: Promise.resolve({ slug }) });
+
+    expectOwnCard(meta);
+    // Used to hardcode "AI Bill of Rights" — one word off SITE_NAME.
+    expect(meta.title).toBe(`${entry.company} — ${SITE_NAME} Scorecard`);
+    expect((meta.openGraph as Og).type).toBe("article");
+  });
+
+  it("carries its own share card for an unknown slug", async () => {
+    const { generateMetadata } = await import("@/app/scorecard/[slug]/page");
+    const meta = await generateMetadata({
+      params: Promise.resolve({ slug: "does-not-exist" }),
+    });
+
+    expectOwnCard(meta);
+    expect(meta.title).toBe(`Scorecard entry not found — ${SITE_NAME}`);
   });
 });
