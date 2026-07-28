@@ -94,29 +94,64 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
     return { ok: false, error: (err as Error).message };
   }
 
-  // Fire mention emails asynchronously — don't let email failures block the response
-  void (async () => {
+  // Resolve and RECORD the mentions synchronously, before returning.
+  //
+  // The rows are not just an audit trail — `renderBodyWithMentions` highlights
+  // from them, so a row that lands after the response means the author's own
+  // comment shows the name they just picked as plain text until some later
+  // refresh. The client calls `router.refresh()` the moment this action
+  // resolves, so a deferred insert loses that race nearly every time. Rows are
+  // cheap and local; only the Clerk lookups and the email send are slow, and
+  // those stay in the background block below.
+  //
+  // Notifications come only from write-time resolution: the composer knows
+  // exactly which signer the author picked. There is deliberately no prose-
+  // parsing fallback — inferring a recipient from free text repeatedly emailed
+  // the wrong person (see the header of resolved-mentions.ts), and a fallback
+  // selected by the *client* would just be an opt-out from the containment
+  // guarantee, since omitting the marker is trivial.
+  let knownSigners: Awaited<ReturnType<typeof listSignersForMention>> = [];
+  let mentions: ReturnType<typeof resolveSubmittedMentions> = [];
+  if (!submittedMentions.fromComposer) {
+    console.warn(
+      "[mention] Submission carried no resolved mentions — notifying nobody",
+      { commentId: insertedCommentId },
+    );
+  } else {
     try {
-      // Notifications come only from write-time resolution: the composer knows
-      // exactly which signer the author picked. There is deliberately no prose-
-      // parsing fallback — inferring a recipient from free text repeatedly
-      // emailed the wrong person (see the header of resolved-mentions.ts), and a
-      // fallback selected by the *client* would just be an opt-out from the
-      // containment guarantee, since omitting the marker is trivial.
-      if (!submittedMentions.fromComposer) {
-        console.warn(
-          "[mention] Submission carried no resolved mentions — notifying nobody",
-          { commentId: insertedCommentId },
-        );
-        return;
-      }
-      const knownSigners = await listSignersForMention(db);
-      const mentions = resolveSubmittedMentions(
+      knownSigners = await listSignersForMention(db);
+      mentions = resolveSubmittedMentions(
         body,
         submittedMentions.signerIds,
         knownSigners,
       );
-      // Filter self-mentions
+      if (mentions.length > 0) {
+        // Every resolved mention gets a row, INCLUDING a self-mention. The row
+        // means "this was a mention", which is true when you name yourself, and
+        // it is what the comment renders from — so dropping it here would make
+        // the composer and the posted comment disagree about the author's own
+        // pick. Suppressing the *email* to yourself is a separate delivery
+        // decision, made below.
+        await db
+          .insert(commentMentions)
+          .values(
+            mentions.map((m) => ({
+              commentId: insertedCommentId,
+              mentionedSignerId: m.signerId,
+            })),
+          )
+          .onConflictDoNothing();
+      }
+    } catch (err) {
+      // A failed row write must not fail the comment — it is already stored.
+      console.error("[mention] Failed to record mention rows:", err);
+    }
+  }
+
+  // Fire mention emails asynchronously — don't let email failures block the response
+  void (async () => {
+    try {
+      // Self-mentions are recorded but never mailed: you know what you wrote.
       const others = mentions.filter((m) => m.signerId !== effectiveSignerId);
       if (others.length === 0) return;
 
@@ -134,11 +169,8 @@ export async function submitCommentAction(formData: FormData): Promise<{ ok: boo
       await Promise.all(
         others.map(async (mention) => {
           try {
-            // Insert mention row (ignore unique-constraint violations)
-            await db.insert(commentMentions).values({
-              commentId: insertedCommentId,
-              mentionedSignerId: mention.signerId,
-            }).onConflictDoNothing();
+            // The mention row is already written above, synchronously, so the
+            // comment renders correctly whether or not this email succeeds.
 
             // Fetch the mentioned signer's clerkUserId to get email
             const mentionedRow = await db

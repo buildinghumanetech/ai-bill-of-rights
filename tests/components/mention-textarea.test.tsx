@@ -45,6 +45,39 @@ function type(text: string) {
   return ta;
 }
 
+/**
+ * Run `body` with `requestAnimationFrame` queueing instead of firing.
+ *
+ * `selectSuggestion` defers its caret write to a frame because React has to
+ * commit the new value first. So the frame must land AFTER the commit: running
+ * the callback inline sets the caret on the *old* value, and jsdom then resets it
+ * to the end when the new value commits — indistinguishable from the caret-losing
+ * regression these tests exist to catch. `flush()` runs the queued callbacks at
+ * the point the real browser would, and asserts at least one was scheduled.
+ */
+function withQueuedFrames(body: (flush: () => void) => void): void {
+  const frames: FrameRequestCallback[] = [];
+  const raf = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+  try {
+    body(() => {
+      // Assert a frame was scheduled rather than silently flushing nothing: an
+      // empty queue would let every caret assertion below pass against whatever
+      // jsdom happened to leave the caret at.
+      expect(frames.length).toBeGreaterThan(0);
+      act(() => {
+        frames.splice(0).forEach((cb) => cb(0));
+      });
+    });
+  } finally {
+    raf.mockRestore();
+  }
+}
+
 /** Last set of mentions the parent was told about. */
 function lastCall(spy: ReturnType<typeof vi.fn>): ResolvedMention[] {
   expect(spy).toHaveBeenCalled();
@@ -177,20 +210,8 @@ describe("MentionTextarea write-time resolution", () => {
     // lands. So this pins the caret landing on the mention rather than at the end
     // of the text, which is the regression a reader would actually notice.
     //
-    // The write happens inside a requestAnimationFrame callback. Queue the
-    // callbacks rather than running them inline: the frame has to land AFTER
-    // React commits the new value, which is the entire reason the production code
-    // defers it. Running it inline sets the caret on the old value and jsdom then
-    // resets it to the end when the new value is committed — which is exactly
-    // what a caret-losing regression looks like, so the ordering matters here.
-    const frames: FrameRequestCallback[] = [];
-    const raf = vi
-      .spyOn(window, "requestAnimationFrame")
-      .mockImplementation((cb: FrameRequestCallback) => {
-        frames.push(cb);
-        return frames.length;
-      });
-    try {
+    // The rAF ordering this depends on is explained on `withQueuedFrames`.
+    withQueuedFrames((flush) => {
       render(<Harness onResolved={vi.fn()} />);
 
       // Mid-text, with the caret inside the mention — `detectMentionQuery` reads
@@ -200,55 +221,49 @@ describe("MentionTextarea write-time resolution", () => {
       fireEvent.change(screen.getByRole("textbox"), {
         target: { value: "hey @Ali and more", selectionStart: 8 },
       });
-      const before = frames.length;
       fireEvent.mouseDown(screen.getByRole("option", { name: "@Alice Nguyen" }));
-      // `fireEvent` has flushed the commit by now, so this is the real ordering.
-      // Assert the delta rather than the total: anything else in the tree
-      // scheduling a frame during this commit has nothing to do with the caret,
-      // and should not fail this test with a message pointing at rAF.
-      expect(frames.length).toBeGreaterThan(before);
-      act(() => {
-        frames.forEach((cb) => cb(0));
-      });
+      flush();
 
       const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
       const inserted = mentionText("Alice Nguyen");
       // One space after the mention, not two: `after` already began with one, so
       // `selectSuggestion` adds none. Picking at the end of the text is the other
-      // case, covered by the tests above; punctuation is covered by the case
-      // below.
+      // case, covered by the tests above; punctuation by the case below.
       expect(ta.value).toBe("hey @Alice Nguyen and more");
       // Just past the mention and the space that follows it — where the author's
       // next keystroke goes, which is well short of `value.length`.
       expect(ta.selectionStart).toBe(ta.value.indexOf(inserted) + inserted.length + 1);
       expect(ta.selectionStart).toBeLessThan(ta.value.length);
       expect(ta.selectionStart).toBe(ta.selectionEnd);
-    } finally {
-      raf.mockRestore();
-    }
+    });
   });
 
-  it("still spaces before punctuation, which is accepted for now", () => {
-    // ACCEPTED OUTPUT, NOT A DESIRED ONE. `sep` is gated on `after` starting with
-    // a space, so picking before punctuation leaves "@Alice Nguyen , thanks".
-    // Gating on a punctuation class would fix it, but picking which characters
-    // belong in that class is a typography decision nobody has made.
+  it("adds no space when the pick is followed by punctuation", () => {
+    // `sep` is gated on a punctuation class, not on a bare leading space, so
+    // picking before a comma reads as prose: "@Alice Nguyen, thanks".
     //
-    // This is asserted rather than left as a prose note so that the decision has
-    // teeth: whoever makes the typography call gets a loud, obvious failure here
-    // instead of a comment that quietly became untrue.
-    //
-    // Measured, so the cost of that call is known rather than guessed: gating
-    // `sep` on `/^[\s,.;:!?)]/` instead of `after.startsWith(" ")` fails THIS
-    // assertion and no other in the suite. One line, one test.
-    render(<Harness onResolved={vi.fn()} />);
+    // The caret moves with that gate and is asserted here for that reason. The
+    // caret only steps over a space when one actually follows; before punctuation
+    // it stays tight against the mention, because the author's next keystroke
+    // belongs before the comma and not after it. Assert the value alone and that
+    // half regresses silently — which is how this case slipped through the first
+    // time it was written down.
+    withQueuedFrames((flush) => {
+      render(<Harness onResolved={vi.fn()} />);
 
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "hey @Ali, thanks", selectionStart: 8 },
+      fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: "hey @Ali, thanks", selectionStart: 8 },
+      });
+      fireEvent.mouseDown(screen.getByRole("option", { name: "@Alice Nguyen" }));
+      flush();
+
+      const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
+      const inserted = mentionText("Alice Nguyen");
+      expect(ta.value).toBe("hey @Alice Nguyen, thanks");
+      // Immediately after the mention — on the comma, not past it.
+      expect(ta.selectionStart).toBe(ta.value.indexOf(inserted) + inserted.length);
+      expect(ta.value[ta.selectionStart]).toBe(",");
     });
-    fireEvent.mouseDown(screen.getByRole("option", { name: "@Alice Nguyen" }));
-
-    expect(textareaValue()).toBe("hey @Alice Nguyen , thanks");
   });
 
   it("clears its picks when the parent resets the body", () => {

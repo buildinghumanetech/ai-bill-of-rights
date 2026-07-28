@@ -3,7 +3,6 @@ import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { comments, signers, versions, commentMentions } from "@/lib/db/schema";
 import { createComment, editComment, deleteComment } from "@/server/comments/core";
-import { parseMentions } from "@/lib/comments/mentions";
 import {
   appendResolvedMentions,
   readSubmittedMentions,
@@ -306,7 +305,7 @@ describe("deleteComment (data layer)", () => {
 });
 
 describe("comment mentions (data layer)", () => {
-  it("parseMentions + insert mention rows when known signers are passed in", async () => {
+  it("resolves a submitted id and inserts the mention row", async () => {
     const { db, versionId, signerId } = await seed();
 
     // Create a second signer to be mentioned
@@ -332,8 +331,9 @@ describe("comment mentions (data layer)", () => {
       body,
     });
 
-    // Simulate what the action does: parse mentions, insert mention rows
-    const mentions = parseMentions(body, knownSigners);
+    // Simulate what the action does: resolve the id the composer submitted
+    // against the stored body, then insert the mention row.
+    const mentions = resolveSubmittedMentions(body, [mentioned.id], knownSigners);
     expect(mentions).toHaveLength(1);
     expect(mentions[0].signerId).toBe(mentioned.id);
 
@@ -402,9 +402,21 @@ describe("write-time mention resolution (data layer)", () => {
 
   /**
    * Mirror of the notification block in `submitCommentAction`: resolve, drop
-   * self-mentions, insert rows. Kept in the test rather than exercising the
-   * action itself because that path needs Clerk and Resend; what matters here is
-   * that the ids reaching `comment_mentions` come from the composer.
+   * record EVERY mention, and report the mailed subset separately. The
+   * self-filter is delivery-only: a self-mention gets a row (highlighting reads
+   * the rows) but no email.
+   *
+   * Kept in the test rather than exercising the action itself because that path
+   * needs Clerk and Resend; what matters here is that the ids reaching
+   * `comment_mentions` come from the composer.
+   *
+   * KNOWN WEAKNESS OF A MIRROR: it drifts, silently. This docstring described
+   * "drop self-mentions, insert rows" for a while after the action stopped doing
+   * that, and the mirror kept the old behaviour green — which is how the
+   * self-mention bug hid here. A mirror also cannot test *when* the action
+   * writes, and the ordering of that write is what makes highlighting correct.
+   * The fix is a real `submitCommentAction` harness; until then, treat agreement
+   * between this helper and the action as unverified.
    */
   async function recordMentions(
     db: TestDb,
@@ -428,16 +440,23 @@ describe("write-time mention resolution (data layer)", () => {
     const mentions = read.fromComposer
       ? resolveSubmittedMentions(body, read.signerIds, known)
       : [];
-    for (const m of mentions.filter((m) => m.signerId !== authorSignerId)) {
+    // EVERY resolved mention gets a row, self-mentions included — the row is
+    // what the comment renders from, so dropping it would unstyle a name the
+    // author picked. The self-filter applies only to the email fan-out, which
+    // is why it is reported separately rather than applied here.
+    if (mentions.length > 0) {
       await db
         .insert(commentMentions)
-        .values({ commentId, mentionedSignerId: m.signerId })
+        .values(
+          mentions.map((m) => ({ commentId, mentionedSignerId: m.signerId })),
+        )
         .onConflictDoNothing();
     }
-    return db
+    const rows = await db
       .select()
       .from(commentMentions)
       .where(eq(commentMentions.commentId, commentId));
+    return { rows, mailed: mentions.filter((m) => m.signerId !== authorSignerId) };
   }
 
   it("notifies exactly the signer the composer resolved", async () => {
@@ -454,7 +473,7 @@ describe("write-time mention resolution (data layer)", () => {
       body,
     });
 
-    const rows = await recordMentions(db, commentId, body, [alice.id], known, signerId);
+    const { rows } = await recordMentions(db, commentId, body, [alice.id], known, signerId);
     expect(rows).toHaveLength(1);
     expect(rows[0].mentionedSignerId).toBe(alice.id);
   });
@@ -473,7 +492,7 @@ describe("write-time mention resolution (data layer)", () => {
       body,
     });
 
-    const rows = await recordMentions(db, commentId, body, [alice.id], [alice], signerId);
+    const { rows } = await recordMentions(db, commentId, body, [alice.id], [alice], signerId);
     expect(rows).toEqual([]);
   });
 
@@ -490,15 +509,16 @@ describe("write-time mention resolution (data layer)", () => {
     });
 
     // Composer resolved and found nothing — no ids submitted, marker still set.
-    const rows = await recordMentions(db, commentId, body, [], [alice], signerId);
+    const { rows } = await recordMentions(db, commentId, body, [], [alice], signerId);
     expect(rows).toEqual([]);
   });
 
   it("notifies nobody when a submission carries no resolution", async () => {
     // No source marker (a hand-rolled POST). There is deliberately no prose
     // fallback: one the client selects by omitting a field would be an opt-out
-    // from the containment guarantee, and `parseMentions` would notify Alice for
-    // a body like `bob!@alice.com`.
+    // from the containment guarantee. The parser that used to provide that
+    // fallback is gone entirely — it notified Alice for a body like
+    // `bob!@alice.com` — so "no resolution" now means "nobody", full stop.
     const { db, versionId, signerId } = await seed();
     const alice = await addSigner(db, "u_alice_f", "Alice");
 
@@ -512,8 +532,11 @@ describe("write-time mention resolution (data layer)", () => {
 
     const read = readSubmittedMentions(new FormData());
     expect(read.fromComposer).toBe(false);
-    // The prose still names Alice, and the old path would have found her.
-    expect(parseMentions(body, [alice])).toHaveLength(1);
+    // The prose still names Alice — `@Alice` is right there in the body, and
+    // `resolveSubmittedMentions` would happily confirm her if any id had been
+    // submitted. Nothing was, so nothing is recorded and nobody is mailed.
+    expect(resolveSubmittedMentions(body, [alice.id], [alice])).toHaveLength(1);
+    expect(resolveSubmittedMentions(body, read.signerIds, [alice])).toEqual([]);
 
     const rows = await db
       .select()
@@ -522,7 +545,12 @@ describe("write-time mention resolution (data layer)", () => {
     expect(rows).toEqual([]);
   });
 
-  it("drops a self-mention", async () => {
+  it("records a self-mention but does not mail it", async () => {
+    // Two different questions, and they used to share one answer. The ROW means
+    // "this was a mention", which is true when you name yourself — and since
+    // highlighting renders from the rows, dropping it made an author's own pick
+    // show up as plain text while the composer still listed them under "Notifying".
+    // Suppressing the EMAIL is the separate, correct half: you know what you wrote.
     const { db, versionId, signerId } = await seed();
     const [me] = await db
       .select({ id: signers.id, displayName: signers.displayName })
@@ -537,7 +565,9 @@ describe("write-time mention resolution (data layer)", () => {
       body,
     });
 
-    const rows = await recordMentions(db, commentId, body, [me.id], [me], signerId);
-    expect(rows).toEqual([]);
+    const { rows, mailed } = await recordMentions(db, commentId, body, [me.id], [me], signerId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mentionedSignerId).toBe(me.id);
+    expect(mailed).toEqual([]);
   });
 });

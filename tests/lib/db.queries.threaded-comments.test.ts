@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { commentVotes, commentReports, comments, signers, versions } from "@/lib/db/schema";
+import { commentVotes, commentReports, comments, commentMentions, signers, versions } from "@/lib/db/schema";
 import {
   listThreadedCommentsForVersion,
   findCommentInTree,
@@ -238,6 +238,92 @@ describe("findCommentInTree", () => {
   it("returns null when id doesn't exist in tree", () => {
     const found = findCommentInTree([], "nonexistent-id");
     expect(found).toBeNull();
+  });
+});
+
+describe("mentionedSignerIds", () => {
+  // These rows are what the UI highlights on, so a comment that fails to carry
+  // them renders a real mention as plain text. Nothing else in the suite would
+  // catch that: `render-mentions` is tested against ids passed in directly.
+  it("carries the mention rows for each comment", async () => {
+    const { db, versionId, aliceId, bobId } = await seed();
+    const [mentioning] = await db
+      .insert(comments)
+      .values({
+        baseVersionId: versionId,
+        anchorId: "preamble-s-1",
+        signerId: aliceId,
+        body: "cc @Bob",
+      })
+      .returning({ id: comments.id });
+    await db
+      .insert(comments)
+      .values({
+        baseVersionId: versionId,
+        anchorId: "preamble-s-1",
+        signerId: aliceId,
+        body: "no mentions here",
+      });
+    await db
+      .insert(commentMentions)
+      .values({ commentId: mentioning.id, mentionedSignerId: bobId });
+
+    const flat = flattenTree(await listThreadedCommentsForVersion(db, versionId, null));
+    const withMention = flat.find((c) => c.id === mentioning.id);
+    const without = flat.find((c) => c.id !== mentioning.id);
+    expect(withMention?.mentionedSignerIds).toEqual([bobId]);
+
+    // Absent rows must be an empty array, not undefined — the render path
+    // iterates it without a guard.
+    expect(without?.mentionedSignerIds).toEqual([]);
+  });
+
+  it("collects every signer when one comment mentions two people", async () => {
+    // Exercises the accumulate branch in the grouping loop. Without a comment
+    // carrying two rows, replacing the push with an overwrite leaves the suite
+    // green while a two-person mention highlights only one of them.
+    const { db, versionId, aliceId, bobId } = await seed();
+    const [c] = await db
+      .insert(comments)
+      .values({
+        baseVersionId: versionId,
+        anchorId: "preamble-s-1",
+        signerId: aliceId,
+        body: "@Alice and @Bob both",
+      })
+      .returning({ id: comments.id });
+    await db.insert(commentMentions).values([
+      { commentId: c.id, mentionedSignerId: aliceId },
+      { commentId: c.id, mentionedSignerId: bobId },
+    ]);
+
+    const flat = flattenTree(await listThreadedCommentsForVersion(db, versionId, null));
+    // Row order is not guaranteed, so compare as a set.
+    expect([...(flat[0]?.mentionedSignerIds ?? [])].sort()).toEqual(
+      [aliceId, bobId].sort(),
+    );
+  });
+
+  it("keeps each comment's rows separate when several mention people", async () => {
+    // One shared query feeds every comment, so a grouping bug here would leak
+    // one comment's mentions onto another and highlight names nobody picked.
+    const { db, versionId, aliceId, bobId } = await seed();
+    const [first] = await db
+      .insert(comments)
+      .values({ baseVersionId: versionId, anchorId: "preamble-s-1", signerId: aliceId, body: "@Bob one" })
+      .returning({ id: comments.id });
+    const [second] = await db
+      .insert(comments)
+      .values({ baseVersionId: versionId, anchorId: "preamble-s-1", signerId: bobId, body: "@Alice two" })
+      .returning({ id: comments.id });
+    await db.insert(commentMentions).values([
+      { commentId: first.id, mentionedSignerId: bobId },
+      { commentId: second.id, mentionedSignerId: aliceId },
+    ]);
+
+    const flat = flattenTree(await listThreadedCommentsForVersion(db, versionId, null));
+    expect(flat.find((c) => c.id === first.id)?.mentionedSignerIds).toEqual([bobId]);
+    expect(flat.find((c) => c.id === second.id)?.mentionedSignerIds).toEqual([aliceId]);
   });
 });
 
