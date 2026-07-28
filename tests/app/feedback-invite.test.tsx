@@ -41,6 +41,11 @@ const proposed = (commentCount: number) => (
  * satisfied by `sm:text-center` and `toContain("mt-2")` by `mt-20` — a banner
  * centered on desktop but broken on mobile would pass.
  *
+ * The same change cuts the other way for *negative* assertions: membership
+ * makes `not.toContain("text-center")` blind to `sm:text-center`, which would
+ * let a responsive variant slip past a guard meant to exclude the class
+ * entirely. Use `lacksClass` for negatives — it strips variant prefixes.
+ *
  * Class assertions are scoped to the element under test: a bare
  * `html.toContain("text-center")` would fire on any nested element picking up
  * the class, which is a different change than the one being guarded.
@@ -74,6 +79,17 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
   }
   return classLists[0];
 };
+
+/**
+ * True when no token resolves to `base` once any `variant:` prefixes are
+ * stripped — so `sm:text-center` counts as `text-center` being present.
+ *
+ * Plain `not.toContain` is exact membership and would let the prefixed form
+ * through, which is the wrong direction for a guard whose whole job is to
+ * exclude a class.
+ */
+const lacksClass = (tokens: string[], base: string) =>
+  tokens.every((token) => token.split(":").pop() !== base);
 
 describe("FeedbackInvite (current)", () => {
   it("uses no em dashes", () => {
@@ -111,9 +127,10 @@ describe("FeedbackInvite (current)", () => {
 
     const button = classesOf(html, "button");
     expect(button).toContain("underline");
-    // The old filled pill button is gone: no fill, no pill.
-    expect(button).not.toContain("bg-blue-600");
-    expect(button).not.toContain("rounded-full");
+    // The old filled pill button is gone: no fill, no pill — not even behind a
+    // responsive variant, hence lacksClass rather than not.toContain.
+    expect(lacksClass(button, "bg-blue-600")).toBe(true);
+    expect(lacksClass(button, "rounded-full")).toBe(true);
 
     expect(text(current(0))).not.toContain("Give feedback on");
   });
@@ -128,11 +145,13 @@ describe("FeedbackInvite (current)", () => {
     expect(text(current(1))).toContain("1 comment already on it.");
 
     // The count line is supporting copy under the link, not a second control:
-    // muted, tight to it, and inheriting the section's centering rather than
-    // setting its own.
-    const countLine = classesOf(render(current(12)), "p", "text-zinc-600");
-    expect(countLine).toContain("mt-2");
-    expect(countLine).not.toContain("text-center");
+    // muted, tight to it, and centered by inheritance from the section rather
+    // than by a class of its own. Assert the section's `text-center` here too,
+    // so that inheritance is a real dependency this test can break — the count
+    // line simply not carrying `text-center` cannot fail on any plausible edit.
+    const populated = render(current(12));
+    expect(classesOf(populated, "section")).toContain("text-center");
+    expect(classesOf(populated, "p", "text-zinc-600")).toContain("mt-2");
   });
 });
 
@@ -154,6 +173,8 @@ describe("FeedbackInvite (proposed)", () => {
     // it has to fail on a structural change rather than quietly stop guarding.
     // `classesOf` throwing on anything but a unique match is what supplies that;
     // a decorative positive assertion here would only add a false-failure surface.
-    expect(classesOf(html, "section")).not.toContain("text-center");
+    // `lacksClass`, not `not.toContain`: centering the grid on desktop only
+    // (`sm:text-center`) is exactly the regression this needs to catch.
+    expect(lacksClass(classesOf(html, "section"), "text-center")).toBe(true);
   });
 });
