@@ -27,10 +27,21 @@ const US_LAW_SLUGS = new Set([
   "white-house-ai-bill-of-rights-2022",
 ]);
 
-type PillCategory = {
+export type PillCategory = {
   id: string;
   matches: (slug: string) => boolean;
   className: string;
+};
+
+/**
+ * Also the last entry of `PILL_CATEGORIES`, and the `??` fallback below, so
+ * that reordering or narrowing the array degrades to a rose pill instead of
+ * throwing at render time and taking the homepage down with it.
+ */
+const FALLBACK_CATEGORY: PillCategory = {
+  id: "research-advocacy",
+  matches: () => true,
+  className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
 };
 
 /**
@@ -39,7 +50,7 @@ type PillCategory = {
  * category deliberately` in the tests keeps that from becoming a silent
  * catch-all for slugs nobody classified.
  */
-const PILL_CATEGORIES: PillCategory[] = [
+export const PILL_CATEGORIES: PillCategory[] = [
   {
     id: "humanebench",
     matches: (slug) => slug.startsWith("humanebench"),
@@ -60,15 +71,15 @@ const PILL_CATEGORIES: PillCategory[] = [
     matches: (slug) => slug.startsWith("uk-"),
     className: "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
   },
-  {
-    id: "research-advocacy",
-    matches: () => true,
-    className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
-  },
+  FALLBACK_CATEGORY,
 ];
 
 export function pillCategory(slug: string): PillCategory {
-  return PILL_CATEGORIES.find((c) => c.matches(slug))!;
+  // `??`, not `!`: the non-null assertion would have relied on
+  // FALLBACK_CATEGORY staying last in an array that is exactly the kind of
+  // thing someone alphabetises. Getting that wrong should cost a rose pill,
+  // not a render-time crash on the homepage.
+  return PILL_CATEGORIES.find((c) => c.matches(slug)) ?? FALLBACK_CATEGORY;
 }
 
 export function pillColor(slug: string): string {

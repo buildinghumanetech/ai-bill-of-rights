@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { articles, pillCategory, pillColor } from "@/app/HomepageArticles";
+import {
+  PILL_CATEGORIES,
+  articles,
+  pillCategory,
+  pillColor,
+} from "@/app/HomepageArticles";
 
 /**
  * "Connects to" pill colour is a property of the pill's category, not of the
@@ -76,9 +81,18 @@ describe("pill categories", () => {
     expect(colors.size).toBe(ids.length);
   });
 
-  it("keeps a pill's colour stable across calls", () => {
+  it("has no slug claimed by two category rules", () => {
+    // `pillCategory` takes the first match, so an ambiguous slug is silently
+    // resolved by array order rather than failing. That is a real hazard here:
+    // `us-law` is a hand-maintained slug set while its neighbours are prefix
+    // rules, so adding e.g. "uk-online-safety-act" to US_LAW_SLUGS would make
+    // it match two rules and take whichever sits higher.
+    //
+    // The catch-all is excluded — matching everything is its job.
+    const specific = PILL_CATEGORIES.filter((c) => c.id !== "research-advocacy");
     for (const slug of allSlugs) {
-      expect(pillColor(slug)).toBe(pillColor(slug));
+      const claimants = specific.filter((c) => c.matches(slug)).map((c) => c.id);
+      expect(claimants.length, `${slug} claimed by ${claimants.join(" and ")}`).toBeLessThan(2);
     }
   });
 
