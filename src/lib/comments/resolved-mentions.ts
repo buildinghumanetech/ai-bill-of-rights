@@ -50,11 +50,24 @@ interface KnownSigner {
 }
 
 /**
- * The exact text the composer inserts for a pick. Both sides derive the needle
- * from this one function so they can never disagree about what to look for.
+ * The exact text the composer inserts for a pick. Every side derives the needle
+ * from this one function — composer, server, and the highlighter in
+ * `./render-mentions.tsx` — so they can never disagree about what to look for.
+ *
+ * The `trim()` is belt-and-braces, not a live fix. A padded display name breaks
+ * the needle in a specific way: the composer inserts `@Padded Name ` (trailing
+ * space included), submit sends `body.trim()`, the space is gone from the body,
+ * the needle is no longer found, and the author is told they notified someone
+ * they did not. **No current write path can produce such a name** — every one of
+ * them already trims (`formatDisplayName` in `sign-from-modal.ts`, and
+ * `.trim()` in `account.ts`, `admin.ts`, `non-signers.ts`) — so this normalises
+ * an input that cannot arrive today. It is here so that a future writer which
+ * forgets to trim cannot turn a cosmetic data problem into silently-dropped
+ * notifications, and so this function's output is a property of the needle
+ * rather than of the callers' hygiene.
  */
 export function mentionText(displayName: string): string {
-  return `@${displayName}`;
+  return `@${displayName.trim()}`;
 }
 
 /**

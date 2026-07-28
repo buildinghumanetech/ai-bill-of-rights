@@ -171,11 +171,11 @@ export function MentionTextarea({
     // typing affordance for the composer, not part of what anything matches on.
     // `sep` suppresses it whenever `after` already opens with something that
     // should sit tight against the name — existing whitespace, or closing
-    // punctuation. One source of an ugly gap is deliberately NOT handled here: a
-    // padded `displayName` makes `inserted` itself end in a space, and that
-    // resolves with the deferred `mentionText` trim rather than a wider test on
-    // this side. It is pinned in `tests/components/comment-node.mentions.test.tsx`;
-    // the cases below are pinned in `tests/components/mention-textarea.test.tsx`.
+    // punctuation. A padded `displayName` used to be a second source of a gap —
+    // `inserted` ending in a space itself — and that is handled at the source now
+    // that `mentionText` trims, not by widening the test on this side. It is
+    // pinned in `tests/components/comment-node.mentions.test.tsx`; the cases
+    // below are pinned in `tests/components/mention-textarea.test.tsx`.
     const inserted = mentionText(signer.displayName);
     const sep = /^[\s,.;:!?)]/.test(after) ? "" : " ";
     const newValue = `${before}${inserted}${sep}${after}`;
@@ -263,16 +263,16 @@ export function MentionTextarea({
             <span key={m.signerId}>
               {idx > 0 ? ", " : ""}
               {/* Rendered through `mentionText` so the name shown here is the
-                  same string the notification resolves on. If that ever
-                  normalises the name, promising "@Padded Name " while
-                  delivering on "@Padded Name" would be a lie of exactly the
-                  kind this line exists to prevent.
+                  same string the notification resolves on. `mentionText` trims,
+                  so promising "@Padded Name " while delivering on
+                  "@Padded Name" — a lie of exactly the kind this line exists to
+                  prevent — cannot happen from either side.
 
-                  UNVERIFIABLE BY CONSTRUCTION, stated rather than hidden: while
-                  `mentionText` is the identity, no assertion can tell this from
-                  an inline `@{m.displayName}`, so reverting this site — or the
-                  suggestion button below — would be caught by nothing until the
-                  trim lands. Both are load-bearing only from that point on. */}
+                  This site and the suggestion button below are load-bearing for
+                  that reason: an inline `@{m.displayName}` here would show the
+                  untrimmed name while the notification resolved on the trimmed
+                  one. Pinned by the padded-name case in
+                  `tests/components/comment-node.mentions.test.tsx`. */}
               <span className="font-medium text-zinc-700">
                 {mentionText(m.displayName)}
               </span>
