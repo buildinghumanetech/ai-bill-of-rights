@@ -44,8 +44,11 @@ import type { ThreadedComment } from "@/lib/db/queries";
 const SIGNERS = [
   { id: "sig-alice", displayName: "Alice Nguyen" },
   { id: "sig-erik", displayName: "Erik" },
-  // A name with trailing whitespace. Ugly, but reachable from real signer data,
-  // and it is the only thing that makes the submit-time re-prune observable.
+  // A name with trailing whitespace. NOT reachable from real signer data — every
+  // write path trims (`formatDisplayName` in sign-from-modal.ts; `.trim()` in
+  // account.ts, admin.ts, non-signers.ts). Fixtured because it is the only input
+  // that makes `mentionText`'s own normalisation observable, so the needle stays
+  // correct if a future writer forgets to trim.
   { id: "sig-padded", displayName: "Padded Name " },
 ];
 
@@ -227,56 +230,44 @@ describe("CommentNode reply mention wiring", () => {
     expect(submitted().getAll(MENTION_IDS_FIELD)).toEqual([]);
   });
 
-  it("re-prunes against the trimmed body, not the composer's", async () => {
-    // `handleReplySubmit` submits `body.trim()` but resolves against the picks,
-    // so the two can disagree. A display name ending in whitespace is the case
-    // that makes it observable: the composer holds "agreed @Padded Name  " and
-    // the pick matches on "@Padded Name ", but the *submitted* body is trimmed to
-    // "agreed @Padded Name", where that needle is gone.
+  it("normalises a padded display name so the promise matches the delivery", async () => {
+    // `handleReplySubmit` submits `body.trim()` while resolving against the
+    // picks, so the composer's value and the submitted body can disagree about
+    // what the needle is. A display name with trailing whitespace is the case
+    // that makes it observable, and it USED to break: the composer held
+    // "agreed @Padded Name  " and matched on "@Padded Name ", the submitted body
+    // was trimmed to "agreed @Padded Name", the needle was gone, and the author
+    // was told they had notified someone who then got nothing.
     //
-    // Nobody is notified, which is the module's stated direction of failure —
-    // silence, never a wrong recipient. Without the submit-time re-prune this
-    // sends sig-padded for a body that no longer contains their mention text.
+    // `mentionText` trims now, so all three sides agree on "@Padded Name" and
+    // the promise is kept. Note this is a REGRESSION GUARD, not a live fix:
+    // every display-name write path already trims (`formatDisplayName` in
+    // sign-from-modal.ts; `.trim()` in account.ts, admin.ts, non-signers.ts), so
+    // "Padded Name " below cannot reach the database today. It is fixtured here
+    // to pin the needle's own behaviour, so a future writer that forgets to trim
+    // cannot turn a cosmetic data problem into dropped notifications.
     renderNode();
     toggle();
 
     type("agreed @Padded");
     pick("@Padded Name");
+    // One trailing space, from the composer's typing affordance — not two. The
+    // padding is gone at the point of insertion.
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
-      "agreed @Padded Name  ",
+      "agreed @Padded Name ",
     );
-
-    // KNOWN INCONSISTENCY, asserted so it cannot hide: the composer promises a
-    // notification here that the submit will not deliver. `pruneResolvedMentions`
-    // sees the untrimmed value, where "@Padded Name " is present, so the
-    // "Notifying …" line lists Padded Name — and then nobody is emailed. That
-    // line exists precisely so delivery is never a surprise, so this is a real
-    // (if narrow) defect, not just cosmetics.
-    //
-    // The fix is to normalise at the insertion point so composer, submitted body
-    // and server all agree on the needle — trimming inside `mentionText` would do
-    // it in one place. Deliberately not done here: it changes who gets notified,
-    // and that call is not mine to make unilaterally.
-    //
-    // What pins the defect is the PAIR: notify-list populated, submitted ids
-    // empty. Neither assertion says anything on its own — and it is THIS one,
-    // the notify-list, that passes either way, because "@Padded Name" is present
-    // in the padded composer value too.
-    //
-    // Two assertions move when the fix is taken, and the first is above, not
-    // below: `selectSuggestion` inserts `mentionText(...)`, so trimming there
-    // also trims what the composer writes. The value assertion becomes
-    // "agreed @Padded Name " (one trailing space, not two) and fails FIRST, then
-    // MENTION_IDS_FIELD below flips to ["sig-padded"]. Measured, post-refactor.
     expect(screen.getByTestId("mention-notify-list").textContent).toContain(
       "Padded Name",
     );
 
     await submitReply();
 
+    // The PAIR is what matters: the notify-list above said this person would be
+    // notified, and the submitted ids agree. Before the trim these two
+    // contradicted each other, and only asserting both catches that.
     const fd = submitted();
     expect(fd.get("body")).toBe("agreed @Padded Name");
-    expect(fd.getAll(MENTION_IDS_FIELD)).toEqual([]);
+    expect(fd.getAll(MENTION_IDS_FIELD)).toEqual(["sig-padded"]);
   });
 
   it("submits the admin post-as signer, and clears it after the send", async () => {

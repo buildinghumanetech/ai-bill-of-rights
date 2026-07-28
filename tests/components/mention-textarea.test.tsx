@@ -204,11 +204,12 @@ describe("MentionTextarea write-time resolution", () => {
     // all, which made the whole point of deriving it unverifiable.
     //
     // What this does and does not catch, measured: replacing the computation with
-    // `newValue.length` fails it. It CANNOT tell `inserted.length` from
-    // `displayName.length + 1` today, because `mentionText` is the identity and
-    // the two are equal — that distinction only becomes observable if the trim
-    // lands. So this pins the caret landing on the mention rather than at the end
-    // of the text, which is the regression a reader would actually notice.
+    // `newValue.length` fails it. It cannot tell `inserted.length` from
+    // `displayName.length + 1` for the names used HERE, because they need no
+    // trimming and so the two are equal; the padded-name case in
+    // `comment-node.mentions.test.tsx` is where that distinction is observable.
+    // So this pins the caret landing on the mention rather than at the end of the
+    // text, which is the regression a reader would actually notice.
     //
     // The rAF ordering this depends on is explained on `withQueuedFrames`.
     withQueuedFrames((flush) => {
