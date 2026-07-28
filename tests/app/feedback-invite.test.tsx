@@ -81,15 +81,22 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
 };
 
 /**
- * True when no token resolves to `base` once any `variant:` prefixes are
- * stripped — so `sm:text-center` counts as `text-center` being present.
+ * Class tokens reduced to their base utility: `sm:hover:bg-blue-600/90` becomes
+ * `bg-blue-600`.
  *
- * Plain `not.toContain` is exact membership and would let the prefixed form
- * through, which is the wrong direction for a guard whose whole job is to
- * exclude a class.
+ * Negative assertions go through this. Plain `not.toContain` over raw tokens is
+ * exact membership, so it would let `sm:text-center` past a guard whose whole
+ * job is to exclude `text-center` — the wrong direction entirely. Normalizing
+ * the tokens rather than wrapping the check in a boolean keeps the matcher's
+ * diff, so a failure names the class list instead of printing
+ * `expected false to be true`.
+ *
+ * Reach: variant prefixes and opacity modifiers only. A different shade
+ * (`bg-blue-500`) or an arbitrary value (`bg-[#2563eb]`) is out of scope and
+ * will not be caught.
  */
-const lacksClass = (tokens: string[], base: string) =>
-  tokens.every((token) => token.split(":").pop() !== base);
+const baseClasses = (tokens: string[]) =>
+  tokens.map((token) => token.split(":").pop()!.split("/")[0]);
 
 describe("FeedbackInvite (current)", () => {
   it("uses no em dashes", () => {
@@ -127,10 +134,10 @@ describe("FeedbackInvite (current)", () => {
 
     const button = classesOf(html, "button");
     expect(button).toContain("underline");
-    // The old filled pill button is gone: no fill, no pill — not even behind a
-    // responsive variant, hence lacksClass rather than not.toContain.
-    expect(lacksClass(button, "bg-blue-600")).toBe(true);
-    expect(lacksClass(button, "rounded-full")).toBe(true);
+    // The old filled pill button is gone: no fill, no pill — not behind a
+    // responsive variant or an opacity modifier either, hence baseClasses.
+    expect(baseClasses(button)).not.toContain("bg-blue-600");
+    expect(baseClasses(button)).not.toContain("rounded-full");
 
     expect(text(current(0))).not.toContain("Give feedback on");
   });
@@ -145,13 +152,10 @@ describe("FeedbackInvite (current)", () => {
     expect(text(current(1))).toContain("1 comment already on it.");
 
     // The count line is supporting copy under the link, not a second control:
-    // muted, tight to it, and centered by inheritance from the section rather
-    // than by a class of its own. Assert the section's `text-center` here too,
-    // so that inheritance is a real dependency this test can break — the count
-    // line simply not carrying `text-center` cannot fail on any plausible edit.
-    const populated = render(current(12));
-    expect(classesOf(populated, "section")).toContain("text-center");
-    expect(classesOf(populated, "p", "text-zinc-600")).toContain("mt-2");
+    // muted and tight to it. Its centering is inherited from the section and is
+    // guarded by the `it.each([0, 12])` centering test above, which runs on this
+    // same populated markup — asserting it here again would only duplicate that.
+    expect(classesOf(render(current(12)), "p", "text-zinc-600")).toContain("mt-2");
   });
 });
 
@@ -173,8 +177,8 @@ describe("FeedbackInvite (proposed)", () => {
     // it has to fail on a structural change rather than quietly stop guarding.
     // `classesOf` throwing on anything but a unique match is what supplies that;
     // a decorative positive assertion here would only add a false-failure surface.
-    // `lacksClass`, not `not.toContain`: centering the grid on desktop only
+    // Through `baseClasses`, not raw tokens: centering the grid on desktop only
     // (`sm:text-center`) is exactly the regression this needs to catch.
-    expect(lacksClass(classesOf(html, "section"), "text-center")).toBe(true);
+    expect(baseClasses(classesOf(html, "section"))).not.toContain("text-center");
   });
 });
