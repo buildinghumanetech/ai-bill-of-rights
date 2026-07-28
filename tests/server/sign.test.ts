@@ -232,4 +232,114 @@ describe("recordSignature", () => {
     const firstSigConsent = records.find((r) => r.id === sigs[0].consentRecordId);
     expect(firstSigConsent?.consentTextHash).toBe("a".repeat(64));
   });
+
+  it("refuses to sign a version that is no longer current", async () => {
+    // The version string is client-supplied end to end: a hidden form field in
+    // submitProfileAction, then a query param on the redirect to
+    // /sign/consent, then straight into recordSignature. Before this guard,
+    // `/sign/profile?version=0.0.1` wrote a real signature against the
+    // archived version — which renders "v0.0.1" beside that person on
+    // /signers and resolves as `signed-earlier`, offering them a re-affirm for
+    // a document they had just signed. reaffirmSignature refused this all
+    // along; the first-time path did not, so the two disagreed about an
+    // invariant the signed-earlier UI assumes.
+    const db = await createTestDb();
+    await syncVersions(db, [
+      {
+        version: "0.0.1",
+        publishedAt: new Date("2026-05-18T00:00:00Z"),
+        markdown: sampleMarkdown.replace("1.0.0", "0.0.1"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: false,
+        gitCommitSha: null,
+      },
+      {
+        version: "1.0.0",
+        publishedAt: new Date("2026-07-24T00:00:00Z"),
+        markdown: sampleMarkdown,
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: true,
+        gitCommitSha: null,
+      },
+    ]);
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "user_archived",
+        displayName: "Archived Signer",
+        affiliation: null,
+        locationText: null,
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+
+    await expect(
+      recordSignature(db, {
+        signerId: signer.id,
+        versionString: "0.0.1",
+        consentTextHash: "f".repeat(64),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        capturedFields: {} as any,
+      }),
+    ).rejects.toThrow(/no longer open for signing/i);
+
+    // Nothing partial: the version check runs before the consent insert, so a
+    // refused attempt leaves no orphan consent_records row behind either.
+    expect(await db.select().from(signatures)).toHaveLength(0);
+    expect(await db.select().from(consentRecords)).toHaveLength(0);
+  });
+
+  it("still writes a historical signature when the caller opts in explicitly", async () => {
+    // The fixture escape hatch. Tests reconstructing a past state — the
+    // `signed-earlier` and re-affirm scenarios — are not signing; they are
+    // asserting a row that could only have arisen while that version WAS
+    // current. It has to stay possible, and it has to be impossible to do by
+    // accident from a request path.
+    const db = await createTestDb();
+    await syncVersions(db, [
+      {
+        version: "0.0.1",
+        publishedAt: new Date("2026-05-18T00:00:00Z"),
+        markdown: sampleMarkdown.replace("1.0.0", "0.0.1"),
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: false,
+        gitCommitSha: null,
+      },
+      {
+        version: "1.0.0",
+        publishedAt: new Date("2026-07-24T00:00:00Z"),
+        markdown: sampleMarkdown,
+        agentsMd: "stub",
+        specJson: "{}",
+        isCurrent: true,
+        gitCommitSha: null,
+      },
+    ]);
+    const [signer] = await db
+      .insert(signers)
+      .values({
+        clerkUserId: "user_historical",
+        displayName: "Historical Signer",
+        affiliation: null,
+        locationText: null,
+        verificationMethod: "email",
+        verifiedAt: new Date(),
+      })
+      .returning({ id: signers.id });
+
+    await recordSignature(db, {
+      signerId: signer.id,
+      versionString: "0.0.1",
+      allowArchivedVersion: true,
+      consentTextHash: "9".repeat(64),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      capturedFields: {} as any,
+    });
+
+    expect(await db.select().from(signatures)).toHaveLength(1);
+  });
 });
