@@ -3,7 +3,6 @@ import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { comments, signers, versions, commentMentions } from "@/lib/db/schema";
 import { createComment, editComment, deleteComment } from "@/server/comments/core";
-import { parseMentions } from "@/lib/comments/mentions";
 import {
   appendResolvedMentions,
   readSubmittedMentions,
@@ -306,7 +305,7 @@ describe("deleteComment (data layer)", () => {
 });
 
 describe("comment mentions (data layer)", () => {
-  it("parseMentions + insert mention rows when known signers are passed in", async () => {
+  it("resolves a submitted id and inserts the mention row", async () => {
     const { db, versionId, signerId } = await seed();
 
     // Create a second signer to be mentioned
@@ -332,8 +331,9 @@ describe("comment mentions (data layer)", () => {
       body,
     });
 
-    // Simulate what the action does: parse mentions, insert mention rows
-    const mentions = parseMentions(body, knownSigners);
+    // Simulate what the action does: resolve the id the composer submitted
+    // against the stored body, then insert the mention row.
+    const mentions = resolveSubmittedMentions(body, [mentioned.id], knownSigners);
     expect(mentions).toHaveLength(1);
     expect(mentions[0].signerId).toBe(mentioned.id);
 
@@ -497,8 +497,9 @@ describe("write-time mention resolution (data layer)", () => {
   it("notifies nobody when a submission carries no resolution", async () => {
     // No source marker (a hand-rolled POST). There is deliberately no prose
     // fallback: one the client selects by omitting a field would be an opt-out
-    // from the containment guarantee, and `parseMentions` would notify Alice for
-    // a body like `bob!@alice.com`.
+    // from the containment guarantee. The parser that used to provide that
+    // fallback is gone entirely — it notified Alice for a body like
+    // `bob!@alice.com` — so "no resolution" now means "nobody", full stop.
     const { db, versionId, signerId } = await seed();
     const alice = await addSigner(db, "u_alice_f", "Alice");
 
@@ -512,8 +513,11 @@ describe("write-time mention resolution (data layer)", () => {
 
     const read = readSubmittedMentions(new FormData());
     expect(read.fromComposer).toBe(false);
-    // The prose still names Alice, and the old path would have found her.
-    expect(parseMentions(body, [alice])).toHaveLength(1);
+    // The prose still names Alice — `@Alice` is right there in the body, and
+    // `resolveSubmittedMentions` would happily confirm her if any id had been
+    // submitted. Nothing was, so nothing is recorded and nobody is mailed.
+    expect(resolveSubmittedMentions(body, [alice.id], [alice])).toHaveLength(1);
+    expect(resolveSubmittedMentions(body, read.signerIds, [alice])).toEqual([]);
 
     const rows = await db
       .select()

@@ -437,7 +437,11 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             </div>
           ) : (
             <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 break-words">
-              {renderBodyWithMentions(comment.body, signersForMention)}
+              {renderBodyWithMentions(
+                comment.body,
+                signersForMention,
+                comment.mentionedSignerIds,
+              )}
             </p>
           )}
 

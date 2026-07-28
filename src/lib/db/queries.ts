@@ -1,5 +1,5 @@
-import { eq, count, desc, gt, and, isNull, isNotNull, asc, sum, sql } from "drizzle-orm";
-import { versions, signatures, signers, comments, attestations, commentVotes, commentReports } from "./schema";
+import { eq, count, desc, gt, and, isNull, isNotNull, asc, sum, sql, inArray } from "drizzle-orm";
+import { versions, signatures, signers, comments, attestations, commentVotes, commentReports, commentMentions } from "./schema";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
@@ -339,6 +339,13 @@ export interface ThreadedComment {
   myVote: 1 | -1 | null;
   /** Whether the current viewer has flagged this comment. */
   myReport: boolean;
+  /**
+   * Signers this comment actually notified — the `comment_mentions` rows, which
+   * come from explicit typeahead picks. This is what drives mention highlighting,
+   * so what a reader sees styled is exactly who received mail. See
+   * `src/lib/comments/render-mentions.tsx`.
+   */
+  mentionedSignerIds: string[];
   replies: ThreadedComment[];
 }
 
@@ -444,7 +451,24 @@ export async function listThreadedCommentsForVersion(
     for (const r of myReports) myReportSet.add(r.commentId);
   }
 
-  // 5. Build tree
+  // 5. Fetch the mention rows for these comments. Scoped to the ids we already
+  // hold rather than joined onto the comment query, so a comment mentioning
+  // three people stays one row instead of three that then need collapsing.
+  const mentionsByComment = new Map<string, string[]>();
+  const mentionRows = await db
+    .select({
+      commentId: commentMentions.commentId,
+      mentionedSignerId: commentMentions.mentionedSignerId,
+    })
+    .from(commentMentions)
+    .where(inArray(commentMentions.commentId, commentRows.map((r: { id: string }) => r.id)));
+  for (const m of mentionRows) {
+    const list = mentionsByComment.get(m.commentId);
+    if (list) list.push(m.mentionedSignerId);
+    else mentionsByComment.set(m.commentId, [m.mentionedSignerId]);
+  }
+
+  // 6. Build tree
   const flat: Omit<ThreadedComment, "replies">[] = commentRows.map((r: any) => ({
     id: r.id,
     body: r.body,
@@ -457,6 +481,7 @@ export async function listThreadedCommentsForVersion(
     score: scoreMap.get(r.id) ?? 0,
     myVote: myVoteMap.get(r.id) ?? null,
     myReport: myReportSet.has(r.id),
+    mentionedSignerIds: mentionsByComment.get(r.id) ?? [],
   }));
 
   return buildTree(flat);

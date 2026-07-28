@@ -6,59 +6,119 @@ const signers = [
   { id: "2", displayName: "Bob Smith" },
 ];
 
+/** The visible text of a rendered mention span. */
+function spanText(node: unknown): string {
+  return (node as { props: { children: string } }).props.children;
+}
+
 describe("renderBodyWithMentions", () => {
-  it("returns plain string when no mentions", () => {
-    const result = renderBodyWithMentions("Hello world.", signers);
+  it("returns plain string when nothing was mentioned", () => {
+    const result = renderBodyWithMentions("Hello world.", signers, []);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("Hello world.");
   });
 
-  it("returns [string, span, string] when one mention in the middle", () => {
-    const result = renderBodyWithMentions("Hello @Alice how are you?", signers);
+  it("returns [string, span, string] when one mention is in the middle", () => {
+    const result = renderBodyWithMentions("Hello @Alice how are you?", signers, ["1"]);
     expect(result).toHaveLength(3);
     expect(result[0]).toBe("Hello ");
-    // result[1] is a React element
-    expect(typeof result[1]).toBe("object");
+    expect(spanText(result[1])).toBe("@Alice");
     expect(result[2]).toBe(" how are you?");
   });
 
-  it("returns array starting with span when mention is at start", () => {
-    const result = renderBodyWithMentions("@Alice how are you?", signers);
-    // No leading string before the mention
+  it("starts with the span when the mention is at the start", () => {
+    const result = renderBodyWithMentions("@Alice how are you?", signers, ["1"]);
     expect(result).toHaveLength(2);
-    expect(typeof result[0]).toBe("object"); // span
+    expect(spanText(result[0])).toBe("@Alice");
     expect(result[1]).toBe(" how are you?");
   });
 
-  it("handles consecutive mentions", () => {
-    const result = renderBodyWithMentions("@Alice and @Bob Smith!", signers);
-    // [span, " and ", span, "!"]
+  it("handles two mentions in one body", () => {
+    const result = renderBodyWithMentions("@Alice and @Bob Smith!", signers, ["1", "2"]);
     expect(result).toHaveLength(4);
-    expect(typeof result[0]).toBe("object"); // Alice span
+    expect(spanText(result[0])).toBe("@Alice");
     expect(result[1]).toBe(" and ");
-    expect(typeof result[2]).toBe("object"); // Bob Smith span
+    expect(spanText(result[2])).toBe("@Bob Smith");
     expect(result[3]).toBe("!");
   });
 
-  it("returns single string when signers list is empty", () => {
-    const result = renderBodyWithMentions("Hello @Alice!", []);
+  it("does not highlight a name the author typed by hand", () => {
+    // THE POINT OF THIS MODULE. Highlighting is driven by the `comment_mentions`
+    // rows — the signers the author actually picked from the typeahead — and
+    // those rows are what the notification was sent on. A hand-typed name has no
+    // row, notifies nobody, and so must not be dressed up to look like it did.
+    // Rendering it as a styled mention was a promise the delivery path never kept.
+    const result = renderBodyWithMentions("Hello @Alice!", signers, []);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("Hello @Alice!");
   });
 
-  it("returns single string when body has no mentions", () => {
-    const result = renderBodyWithMentions("No at-signs here.", signers);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toBe("No at-signs here.");
+  it("highlights only the picked signer when another name is typed alongside", () => {
+    const result = renderBodyWithMentions("@Alice and @Bob Smith!", signers, ["1"]);
+    expect(result).toHaveLength(2);
+    expect(spanText(result[0])).toBe("@Alice");
+    expect(result[1]).toBe(" and @Bob Smith!");
   });
 
-  it("highlights the text the author typed rather than the canonical name", () => {
-    // Matching is case-insensitive and accepts first names, so echoing the
-    // display name here would silently rewrite the comment.
-    const result = renderBodyWithMentions("ok @bob said so", signers);
+  it("returns a single string when the signer list is empty", () => {
+    const result = renderBodyWithMentions("Hello @Alice!", [], ["1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("Hello @Alice!");
+  });
+
+  it("ignores a mention row whose signer is no longer mentionable", () => {
+    // Rows outlive the signer list they were written against. An id that no
+    // longer resolves has no display name, so there is no needle to look for.
+    const result = renderBodyWithMentions("Hello @Alice!", signers, ["deleted"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("Hello @Alice!");
+  });
+
+  it("requires an exact match, so a differently-cased name stays plain", () => {
+    // The needle comes from `mentionText(displayName)` — byte-identical to what
+    // the composer inserted and to what the server checked before notifying.
+    // "@bob smith" is not that string, so Bob was not picked here.
+    const result = renderBodyWithMentions("ok @bob smith said so", signers, ["2"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("ok @bob smith said so");
+  });
+
+  it("highlights every occurrence when one signer is mentioned twice", () => {
+    const result = renderBodyWithMentions("@Alice ping @Alice", signers, ["1"]);
     expect(result).toHaveLength(3);
-    const span = result[1] as { props: { children: string } };
-    expect(span.props.children).toBe("@bob");
-    expect(result[2]).toBe(" said so");
+    expect(spanText(result[0])).toBe("@Alice");
+    expect(result[1]).toBe(" ping ");
+    expect(spanText(result[2])).toBe("@Alice");
+  });
+
+  it("prefers the longer name when one display name is a prefix of another", () => {
+    // "@Erik" occurs inside "@Erika Anderson". Both were picked, so both have
+    // rows, and the highlight must not chop Erika's name in half.
+    const overlapping = [
+      { id: "e1", displayName: "Erik" },
+      { id: "e2", displayName: "Erika Anderson" },
+    ];
+    const result = renderBodyWithMentions("cc @Erika Anderson", overlapping, ["e1", "e2"]);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe("cc ");
+    expect(spanText(result[1])).toBe("@Erika Anderson");
+  });
+
+  it("does not crash on a display name containing regex metacharacters", () => {
+    // Matching is plain `indexOf`, never a constructed regex, so nothing here
+    // needs escaping and no metacharacter can change the match semantics.
+    const odd = [{ id: "x", displayName: "A. (Bob) Smith+" }];
+    const result = renderBodyWithMentions("hi @A. (Bob) Smith+ there", odd, ["x"]);
+    expect(result).toHaveLength(3);
+    expect(spanText(result[1])).toBe("@A. (Bob) Smith+");
+  });
+
+  it("gives sibling mentions distinct React keys", () => {
+    // Two spans for the same signer would collide on a signer-id-only key.
+    const result = renderBodyWithMentions("@Alice ping @Alice", signers, ["1"]);
+    const keys = result
+      .filter((n) => typeof n === "object")
+      .map((n) => (n as { key: string | null }).key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
