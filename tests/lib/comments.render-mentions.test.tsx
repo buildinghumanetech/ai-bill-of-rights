@@ -153,7 +153,9 @@ describe("renderBodyWithMentions", () => {
     //
     // Both edges have to allow it, so both are asserted.
     const erik = [{ id: "e1", displayName: "Erik" }];
-    expect(renderBodyWithMentions("よろしく@Erik", erik, ["e1"])).toHaveLength(2);
+    const leading = renderBodyWithMentions("よろしく@Erik", erik, ["e1"]);
+    expect(leading[0]).toBe("よろしく");
+    expect(spanText(leading[1])).toBe("@Erik");
     const trailing = renderBodyWithMentions("@Erikさん、ありがとう", erik, ["e1"]);
     expect(spanText(trailing[0])).toBe("@Erik");
     expect(trailing[1]).toBe("さん、ありがとう");
@@ -171,6 +173,38 @@ describe("renderBodyWithMentions", () => {
     const result = renderBodyWithMentions("cc @Erikさん", signers2, ["e1"]);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("cc @Erikさん");
+  });
+
+  it("sees through a combining mark to the email local part behind it", () => {
+    // THE CASE THE PREVIOUS ROUND CLAIMED TO FIX AND DID NOT. In NFD, `andré`
+    // ends with U+0301 sitting immediately before the `@`. That is not an
+    // EMAIL_LOCAL_CHAR, so a guard reading `body[at - 1]` directly waves the
+    // whole address through. The walk-back resolves it to base `e`, which is
+    // ASCII, and the address stays plain.
+    //
+    // The previous round's test used a mark AFTER the needle, so it passed while
+    // the case in its own commit message stayed broken.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    // Both spellings are written as explicit escapes. A literal depends on how
+    // the file happens to be encoded, and an editor normalising it would swap
+    // which case is under test without anyone noticing.
+    const nfd = "write andre\u0301@Erik.com today"; // e + combining acute
+    const nfc = "write andr\u00e9@Erik.com today"; // precomposed e-acute
+    for (const body of [nfd, nfc]) {
+      const result = renderBodyWithMentions(body, erik, ["e1"]);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(body);
+    }
+  });
+
+  it("still highlights after a non-ASCII base character carrying a mark", () => {
+    // The walk-back must not become a Unicode-wide guard by the back door.
+    // Devanagari `मुझे` ends in a combining vowel sign over base `झ`, which is
+    // not ASCII — so this is prose, not an address, and it highlights. Same
+    // reasoning as CJK above.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const result = renderBodyWithMentions("मुझे@Erik", erik, ["e1"]);
+    expect(spanText(result[1])).toBe("@Erik");
   });
 
   it("treats a combining mark as part of the preceding word", () => {
