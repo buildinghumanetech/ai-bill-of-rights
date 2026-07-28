@@ -38,11 +38,13 @@ const proposed = (commentCount: number) => (
  *
  * Class assertions are scoped to the element under test: a bare
  * `html.toContain("text-center")` would fire on any nested element picking up
- * the class, which is a different change than the one being guarded. Throws
- * unless exactly one *classed* element matches, so a rename or an inserted
- * classed sibling fails the test rather than silently retargeting it. An
- * inserted element with no class attribute at all is invisible to this and
- * does not trip the check.
+ * the class, which is a different change than the one being guarded.
+ *
+ * Throws unless exactly one candidate matches, so a rename fails the test
+ * rather than silently retargeting it. Two escape hatches are deliberate and
+ * worth knowing: an element with no `class` attribute at all is invisible here,
+ * and when a `discriminator` is given the uniqueness check covers only elements
+ * carrying it — a new classed sibling *without* it passes unnoticed.
  */
 const classesOf = (html: string, tag: string, discriminator?: string) => {
   // `(?=[\s>])` delimits the tag name: without it, "p" matches <path>, <pre>
@@ -50,7 +52,12 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
   const pattern = new RegExp(`<${tag}(?=[\\s>])[^>]*\\sclass="([^"]*)"`, "g");
   const classLists = [...html.matchAll(pattern)]
     .map((m) => m[1])
-    .filter((c) => discriminator === undefined || c.includes(discriminator));
+    // Exact token match, not substring: `includes("max-w-3xl")` would also
+    // accept `sm:max-w-3xl`, reintroducing one layer down the imprecision the
+    // `(?=[\s>])` lookahead above exists to prevent.
+    .filter((c) =>
+      discriminator === undefined ? true : c.split(/\s+/).includes(discriminator),
+    );
 
   // Uniqueness, not first-match: the pattern skips unclassed tags and advances,
   // so without this a classed sibling still matches and quietly shifts the target.
@@ -70,7 +77,7 @@ describe("FeedbackInvite (current)", () => {
   });
 
   // Both states, not just the empty one: with a count the banner renders a
-  // second classed <p>, which is the state it is normally in.
+  // second classed <p>, and that is the state it is normally in.
   it.each([0, 12])(
     "centers the whole box, paragraph included (count %i)",
     (count) => {
@@ -78,8 +85,15 @@ describe("FeedbackInvite (current)", () => {
       expect(classesOf(html, "section")).toContain("text-center");
       // A width-capped paragraph stays pinned to the left edge of a centered
       // box unless it is also horizontally centered.
-      const paragraph = classesOf(html, "p", "max-w-3xl");
-      expect(paragraph).toContain("mx-auto");
+      expect(classesOf(html, "p", "max-w-3xl")).toContain("mx-auto");
+
+      // The assertions above are byte-identical across both counts, since the
+      // discriminator filters the count line out. Reach for the one piece of
+      // markup only the populated render has, or this case tests the helper
+      // rather than the component.
+      if (count > 0) {
+        expect(classesOf(html, "p", "text-zinc-600")).toContain("mt-2");
+      }
     },
   );
 
