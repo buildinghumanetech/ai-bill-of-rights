@@ -3,29 +3,76 @@ import type { ReactNode } from "react";
 import { AnchorSentence } from "@/components/AnchorSentence";
 import type { CommentWithSelection } from "@/lib/db/queries";
 
-// Pastel pill palette. Tailwind sees these as full class strings so the
-// JIT will include them in the generated CSS. Pills are colored by a tiny
-// deterministic hash of the slug so the same pill always renders the same
-// color across the site.
-const PILL_COLORS = [
-  "border-pink-200 bg-pink-50 text-pink-900 hover:bg-pink-100",
-  "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
-  "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
-  "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
-  "border-violet-200 bg-violet-50 text-violet-900 hover:bg-violet-100",
-  "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
-  "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
-  "border-indigo-200 bg-indigo-50 text-indigo-900 hover:bg-indigo-100",
-  "border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100",
-  "border-orange-200 bg-orange-50 text-orange-900 hover:bg-orange-100",
+/**
+ * "Connects to" pill colour is a property of the pill's *category*, not of the
+ * individual pill.
+ *
+ * This replaced a hash of the slug. That was stable per pill, but it spread the
+ * six HumaneBench principles across five different colours, so the colour
+ * carried no meaning and read as noise. Grouping instead lets a reader learn
+ * "light blue means HumaneBench" once and have it hold everywhere on the site.
+ *
+ * Tailwind's JIT only sees full class strings, so these are written out in full
+ * rather than composed — do not refactor them into `border-${hue}-200`.
+ */
+const US_LAW_SLUGS = new Set([
+  "california-bot-disclosure-act-sb-1001",
+  "consumer-protection-law",
+  "coppa",
+  "eeoc-guidance-ai-employment",
+  "emerging-state-ai-legislation",
+  "ftc-act-section-5",
+  "ftc-guidance-deceptive-ai",
+  "nist-ai-risk-management-framework",
+  "white-house-ai-bill-of-rights-2022",
+]);
+
+type PillCategory = {
+  id: string;
+  matches: (slug: string) => boolean;
+  className: string;
+};
+
+/**
+ * Ordered — the first match wins. `research-advocacy` is last and matches
+ * everything, so a slug can never render unstyled; `every pill lands in a
+ * category deliberately` in the tests keeps that from becoming a silent
+ * catch-all for slugs nobody classified.
+ */
+const PILL_CATEGORIES: PillCategory[] = [
+  {
+    id: "humanebench",
+    matches: (slug) => slug.startsWith("humanebench"),
+    className: "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
+  },
+  {
+    id: "eu-regulation",
+    matches: (slug) => slug.startsWith("eu-ai-act") || slug.startsWith("gdpr"),
+    className: "border-violet-200 bg-violet-50 text-violet-900 hover:bg-violet-100",
+  },
+  {
+    id: "us-law",
+    matches: (slug) => US_LAW_SLUGS.has(slug),
+    className: "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
+  },
+  {
+    id: "uk-regulation",
+    matches: (slug) => slug.startsWith("uk-"),
+    className: "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
+  },
+  {
+    id: "research-advocacy",
+    matches: () => true,
+    className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
+  },
 ];
 
-function pillColor(slug: string): string {
-  let h = 0;
-  for (let i = 0; i < slug.length; i++) {
-    h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  }
-  return PILL_COLORS[h % PILL_COLORS.length];
+export function pillCategory(slug: string): PillCategory {
+  return PILL_CATEGORIES.find((c) => c.matches(slug))!;
+}
+
+export function pillColor(slug: string): string {
+  return pillCategory(slug).className;
 }
 
 interface Article {
@@ -600,11 +647,13 @@ export function HomepageArticles({
                     </span>
                   )}
                   {article.connects.map((pill) => {
-                    const pillClassName = `rounded-md border px-3 py-1 text-xs font-medium transition-colors ${
-                      mode === "interactive"
-                        ? "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
-                        : pillColor(pill.slug)
-                    }`;
+                    // Same colour in both modes. Interactive used to force
+                    // grayscale so the cyan comment highlights would read
+                    // clearly on top; the category palette is light enough
+                    // (`bg-*-50`) that cyan-100/200/300 still stands out.
+                    const pillClassName = `rounded-md border px-3 py-1 text-xs font-medium transition-colors ${pillColor(
+                      pill.slug,
+                    )}`;
                     if (mode === "interactive") {
                       const pillAnchorId = `article-${article.number}-connect-${pill.slug}`;
                       const pillComments = commentsByAnchor[pillAnchorId] ?? [];
