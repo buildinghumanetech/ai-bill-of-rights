@@ -35,8 +35,13 @@ export const US_LAW_SLUGS: ReadonlySet<string> = new Set([
  * *cannot* be expressed without `slugs`, so the test can always enumerate it.
  */
 type PillCategoryRule =
-  | { prefixes: readonly string[]; slugs?: undefined }
-  | { slugs: ReadonlySet<string>; prefixes?: undefined }
+  // Every variant negates the other two discriminants. Excess-property
+  // checking against a union admits any key declared in *some* constituent, so
+  // without `catchAll?: undefined` here, `{ prefixes: [...], catchAll: true }`
+  // would typecheck, match this variant, and have its `catchAll` ignored — a
+  // category its author believes is the fallback quietly matching one prefix.
+  | { prefixes: readonly string[]; slugs?: undefined; catchAll?: undefined }
+  | { slugs: ReadonlySet<string>; prefixes?: undefined; catchAll?: undefined }
   /** Matches everything; exactly one category may use it. */
   | { catchAll: true; prefixes?: undefined; slugs?: undefined };
 
@@ -48,7 +53,15 @@ export function categoryMatches(
 ): boolean {
   if (category.slugs) return category.slugs.has(slug);
   if (category.prefixes) return category.prefixes.some((p) => slug.startsWith(p));
-  return true;
+  if (category.catchAll) return true;
+  // Reading `catchAll` explicitly rather than treating "neither of the above"
+  // as the catch-all: otherwise adding a fourth rule variant (`suffixes`, a
+  // regex) and forgetting the branch here would make that category silently
+  // claim *every* slug. The union closes the hole on the definition side; this
+  // keeps the consumer from re-opening it.
+  const unhandled: never = category;
+  void unhandled;
+  return false;
 }
 
 /**

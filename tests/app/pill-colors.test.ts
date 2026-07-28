@@ -103,7 +103,17 @@ describe("pill categories", () => {
     // assertion below pins that derivation against the one list we know about
     // today, so dropping `slugs` from the us-law entry fails rather than
     // quietly shrinking the domain.
-    const enumerable = PILL_CATEGORIES.flatMap((c) => [...(c.slugs ?? [])]);
+    // Prefixes are probed too, not just slug lists. A prefix string is a valid
+    // probe for its own category, and `p.startsWith(q)` catches nesting in one
+    // direction while probing `q` catches the other — so adding
+    // `{ prefixes: ["uk-ai"] }` alongside `uk-regulation`'s `["uk-"]` fails
+    // here even before any article links to such a slug. Without this the
+    // hazard described above survived in prefix form, which is three of the
+    // four specific categories.
+    const enumerable = PILL_CATEGORIES.flatMap((c) => [
+      ...(c.slugs ?? []),
+      ...(c.prefixes ?? []),
+    ]);
     expect(enumerable).toEqual(expect.arrayContaining([...US_LAW_SLUGS]));
 
     // The catch-all is excluded by identity — matching everything is its job.
