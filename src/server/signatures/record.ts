@@ -19,6 +19,18 @@ export interface RecordSignatureInput {
   versionString: string;
   consentTextHash: string;
   capturedFields: CapturedFields;
+  /**
+   * Permit writing a signature against a version that is no longer current.
+   *
+   * FOR FIXTURES ONLY — never set this from a request path. Signing an
+   * archived version is not something any surface offers, and the version
+   * string reaching `recordSignature` is client-supplied (see the check
+   * below). Tests that need a *historical* signature — the `signed-earlier`
+   * and re-affirm scenarios — are not signing; they are constructing a past
+   * state that could only have arisen while that version WAS current, and
+   * this is how they say so out loud.
+   */
+  allowArchivedVersion?: boolean;
 }
 
 export async function recordSignature(
@@ -34,6 +46,23 @@ export async function recordSignature(
     throw new Error(`Unknown version: ${input.versionString}`);
   }
   const versionRow = versionRows[0];
+
+  if (!versionRow.isCurrent && !input.allowArchivedVersion) {
+    // The version string is CLIENT-SUPPLIED all the way down: it comes off a
+    // hidden form field in `submitProfileAction`, rides the redirect to
+    // /sign/consent as a query param, and arrives here unvalidated. Without
+    // this check, `/sign/profile?version=0.0.1` writes a brand-new signature
+    // against an archived version — which then renders "v0.0.1" beside that
+    // person on /signers, and resolves as `signed-earlier`, offering them a
+    // re-affirm for a document they just signed.
+    //
+    // `reaffirmSignature` has always refused this (src/lib/db/reaffirm.ts:66).
+    // The first-time path did not, so the two disagreed about an invariant the
+    // `signed-earlier` UI assumes holds. Same rule, same chokepoint now.
+    throw new Error(
+      `Version ${input.versionString} is no longer open for signing.`,
+    );
+  }
 
   // The Neon HTTP driver does not support db.transaction(); we insert
   // consent first, then the signature. If the signatures insert fails (e.g.

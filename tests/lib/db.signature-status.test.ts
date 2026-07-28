@@ -74,6 +74,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "a".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -125,6 +127,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "d".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -152,6 +156,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "e".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -204,6 +210,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "1".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -211,6 +219,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.2",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "2".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -273,6 +283,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "7".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -330,6 +342,8 @@ describe("resolveSignatureStatus", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "9".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
@@ -359,6 +373,9 @@ async function seedPriorSigner(
   await recordSignature(db, {
     signerId: signer.id,
     versionString,
+    // A PRIOR signature: by definition written while that version was
+    // current, which is the state re-affirming exists to follow up on.
+    allowArchivedVersion: true,
     consentTextHash: "a".repeat(64),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     capturedFields: {} as any,
@@ -552,6 +569,8 @@ describe("reaffirmSignature", () => {
     await recordSignature(db, {
       signerId: signer.id,
       versionString: "0.0.1",
+      // Historical by construction: written while that version was current.
+      allowArchivedVersion: true,
       consentTextHash: "f".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       capturedFields: {} as any,
