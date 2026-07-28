@@ -25,9 +25,15 @@ const pillClasses = (html: string) =>
     .map((m) => m[1])
     .map((attrs) => ({
       slug: /href="\/resources\/([^"]+)"/.exec(attrs)?.[1],
-      className: /class="([^"]*)"/.exec(attrs)?.[1] ?? "",
+      // No `?? ""` default: an empty class string would satisfy this file's
+      // negative assertions (`not.toContain("bg-zinc-50")`) vacuously. A
+      // class-less anchor is dropped instead, so the `length > 20` guard fires.
+      className: /class="([^"]*)"/.exec(attrs)?.[1],
     }))
-    .filter((p): p is { slug: string; className: string } => p.slug !== undefined);
+    .filter(
+      (p): p is { slug: string; className: string } =>
+        p.slug !== undefined && p.className !== undefined,
+    );
 
 describe("Connects-to pills across both tabs", () => {
   const staticPills = pillClasses(render("static"));

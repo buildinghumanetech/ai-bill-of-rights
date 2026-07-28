@@ -15,7 +15,7 @@ import type { CommentWithSelection } from "@/lib/db/queries";
  * Tailwind's JIT only sees full class strings, so these are written out in full
  * rather than composed — do not refactor them into `border-${hue}-200`.
  */
-const US_LAW_SLUGS = new Set([
+export const US_LAW_SLUGS = new Set([
   "california-bot-disclosure-act-sb-1001",
   "consumer-protection-law",
   "coppa",
@@ -38,7 +38,7 @@ export type PillCategory = {
  * that reordering or narrowing the array degrades to a rose pill instead of
  * throwing at render time and taking the homepage down with it.
  */
-const FALLBACK_CATEGORY: PillCategory = {
+export const FALLBACK_CATEGORY: PillCategory = {
   id: "research-advocacy",
   matches: () => true,
   className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
@@ -50,7 +50,7 @@ const FALLBACK_CATEGORY: PillCategory = {
  * category deliberately` in the tests keeps that from becoming a silent
  * catch-all for slugs nobody classified.
  */
-export const PILL_CATEGORIES: PillCategory[] = [
+export const PILL_CATEGORIES: readonly PillCategory[] = [
   {
     id: "humanebench",
     matches: (slug) => slug.startsWith("humanebench"),

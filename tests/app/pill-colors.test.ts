@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  FALLBACK_CATEGORY,
   PILL_CATEGORIES,
+  US_LAW_SLUGS,
   articles,
   pillCategory,
   pillColor,
@@ -88,9 +90,15 @@ describe("pill categories", () => {
     // rules, so adding e.g. "uk-online-safety-act" to US_LAW_SLUGS would make
     // it match two rules and take whichever sits higher.
     //
-    // The catch-all is excluded — matching everything is its job.
-    const specific = PILL_CATEGORIES.filter((c) => c.id !== "research-advocacy");
-    for (const slug of allSlugs) {
+    // Checked over the *rule set*, not just the slugs that currently render.
+    // Registering a slug in US_LAW_SLUGS before wiring it into an article's
+    // `connects` is the natural order when preparing a resource page, and
+    // iterating `allSlugs` alone would let that pass clean, surfacing later as
+    // a mis-coloured pill.
+    //
+    // The catch-all is excluded by identity — matching everything is its job.
+    const specific = PILL_CATEGORIES.filter((c) => c !== FALLBACK_CATEGORY);
+    for (const slug of new Set([...allSlugs, ...US_LAW_SLUGS])) {
       const claimants = specific.filter((c) => c.matches(slug)).map((c) => c.id);
       expect(claimants.length, `${slug} claimed by ${claimants.join(" and ")}`).toBeLessThan(2);
     }
