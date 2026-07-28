@@ -91,25 +91,19 @@ describe("pill categories", () => {
     // rules, so adding e.g. "uk-online-safety-act" to US_LAW_SLUGS would make
     // it match two rules and take whichever sits higher.
     //
-    // Checked over the *rule set*, not just the slugs that currently render.
-    // Registering a slug in a category's list before wiring it into an
-    // article's `connects` is the natural order when preparing a resource
-    // page, and iterating `allSlugs` alone would let that pass clean,
-    // surfacing later as a mis-coloured pill.
+    // Checked over the *rule set*, not just the slugs that currently render:
+    // registering a slug in a category before wiring it into an article's
+    // `connects` is the natural order when preparing a resource page, and
+    // iterating `allSlugs` alone would let that pass clean, surfacing later as
+    // a mis-coloured pill.
     //
-    // The iteration domain is derived from `PillCategory.slugs`, which the
-    // type makes mandatory for any list-based rule — so a *new* category with
-    // its own list is covered here without anyone widening this test. The
-    // assertion below pins that derivation against the one list we know about
-    // today, so dropping `slugs` from the us-law entry fails rather than
-    // quietly shrinking the domain.
-    // Prefixes are probed too, not just slug lists. A prefix string is a valid
-    // probe for its own category, and `p.startsWith(q)` catches nesting in one
-    // direction while probing `q` catches the other — so adding
-    // `{ prefixes: ["uk-ai"] }` alongside `uk-regulation`'s `["uk-"]` fails
-    // here even before any article links to such a slug. Without this the
-    // hazard described above survived in prefix form, which is three of the
-    // four specific categories.
+    // The domain is every declared `slugs` entry plus every declared
+    // `prefixes` entry. The union makes one or the other mandatory, so both
+    // list- and prefix-based categories are covered without widening this test
+    // by hand. A prefix string is a valid probe for its own category, and
+    // `p.startsWith(q)` catches nesting one way while probing `q` catches the
+    // other — so `prefixes: ["uk-ai"]` beside `uk-regulation`'s `["uk-"]` fails
+    // here before any article links to such a slug.
     const enumerable = PILL_CATEGORIES.flatMap((c) => [
       ...(c.slugs ?? []),
       ...(c.prefixes ?? []),
@@ -124,6 +118,18 @@ describe("pill categories", () => {
         .map((c) => c.id);
       expect(claimants.length, `${slug} claimed by ${claimants.join(" and ")}`).toBeLessThan(2);
     }
+  });
+
+  it("matches through the declared rule, not by falling through", () => {
+    // `categoryMatches` returning `true` for the catch-all is invisible via
+    // `pillCategory`, which reaches the fallback through `?? FALLBACK_CATEGORY`
+    // regardless — so deleting that branch would leave every other test in this
+    // file green. Asserted directly, in both directions.
+    expect(categoryMatches(FALLBACK_CATEGORY, "anything-at-all")).toBe(true);
+
+    const humanebench = PILL_CATEGORIES.find((c) => c.id === "humanebench")!;
+    expect(categoryMatches(humanebench, "humanebench-principle-x")).toBe(true);
+    expect(categoryMatches(humanebench, "gdpr-article-7")).toBe(false);
   });
 
   it("never returns an empty class string", () => {

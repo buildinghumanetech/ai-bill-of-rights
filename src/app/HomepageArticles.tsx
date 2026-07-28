@@ -59,8 +59,7 @@ export function categoryMatches(
   // regex) and forgetting the branch here would make that category silently
   // claim *every* slug. The union closes the hole on the definition side; this
   // keeps the consumer from re-opening it.
-  const unhandled: never = category;
-  void unhandled;
+  category satisfies never;
   return false;
 }
 
