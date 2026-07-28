@@ -33,8 +33,13 @@ const proposed = (commentCount: number) => (
 );
 
 /**
- * Class list of the single classed `<tag>` in `html`, optionally narrowed to
- * the one carrying `discriminator`.
+ * Class *tokens* of the single classed `<tag>` in `html`, optionally narrowed
+ * to the one carrying `discriminator`.
+ *
+ * Returns an array rather than the raw string so every `toContain` at a call
+ * site is exact membership. Against the string, `toContain("text-center")` is
+ * satisfied by `sm:text-center` and `toContain("mt-2")` by `mt-20` — a banner
+ * centered on desktop but broken on mobile would pass.
  *
  * Class assertions are scoped to the element under test: a bare
  * `html.toContain("text-center")` would fire on any nested element picking up
@@ -51,12 +56,12 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
   // and <param>, and a wrong element's class list satisfies the assertion.
   const pattern = new RegExp(`<${tag}(?=[\\s>])[^>]*\\sclass="([^"]*)"`, "g");
   const classLists = [...html.matchAll(pattern)]
-    .map((m) => m[1])
-    // Exact token match, not substring: `includes("max-w-3xl")` would also
-    // accept `sm:max-w-3xl`, reintroducing one layer down the imprecision the
-    // `(?=[\s>])` lookahead above exists to prevent.
-    .filter((c) =>
-      discriminator === undefined ? true : c.split(/\s+/).includes(discriminator),
+    .map((m) => m[1].split(/\s+/).filter(Boolean))
+    // Exact token match, not substring: `includes("max-w-3xl")` over the raw
+    // string would also accept `sm:max-w-3xl`, reintroducing one layer down the
+    // imprecision the `(?=[\s>])` lookahead above exists to prevent.
+    .filter((tokens) =>
+      discriminator === undefined ? true : tokens.includes(discriminator),
     );
 
   // Uniqueness, not first-match: the pattern skips unclassed tags and advances,
@@ -76,26 +81,19 @@ describe("FeedbackInvite (current)", () => {
     expect(text(current(12))).not.toContain("—");
   });
 
-  // Both states, not just the empty one: with a count the banner renders a
-  // second classed <p>, and that is the state it is normally in.
-  it.each([0, 12])(
-    "centers the whole box, paragraph included (count %i)",
-    (count) => {
-      const html = render(current(count));
-      expect(classesOf(html, "section")).toContain("text-center");
-      // A width-capped paragraph stays pinned to the left edge of a centered
-      // box unless it is also horizontally centered.
-      expect(classesOf(html, "p", "max-w-3xl")).toContain("mx-auto");
-
-      // The assertions above are byte-identical across both counts, since the
-      // discriminator filters the count line out. Reach for the one piece of
-      // markup only the populated render has, or this case tests the helper
-      // rather than the component.
-      if (count > 0) {
-        expect(classesOf(html, "p", "text-zinc-600")).toContain("mt-2");
-      }
-    },
-  );
+  // Run over both counts on purpose: the claim is that centering does *not*
+  // depend on the count. The populated render adds a second classed <p>, and
+  // that is the state the banner is normally in, so it must not be the state
+  // that goes unchecked. The count line's own styling is asserted below, in the
+  // test named for it — putting it here would fail a centering test for a
+  // palette tweak.
+  it.each([0, 12])("centers the whole box, paragraph included (count %i)", (count) => {
+    const html = render(current(count));
+    expect(classesOf(html, "section")).toContain("text-center");
+    // A width-capped paragraph stays pinned to the left edge of a centered
+    // box unless it is also horizontally centered.
+    expect(classesOf(html, "p", "max-w-3xl")).toContain("mx-auto");
+  });
 
   it("states the mechanism in two sentences", () => {
     const copy = text(current(0));
@@ -128,6 +126,13 @@ describe("FeedbackInvite (current)", () => {
 
     expect(text(current(12))).toContain("12 comments already on it.");
     expect(text(current(1))).toContain("1 comment already on it.");
+
+    // The count line is supporting copy under the link, not a second control:
+    // muted, tight to it, and inheriting the section's centering rather than
+    // setting its own.
+    const countLine = classesOf(render(current(12)), "p", "text-zinc-600");
+    expect(countLine).toContain("mt-2");
+    expect(countLine).not.toContain("text-center");
   });
 });
 
