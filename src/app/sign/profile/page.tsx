@@ -14,7 +14,7 @@ export default async function ProfilePage({
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight">Sign — Step 1 of 2</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-sm text-zinc-600">
         These three fields are public. Everything else stays private — you'll
         see exactly what on the next screen.
       </p>
@@ -30,7 +30,7 @@ export default async function ProfilePage({
             type="text"
             required
             maxLength={200}
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+            className="rounded-md border border-zinc-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-2">
@@ -43,7 +43,7 @@ export default async function ProfilePage({
             name="location"
             type="text"
             maxLength={200}
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+            className="rounded-md border border-zinc-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-2">
@@ -56,12 +56,12 @@ export default async function ProfilePage({
             name="affiliation"
             type="text"
             maxLength={200}
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+            className="rounded-md border border-zinc-300 px-3 py-2"
           />
         </label>
         <button
           type="submit"
-          className="self-start rounded-full bg-zinc-900 px-6 py-3 text-base font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-950"
+          className="self-start rounded-full bg-zinc-900 px-6 py-3 text-base font-medium text-white hover:bg-zinc-700"
         >
           Continue →
         </button>

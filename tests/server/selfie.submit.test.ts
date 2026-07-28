@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
 import { selfies, signers } from "@/lib/db/schema";
-import { submitSelfie } from "@/server/actions/selfie";
+import { submitSelfie } from "@/server/selfies/core";
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
 

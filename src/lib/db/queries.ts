@@ -176,6 +176,63 @@ export async function listSignaturesForSigner(
   return rows;
 }
 
+// ─── Referrals ────────────────────────────────────────────────────────────────
+// "Who did I bring in." Reads signers.referredBySignerId, which is stamped
+// once at signup from the visitor's ref cookie (see src/lib/referral/).
+
+/** How many people arrived through this signer's share links and signed up. */
+export async function countReferralsBySigner(
+  signerId: string,
+  db: any = null,
+): Promise<number> {
+  const client = db ?? getDefaultDb();
+  const rows = await client
+    .select({ value: count() })
+    .from(signers)
+    .where(eq(signers.referredBySignerId, signerId));
+  return Number(rows[0]?.value ?? 0);
+}
+
+export interface ReferredSigner {
+  signerId: string;
+  displayName: string;
+  createdAt: Date;
+  /** Null when they made an account but have not signed the bill. */
+  signedAt: Date | null;
+}
+
+/**
+ * The people this signer brought in, newest first. `signedAt` distinguishes
+ * "signed because of you" from "made an account because of you" — a
+ * re-engagement message wants the former.
+ */
+export async function listReferralsBySigner(
+  signerId: string,
+  db: any = null,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<ReferredSigner[]> {
+  const client = db ?? getDefaultDb();
+  let q = client
+    .select({
+      signerId: signers.id,
+      displayName: signers.displayName,
+      createdAt: signers.createdAt,
+      // A signer can hold several signatures (one per version); the earliest
+      // is the one that represents "they signed because of you".
+      signedAt: sql<Date | null>`min(${signatures.signedAt})`,
+    })
+    .from(signers)
+    .leftJoin(signatures, eq(signatures.signerId, signers.id))
+    .where(eq(signers.referredBySignerId, signerId))
+    .groupBy(signers.id, signers.displayName, signers.createdAt)
+    .orderBy(desc(signers.createdAt));
+
+  if (opts.limit !== undefined) q = q.limit(opts.limit);
+  if (opts.offset !== undefined) q = q.offset(opts.offset);
+
+  return (await q) as ReferredSigner[];
+}
+
 export interface RecentSignerEvent {
   id: string;
   displayName: string;

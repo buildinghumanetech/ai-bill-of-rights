@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { commentReports, comments, signers, versions } from "@/lib/db/schema";
-import { reportComment, toggleReportComment } from "@/server/actions/comment-reports";
+import { reportComment, toggleReportComment } from "@/server/comments/reports";
 
 const md = `---
 version: 1.0.0

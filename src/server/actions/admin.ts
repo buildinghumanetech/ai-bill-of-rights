@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   attestations,
@@ -12,15 +12,12 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
-
-let _db: any | null = null;
-function getDb() {
-  if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = require("@/lib/db").db;
-  }
-  return _db;
-}
+import { deleteSigner } from "@/server/signers/delete";
+import {
+  insertNonSigner,
+  type AdminAddNonSignerResult,
+} from "@/server/admin/non-signers";
+import { getDb } from "@/lib/db/lazy";
 
 async function requireAdminOrBootstrap() {
   const ctx = await getCurrentAdmin();
@@ -47,40 +44,12 @@ export async function bootstrapAdminAction(): Promise<void> {
 export async function deleteSignerAction(signerId: string): Promise<void> {
   await requireAdminOrBootstrap();
   const db = getDb();
-  // Cascade manually since neon-http has no transaction support. Order
-  // matters for FK constraints; we delete children before parents.
-  //
-  // The production DB still has `comments`, `comment_upvotes`, `reports`
-  // tables left behind from an earlier Phase 3 db:push, even though those
-  // tables aren't in the current schema.ts (the Phase 3 PRs were closed).
-  // The FKs from those tables to `signers` were blocking the final
-  // DELETE FROM signers and 500ing the admin Delete button.
-  //
-  // Wrap each defensive DELETE in try/catch so "relation does not exist" is
-  // a no-op (pglite tests + cleaned dev branches have no such tables; prod
-  // still does).
-  async function tryExec(stmt: ReturnType<typeof sql>): Promise<void> {
-    try {
-      await db.execute(stmt);
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      if (!/does not exist|undefined_table/i.test(msg)) throw err;
-    }
-  }
-  await tryExec(sql`
-    DELETE FROM reports
-    WHERE reporter_signer_id = ${signerId} OR resolved_by = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`
-    DELETE FROM comment_upvotes
-    WHERE signer_id = ${signerId}
-       OR comment_id IN (SELECT id FROM comments WHERE signer_id = ${signerId})
-  `);
-  await tryExec(sql`DELETE FROM comments WHERE signer_id = ${signerId}`);
-  await db.delete(signatures).where(eq(signatures.signerId, signerId));
-  await db.delete(consentRecords).where(eq(consentRecords.signerId, signerId));
-  await db.delete(signers).where(eq(signers.id, signerId));
+  // Delegate to the one cascade in @/server/signers/delete. This action used
+  // to carry its own partial copy (reports, comment_upvotes, comments, signatures,
+  // consent_records) which drifted out of date as tables were added: the
+  // Delete button 500'd with SQLSTATE 23503 on anyone who had endorsed a
+  // version, voted on a comment, proposed an edit or uploaded a selfie.
+  await deleteSigner(db, signerId);
   revalidatePath("/admin/signers");
   revalidatePath("/signers");
 }
@@ -256,12 +225,6 @@ export interface AdminAddNonSignerInput {
   notificationPreference: "major" | "minor" | "none";
 }
 
-export interface AdminAddNonSignerResult {
-  success: boolean;
-  signerId?: string;
-  error?: string;
-}
-
 /**
  * Admin-only: manually create a signer row WITHOUT a signature. Use when an
  * admin wants to give someone a comment-only account (registered but didn't
@@ -300,66 +263,4 @@ export async function adminAddNonSignerAction(
   }
 
   return result;
-}
-
-/**
- * Pure data-layer function for creating a non-signer account. Exported so
- * tests can call it directly without mocking Clerk auth.
- */
-export async function insertNonSigner(
-  db: any,
-  input: {
-    displayName: string;
-    affiliation: string;
-    locationText: string;
-    verificationMethod: "email" | "sms";
-    contactValue?: string;
-    isAdmin: boolean;
-    notificationPreference: "major" | "minor" | "none";
-    adminSignerId: string | null;
-  },
-): Promise<AdminAddNonSignerResult> {
-  const displayName = input.displayName.trim();
-  if (!displayName) {
-    return { success: false, error: "Display name is required." };
-  }
-
-  const syntheticClerkId = `admin-added-non-signer-${randomUUID()}`;
-  const contactValue = (input.contactValue ?? "").trim();
-  const capturedFields = {
-    source: "admin_added_non_signer" as const,
-    admin_signer_id: input.adminSignerId,
-    added_at_utc: new Date().toISOString(),
-    contact_method: input.verificationMethod,
-    contact_value: contactValue || null,
-  };
-
-  const [signer] = await db
-    .insert(signers)
-    .values({
-      clerkUserId: syntheticClerkId,
-      displayName,
-      affiliation: input.affiliation.trim() || null,
-      locationText: input.locationText.trim() || null,
-      verificationMethod: input.verificationMethod,
-      isAdmin: input.isAdmin,
-      notificationPreference: input.notificationPreference,
-      verifiedAt: new Date(),
-    })
-    .returning({ id: signers.id });
-
-  // Build consent text hash (small, deterministic). No version part since
-  // there is no signature to associate with a version.
-  const consentText = `admin-added-non-signer|${displayName}|${input.verificationMethod}`;
-  const consentTextHash = sha256Hex(consentText);
-
-  await db
-    .insert(consentRecords)
-    .values({
-      signerId: signer.id,
-      consentTextHash,
-      capturedFields,
-    });
-
-  return { success: true, signerId: signer.id };
 }

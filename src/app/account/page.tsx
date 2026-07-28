@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { signers } from "@/lib/db/schema";
 import { listSignaturesForSigner } from "@/lib/db/queries";
 import { getLatestSelfieForSigner } from "@/lib/selfie/queries";
+import { normalizeWhyISigned } from "@/lib/why-i-signed";
 import type { SelfieCardData } from "@/components/SelfieCard";
 import type { RejectionReason } from "@/lib/selfie/policy";
 import AccountClient from "./AccountClient";
@@ -45,6 +46,14 @@ export default async function AccountPage({
   const sigs = await listSignaturesForSigner(signer.id);
   const latestSelfie = await getLatestSelfieForSigner(signer.id);
   const { revoked } = await searchParams;
+
+  // Every surface re-derives the statement through `normalizeWhyISigned` rather
+  // than trusting the column, and the editor is no exception: a row written
+  // before the cap existed would otherwise fill the textarea with 1000
+  // characters — `maxLength` does not truncate a value set programmatically —
+  // and render the counter as "1000/200" in amber against text the signer page
+  // and the OG card both display clamped to 200.
+  const whyISigned = normalizeWhyISigned(signer.whyISigned);
 
   let selfieCard: SelfieCardData = { status: "none" };
   if (latestSelfie) {
@@ -118,6 +127,7 @@ export default async function AccountPage({
         initialDisplayName={signer.displayName}
         initialAffiliation={signer.affiliation}
         initialLocationText={signer.locationText}
+        initialWhyISigned={whyISigned}
         verificationMethod={signer.verificationMethod}
         signatures={sigs.map((s: { version: string; signedAt: Date }) => ({
           version: s.version,

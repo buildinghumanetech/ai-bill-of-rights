@@ -8,7 +8,9 @@ import {
   signers,
   versions,
 } from "@/lib/db/schema";
-import { recordSignature } from "@/server/actions/sign";
+// `main` moved this out of the server action and into its own module; the
+// action now imports it from here too.
+import { recordSignature } from "@/server/signatures/record";
 import { resolveSignatureStatus } from "@/lib/db/signature-status";
 import { reaffirmSignature } from "@/lib/db/reaffirm";
 

@@ -1,47 +1,17 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
-import { commentUpvotes, signers } from "@/lib/db/schema";
+import { signers } from "@/lib/db/schema";
+import { toggleCommentUpvote } from "@/server/comments/upvotes";
+import { getDb } from "@/lib/db/lazy";
 
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
-
-export async function toggleCommentUpvote(
-  db: any,
-  input: { commentId: string; signerId: string },
-): Promise<{ state: "upvoted" | "removed" }> {
-  const existing = await db
-    .select()
-    .from(commentUpvotes)
-    .where(
-      and(
-        eq(commentUpvotes.commentId, input.commentId),
-        eq(commentUpvotes.signerId, input.signerId),
-      ),
-    )
-    .limit(1);
-  if (existing.length > 0) {
-    await db
-      .delete(commentUpvotes)
-      .where(
-        and(
-          eq(commentUpvotes.commentId, input.commentId),
-          eq(commentUpvotes.signerId, input.signerId),
-        ),
-      );
-    return { state: "removed" };
-  }
-  await db
-    .insert(commentUpvotes)
-    .values({ commentId: input.commentId, signerId: input.signerId });
-  return { state: "upvoted" };
-}
-
+/**
+ * The toggle itself lives in `@/server/comments/upvotes`, a plain module,
+ * because everything exported from this file is a POST-reachable Server
+ * Function and `toggleCommentUpvote` takes the upvoting signer id.
+ */
 export async function toggleCommentUpvoteAction(commentId: string): Promise<{ ok: boolean; error?: string; state?: "upvoted" | "removed" }> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Not signed in." };

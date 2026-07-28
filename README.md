@@ -1,6 +1,6 @@
 # AI Bill of Rights
 
-A versioned, signable, open-source living document at **aibillofrights.org**.
+A versioned, signable, open-source living document at **ai-for-people.org**.
 
 This repo is the source of truth for the document. Each version of the Bill of Rights lives as a markdown file in `content/bill-of-rights/`. The website at `/v/[version]` renders the document, lets verified humans sign it, and shows a public list of signers.
 

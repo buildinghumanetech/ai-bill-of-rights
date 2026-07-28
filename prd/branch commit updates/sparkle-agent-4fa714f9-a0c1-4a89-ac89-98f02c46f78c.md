@@ -1,0 +1,31 @@
+# Branch Progress: sparkle/agent-4fa714f9-a0c1-4a89-ac89-98f02c46f78c
+
+## Progress Update as of [2026-07-24 20:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Reframed how the live signature count is presented on the homepage. At production scale (90 signatures) the count was shown three times on the critical path as a bare total ("with 90 signatures to back them up", "Join 90 other real people", "Join 90 others who have already signed") — a small raw number is counter-proof, it tells the visitor the campaign is tiny and safe to skip. All three surfaces now run through a new threshold-aware component, `src/components/SignatureMomentum.tsx`, which shows early-adopter/scarcity framing plus a cohort progress bar and a sample of *who* signed while the count is small, and flips automatically to the plain large-number framing once the count crosses a configurable threshold. No count was deleted and `/signers` stays linked from every surface on both sides of the threshold.
+
+### Detail of changes made:
+
+- **New `src/components/SignatureMomentum.tsx`** — the single place all count framing lives. Prop-driven and hook-free, so it renders in both server and client trees and is directly testable with `renderToStaticMarkup`.
+  - `RAW_COUNT_THRESHOLD` — **default 5000**, overridable via the `NEXT_PUBLIC_SIGNATURE_COUNT_THRESHOLD` env var (must be `NEXT_PUBLIC_` so it is inlined at build time for the client bundle). Documented in a large header comment at the top of the file explaining *why* the threshold exists.
+  - `getSignatureFraming(count)` — the pure decision function returning a discriminated union: `{ mode: "early", count, goal, remaining, percent, nextOrdinal }` below the threshold, `{ mode: "scale", count }` at or above it. Everything visual derives from this, so threshold behaviour is testable without rendering. Clamps `NaN`/negative counts to 0 so we never render `NaN`.
+  - `nextCohortGoal(count)` — climbs a goal ladder `[1000, 2500, RAW_COUNT_THRESHOLD]` (deduped and capped at the threshold, so an env override can't produce a nonsense goal). This exists so the progress bar always has a visible gap left to close: at 1,200 signatures the goal becomes 2,500, not a already-passed 1,000.
+  - Three presentational components: `SignatureHeadline` (hero sub-line), `SignatureMomentumPanel` (mid-page block with `role="progressbar"` + aria-value attributes and the "Recently signed by" chips), `SignatureMomentumChip` (floating CTA caption).
+  - Copy below threshold: "Be signer #91 of the first 1,000" / "90 of our first 1,000 signatures — 910 to go. Sign now and you're number 91." Copy above threshold reverts to the original "with 6,000 signatures to back them up" / "Join 6,000 other real people…".
+- **`src/app/SignatureCount.tsx`** — kept the default `SignatureCount` export untouched (`src/app/proposed/page.tsx` still imports it and that file is owned by another worker). Added three thin `"use client"` wrappers — `LiveSignatureHeadline`, `LiveSignatureMomentumPanel`, `LiveSignatureMomentumChip` — that read `useLiveSigners().count` and delegate to the presentational components. This keeps the live-polling count wired in while leaving the framing logic hook-free and unit-testable.
+- **`src/app/page.tsx`** — hero paragraph now renders `<LiveSignatureHeadline />`; the mid-page "Join N other real people" paragraph is replaced by `<LiveSignatureMomentumPanel sample={signerSample} />`. Added a best-effort `loadSignerSample()` that calls the existing `listSignatures(null, { limit: 6, offset: 0 })` query for proof-of-quality chips (name + affiliation, falling back to location). It is wrapped in try/catch and `Promise.all`'d with `loadHomepageTabData()`, so a DB hiccup just drops the chips rather than breaking the homepage — same defensive posture `load-tab-data.ts` already uses.
+- **`src/app/FloatingSignButton.tsx`** — caption now renders `<LiveSignatureMomentumChip />`; the now-unused `next/link` and `SignatureCount` imports were dropped.
+- **`tests/app/signature-momentum.test.tsx`** (new, 16 tests) — asserts **both sides of the threshold** for all three surfaces. Uses `renderToStaticMarkup` from `react-dom/server` under vitest's existing `node` environment (verified `next/link` renders fine there — no jsdom or testing-library needed, matching the repo's existing dependency-free test style). Covers: early/scale mode selection including the exact boundary (`count === RAW_COUNT_THRESHOLD` → scale, `threshold - 1` → early), the goal ladder invariant that `goal > count` and `remaining > 0` everywhere in early mode, NaN clamping, absence of the old deflating copy below the threshold, absence of the goal/progress-bar framing above it, affiliation-over-location precedence in the signer chips, and that `href="/signers"` survives on every surface in both modes.
+
+### Potential concerns to address:
+
+- `src/app/proposed/page.tsx` still uses the old bare `<SignatureCount />` in the same two spots the homepage had ("with N signatures", "Join N other real people"). It is owned by another worker on this run, so it was deliberately left alone — it should be migrated to `LiveSignatureHeadline` / `LiveSignatureMomentumPanel` in a follow-up for consistency.
+- `page.tsx` now issues one extra DB query per homepage render (the page is already `force-dynamic`, so there is no caching layer to lean on). It's a 6-row indexed read, but if homepage latency matters this is a candidate for `unstable_cache` with a short TTL.
+- The `NEXT_PUBLIC_SIGNATURE_COUNT_THRESHOLD` override is read at module load, i.e. inlined at build time. Changing it requires a redeploy, not just an env edit — this is inherent to `NEXT_PUBLIC_` and is noted in the file's header comment.
+- The goal ladder tops out at `RAW_COUNT_THRESHOLD`. If someone raises the threshold well past 5,000 without extending the ladder, counts between 5,000 and the new threshold will show a single very long-running goal. The ladder is one array literal in `SignatureMomentum.tsx` if that ever needs tuning.
+- OG images (`src/app/api/og/**`) and the `/signatories` page were out of scope and still present the raw count. If the small-number problem matters there too, they need the same treatment.
+
+---

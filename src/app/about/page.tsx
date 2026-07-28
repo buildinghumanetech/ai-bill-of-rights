@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import ContactForm from "./ContactForm";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "About — AI Bill of Rights",
+export const metadata: Metadata = buildPageMetadata({
+  title: "About",
   description:
     "The AI Bill of Rights is a project of the Building Humane Technology community, founded by Erika Anderson.",
-};
+});
 
 export default function AboutPage() {
   return (

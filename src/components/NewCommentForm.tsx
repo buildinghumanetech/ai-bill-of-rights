@@ -7,6 +7,11 @@ import { submitCommentAction } from "@/server/actions/comments";
 import { saveDraft, clearDraft } from "@/lib/comments/draft";
 import type { SignerForAdminPostAs, SignerForMention } from "@/lib/db/queries";
 import { MentionTextarea } from "@/components/MentionTextarea";
+import {
+  appendResolvedMentions,
+  pruneResolvedMentions,
+  type ResolvedMention,
+} from "@/lib/comments/resolved-mentions";
 
 interface Props {
   baseVersionId: string;
@@ -49,6 +54,7 @@ export function NewCommentForm({
   const [pending, startTransition] = useTransition();
   // Default "post as" is the admin themselves (empty string = self)
   const [actAsSignerId, setActAsSignerId] = useState<string>("");
+  const [resolvedMentions, setResolvedMentions] = useState<ResolvedMention[]>([]);
   const { isSignedIn } = useAuth();
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -79,6 +85,9 @@ export function NewCommentForm({
       fd.set("anchorId", anchorId);
       fd.set("selectedText", selectedText);
       fd.set("body", trimmed);
+      // Re-prune against the trimmed body that is actually being submitted, so a
+      // mention left only in trailing whitespace can't sneak through.
+      appendResolvedMentions(fd, pruneResolvedMentions(trimmed, resolvedMentions));
       if (isAdmin && actAsSignerId) fd.set("actAsSignerId", actAsSignerId);
       const res = await submitCommentAction(fd);
       if (!res.ok) {
@@ -137,6 +146,7 @@ export function NewCommentForm({
           placeholder="Add a comment…"
           autoFocus
           textareaRef={textareaRef}
+          onResolvedMentionsChange={setResolvedMentions}
         />
         {error ? (
           <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">

@@ -1,48 +1,18 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
-import { commentVotes, comments, signers } from "@/lib/db/schema";
+import { comments, signers } from "@/lib/db/schema";
 import { enforceRateLimit } from "@/lib/ratelimit/enforce";
+import { voteOnComment } from "@/server/comments/votes";
+import { getDb } from "@/lib/db/lazy";
 
-let _db: any | null = null;
-function getDb() {
-  if (!_db) _db = (require("@/lib/db") as { db: any }).db;
-  return _db;
-}
-
-/** Pure data-layer toggle, exposed for tests. */
-export async function voteOnComment(
-  db: any,
-  input: { signerId: string; commentId: string; direction: 1 | -1 },
-): Promise<{ state: "added" | "switched" | "removed" }> {
-  const existing = await db
-    .select()
-    .from(commentVotes)
-    .where(and(eq(commentVotes.commentId, input.commentId), eq(commentVotes.signerId, input.signerId)))
-    .limit(1);
-  if (existing.length === 0) {
-    await db.insert(commentVotes).values({
-      commentId: input.commentId,
-      signerId: input.signerId,
-      direction: input.direction,
-    });
-    return { state: "added" };
-  }
-  if (existing[0].direction === input.direction) {
-    await db
-      .delete(commentVotes)
-      .where(and(eq(commentVotes.commentId, input.commentId), eq(commentVotes.signerId, input.signerId)));
-    return { state: "removed" };
-  }
-  await db
-    .update(commentVotes)
-    .set({ direction: input.direction })
-    .where(and(eq(commentVotes.commentId, input.commentId), eq(commentVotes.signerId, input.signerId)));
-  return { state: "switched" };
-}
-
+/**
+ * The toggle itself lives in `@/server/comments/votes`, a plain module,
+ * because everything exported from this file is a POST-reachable Server
+ * Function and `voteOnComment` takes the voting signer id as an argument.
+ */
 export async function voteCommentAction(
   commentId: string,
   direction: 1 | -1,

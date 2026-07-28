@@ -6,7 +6,7 @@ import {
   approveSelfie,
   removeMySelfie,
   submitSelfie,
-} from "@/server/actions/selfie";
+} from "@/server/selfies/core";
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
 

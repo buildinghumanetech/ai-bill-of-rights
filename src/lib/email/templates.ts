@@ -1,3 +1,10 @@
+import { buildShareText } from "@/lib/share/share-text";
+import {
+  shareHrefs,
+  withShareParams,
+  type ShareChannel,
+} from "@/lib/share/urls";
+
 export function commentAccountCreated(opts: {
   displayName: string;
   siteUrl: string;
@@ -31,21 +38,58 @@ export function signConfirmation(opts: {
   revokeUrl: string;
   signatureNumber?: number;
   totalSignatures?: number;
+  /**
+   * Signer id, so every SHARE link carries ?ref= attribution. Null degrades
+   * to an untagged-but-still-channelled link rather than crediting whoever
+   * happened to be in the URL before.
+   *
+   * It is deliberately not applied to the signer's own "view my signature"
+   * links — see `ownPageUrl` below.
+   *
+   * There is deliberately no `whyISigned` param: this email is sent the
+   * instant the signature lands, and the "why I signed" statement is captured
+   * on the step AFTER that. It is null at send time for every signer, so a
+   * param for it would be a promise the template can never keep.
+   */
+  signerId?: string | null;
 }): { subject: string; text: string; html: string } {
   const sigNum = opts.signatureNumber ?? 1;
   const total = opts.totalSignatures ?? sigNum;
   const milestone = getNextMilestone(total);
   const firstName = opts.displayName.split(/\s+/)[0];
 
-  const shareText = `I just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company. Add your name too:`;
-  const shareUrl = opts.signerPageUrl;
-  const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-  const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
-  const emailShareHref = `mailto:?subject=${encodeURIComponent("Sign the AI Bill of Rights")}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;
+  const ref = opts.signerId ?? null;
+  const shareUrlFor = (channel: ShareChannel) =>
+    withShareParams(opts.signerPageUrl, { ref, channel });
+  const shareTextFor = (channel: ShareChannel) => buildShareText({ channel });
+
+  /**
+   * The two self-directed links — "view your public signature page" and the
+   * "View My Signature" CTA — are clicked by the SIGNER, never by a third
+   * party. They carry the channel but deliberately NO `ref`.
+   *
+   * `ref=<the signer's own id>` here would be an own-goal against the very
+   * loop this email exists to drive: the click stamps a first-touch referral
+   * cookie that lives for 30 days (`referralCookiesToSet`), so a self-ref
+   * would sit in the slot a genuine later referral needed. The database
+   * rejects self-referral, so the harm isn't bad data — it's a swallowed
+   * referral. The share buttons below keep their `ref`; those really do go to
+   * someone else.
+   */
+  const ownPageUrl = withShareParams(opts.signerPageUrl, {
+    ref: null,
+    channel: "confirmation-email",
+  });
+  const { twitterHref, linkedinHref, emailHref: emailShareHref } = shareHrefs({
+    url: shareUrlFor,
+    text: shareTextFor,
+  });
 
   const subject = `You signed the AI Bill of Rights v${opts.version}`;
 
-  const suggestedMessage = `${shareText} ${shareUrl}`;
+  // LinkedIn's share dialog carries no text, so this is the block people
+  // actually paste. It gets their sentence too.
+  const suggestedMessage = `${shareTextFor("linkedin")} ${shareUrlFor("linkedin")}`;
 
   const text = `Hi ${opts.displayName},
 
@@ -62,7 +106,7 @@ Bring two friends — share your signature:
   Share on LinkedIn: ${linkedinHref}
   Share via Email: ${emailShareHref}
 
-View your public signature page: ${opts.signerPageUrl}
+View your public signature page: ${ownPageUrl}
 
 Your data, your choice — you can revoke any time:
 ${opts.revokeUrl}
@@ -115,7 +159,7 @@ ${opts.revokeUrl}
 
   <!-- View My Signature CTA -->
   <div style="padding:24px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
-    <a href="${esc(opts.signerPageUrl)}" style="display:inline-block;padding:12px 32px;background:#059669;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View My Signature</a>
+    <a href="${esc(ownPageUrl)}" style="display:inline-block;padding:12px 32px;background:#059669;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">View My Signature</a>
   </div>
 
   <!-- Footer -->
@@ -147,16 +191,27 @@ Here's their unique signatory URL: ${opts.signerPageUrl}
   };
 }
 
+/**
+ * Every link in this email goes to a THIRD PARTY — the invitee — so both URLs
+ * below must already carry `?ref=<inviter>` and `?via=invite` before they get
+ * here. Build them with `homeShareUrl`/`signerShareUrl`; an untagged value is a
+ * regression, not a stylistic choice. That is why neither param is called
+ * `siteUrl`: the previous version took the bare origin, and a friend who
+ * clicked through and signed was attributed to nobody while the modal had
+ * already reported `share_clicked{channel:"invite"}`.
+ */
 export function signInvitation(opts: {
   inviterName: string;
+  /** The inviter's public signature page, attribution-tagged. */
   inviterPageUrl: string;
-  siteUrl: string;
+  /** The "read it for yourself" homepage link, attribution-tagged. */
+  readItUrl: string;
 }): { subject: string; text: string } {
   return {
     subject: `${opts.inviterName} invited you to sign the AI Bill of Rights`,
     text: `${opts.inviterName} just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company — and thought you'd want to add your name too.
 
-Read it and decide for yourself: ${opts.siteUrl}
+Read it and decide for yourself: ${opts.readItUrl}
 
 ${opts.inviterName}'s signature: ${opts.inviterPageUrl}
 

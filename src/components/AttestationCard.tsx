@@ -6,9 +6,9 @@ interface Props {
 
 export function AttestationCard({ item }: Props) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="rounded-lg border border-zinc-200 p-4">
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+        <span className="text-base font-semibold text-zinc-950">
           {item.productName}
         </span>
         <span className="text-sm text-zinc-500">by {item.orgName}</span>
@@ -19,7 +19,7 @@ export function AttestationCard({ item }: Props) {
             href={item.productUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-zinc-700 underline-offset-4 hover:underline dark:text-zinc-300"
+            className="text-zinc-700 underline-offset-4 hover:underline"
           >
             {item.productUrl}
           </a>

@@ -8,6 +8,11 @@ import { toggleReportCommentAction } from "@/server/actions/comment-reports";
 import { deleteCommentAction, editCommentAction, submitCommentAction } from "@/server/actions/comments";
 import Link from "next/link";
 import { MentionTextarea } from "@/components/MentionTextarea";
+import {
+  appendResolvedMentions,
+  pruneResolvedMentions,
+  type ResolvedMention,
+} from "@/lib/comments/resolved-mentions";
 import { renderBodyWithMentions } from "@/lib/comments/render-mentions";
 
 interface Props {
@@ -61,6 +66,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyActAsSignerId, setReplyActAsSignerId] = useState<string>("");
+  const [replyMentions, setReplyMentions] = useState<ResolvedMention[]>([]);
   // flagged: local state, initialized from server-fetched myReport
   const [flagged, setFlagged] = useState<boolean>(comment.myReport);
   const [flagError, setFlagError] = useState(false);
@@ -177,6 +183,30 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
     });
   }
 
+  /**
+   * Clear every piece of reply-draft state.
+   *
+   * There are three ways a reply draft ends — submit, the Cancel button, and
+   * collapsing via the action-row toggle — and they used to clear three different
+   * subsets: the toggle left `replyActAsSignerId`, Cancel left `replyMentions`.
+   * One function called from all three sites, so they cannot drift apart again.
+   *
+   * A measured note on `setReplyMentions([])`: it is defense in depth, not
+   * observable behaviour. Collapsing unmounts `MentionTextarea`, and a remounted
+   * one immediately reports an empty set, so removing this line breaks no test —
+   * I checked. It stays because relying on a child's mount side-effect to clear a
+   * value the server notifies on is a worse guarantee than clearing it here, and
+   * the day the composer stops unmounting is not the day you want to discover
+   * that. `setReplyBody("")` on these paths IS observable and is pinned by
+   * tests/components/comment-node.mentions.test.tsx.
+   */
+  function resetReplyDraft() {
+    setReplyBody("");
+    setReplyMentions([]);
+    setReplyActAsSignerId("");
+    setReplyError(null);
+  }
+
   function handleReplySubmit(e: React.FormEvent) {
     e.preventDefault();
     setReplyError(null);
@@ -195,14 +225,15 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
       fd.set("anchorId", rootAnchorId ?? comment.anchorId ?? "");
       fd.set("parentCommentId", comment.id);
       fd.set("body", trimmed);
+      // Re-prune against the trimmed body actually being submitted.
+      appendResolvedMentions(fd, pruneResolvedMentions(trimmed, replyMentions));
       if (isAdmin && replyActAsSignerId) fd.set("actAsSignerId", replyActAsSignerId);
       const res = await submitCommentAction(fd);
       if (!res.ok) {
         setReplyError(res.error ?? "Couldn't save reply.");
         return;
       }
-      setReplyBody("");
-      setReplyActAsSignerId("");
+      resetReplyDraft();
       setShowReply(false);
       router.refresh();
     });
@@ -410,7 +441,14 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
             </p>
           )}
 
-          {/* Action row — reply only; flag moved to header row */}
+          {/* Action row — reply only; flag moved to header row.
+
+              The toggle carries an explicit `aria-label` because its visible copy
+              ("reply"/"cancel") differs from the composer's own Reply/Cancel
+              buttons only in letter case. That is ambiguous for anyone listening
+              to the page, not just for `getByRole`'s case-sensitive name matcher,
+              so the fix is a distinct accessible name rather than a test-only
+              hook. Tests select on it. */}
           <div className="mt-1.5 flex items-center gap-3 flex-wrap">
             <button
               type="button"
@@ -419,8 +457,13 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                   openSignModal();
                   return;
                 }
-                setShowReply((v) => !v);
+                // Collapsing unmounts the composer, which loses its picks.
+                // Clear the draft too so reopening can't show mention text that
+                // would no longer notify anyone.
+                if (showReply) resetReplyDraft();
+                setShowReply(!showReply);
               }}
+              aria-label={showReply ? "Cancel reply" : "Reply to this comment"}
               className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
             >
               {showReply ? "cancel" : "reply"}
@@ -457,6 +500,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                 placeholder="Write a reply…"
                 autoFocus
                 textareaRef={textareaRef}
+                onResolvedMentionsChange={setReplyMentions}
               />
               {replyError && (
                 <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{replyError}</p>
@@ -466,9 +510,7 @@ export function CommentNode({ comment, viewerSignerId, isAdmin, signersForAdmin,
                   type="button"
                   onClick={() => {
                     setShowReply(false);
-                    setReplyBody("");
-                    setReplyError(null);
-                    setReplyActAsSignerId("");
+                    resetReplyDraft();
                   }}
                   className="rounded-full px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100"
                 >

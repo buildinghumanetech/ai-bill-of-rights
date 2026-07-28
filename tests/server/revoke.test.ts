@@ -9,13 +9,13 @@ import {
   selfies,
   selfieReports,
 } from "@/lib/db/schema";
-import { recordSignature } from "@/server/actions/sign";
-import { deleteSigner } from "@/server/actions/revoke";
+import { recordSignature } from "@/server/signatures/record";
+import { deleteSigner } from "@/server/signers/delete";
 import {
   approveSelfie,
   reportSelfie,
   submitSelfie,
-} from "@/server/actions/selfie";
+} from "@/server/selfies/core";
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
 

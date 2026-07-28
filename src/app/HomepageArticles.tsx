@@ -482,8 +482,13 @@ interface Props {
 /**
  * Naive sentence splitter: split on `.`, `!`, `?` followed by whitespace + capital.
  * Good enough for the curated article bodies in this app.
+ *
+ * Exported because `<CommitmentsSummary>` needs the same notion of "sentence"
+ * to take the first one. Requiring a following capital is what keeps
+ * "e.g. ", "U.S. " and "vs. " from being read as sentence ends, so a second,
+ * simpler copy of this logic would quietly disagree with this one.
  */
-function splitSentences(body: string): string[] {
+export function splitSentences(body: string): string[] {
   return body
     .split(/(?<=[.!?])\s+(?=[A-Z"„])/)
     .map((s) => s.trim())

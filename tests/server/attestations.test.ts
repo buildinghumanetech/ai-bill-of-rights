@@ -8,7 +8,7 @@ import {
   verifyAttestationToken,
   approveAttestation,
   hideAttestation,
-} from "@/server/actions/attestations";
+} from "@/server/attestations/core";
 
 const sampleMarkdown = `---
 version: 1.0.0

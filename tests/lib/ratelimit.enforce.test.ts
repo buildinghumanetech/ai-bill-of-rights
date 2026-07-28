@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { signers, comments, versions } from "@/lib/db/schema";
 import { syncVersions } from "@/lib/db/sync";
-import { enforceRateLimit, RateLimitError } from "@/lib/ratelimit/enforce";
+import {
+  enforceRateLimit,
+  enforceEphemeralRateLimit,
+  resetEphemeralRateLimits,
+} from "@/lib/ratelimit/enforce";
 
 const md = `---
 version: 1.0.0
@@ -77,27 +81,65 @@ describe("enforceRateLimit", () => {
     ).rejects.toThrow(/rate/i);
   });
 
-  it("throws a typed RateLimitError, not a bare Error", async () => {
-    // Callers must be able to tell "you are over the limit" from "the check
-    // itself blew up" — a DB failure reported as "too many attempts" sends
-    // someone away to retry something that will not fix itself. Matching the
-    // message text is a contract across a module boundary that nothing
-    // enforces; the type is one the compiler keeps.
-    const { db, signerId } = await seed();
+  // A `RateLimitError` test lived here on this branch. `main` has since deleted
+  // the class — it had no consumers, and the two call sites that could have
+  // used it still catch every throw the same way — so the test went with it
+  // rather than being resurrected against an export that no longer exists.
+  // The distinction it argued for (over-the-limit vs the check itself failing)
+  // is still worth drawing; it needs a live consumer first.
+});
 
-    const attempt = enforceRateLimit(db, {
-      bucket: "reaffirm",
-      signerId,
-      windowSec: 3600,
-      max: 0, // already over before any write
-      countSql: `SELECT 0::int as n`,
-    });
+/**
+ * The in-process sibling, used where the rate-limited write leaves no durable
+ * row to count — today that is "why I signed", which is an UPDATE of a column
+ * on `signers`. Same options, same error; the clock is injected so the window
+ * can be walked without sleeping.
+ */
+describe("enforceEphemeralRateLimit", () => {
+  beforeEach(() => resetEphemeralRateLimits());
 
-    await expect(attempt).rejects.toBeInstanceOf(RateLimitError);
-    const err = await attempt.catch((e) => e);
-    expect(err.code).toBe("rate_limited");
-    expect(err.bucket).toBe("reaffirm");
-    // The message is preserved: callers that surface it directly still work.
-    expect(err.message).toMatch(/rate limit exceeded/i);
+  const opts = (now: number) => ({
+    bucket: "why_i_signed",
+    key: "signer-1",
+    windowSec: 3600,
+    max: 3,
+    now,
+  });
+
+  it("allows up to max inside the window then throws", () => {
+    for (let i = 0; i < 3; i++) {
+      expect(() => enforceEphemeralRateLimit(opts(1_000 + i))).not.toThrow();
+    }
+    expect(() => enforceEphemeralRateLimit(opts(1_003))).toThrow(/rate limit/i);
+  });
+
+  it("lets the window slide rather than locking the key out forever", () => {
+    for (let i = 0; i < 3; i++) enforceEphemeralRateLimit(opts(1_000));
+    expect(() => enforceEphemeralRateLimit(opts(1_000))).toThrow();
+    // One hour and a bit later the earlier attempts have aged out.
+    expect(() =>
+      enforceEphemeralRateLimit(opts(1_000 + 3_601_000)),
+    ).not.toThrow();
+  });
+
+  it("does not let refused attempts hold the window open", () => {
+    for (let i = 0; i < 3; i++) enforceEphemeralRateLimit(opts(0));
+    // A client retrying in a tight loop for the whole window...
+    for (let t = 0; t < 3_600_000; t += 60_000) {
+      expect(() => enforceEphemeralRateLimit(opts(t))).toThrow();
+    }
+    // ...still gets in once the ORIGINAL three attempts expire.
+    expect(() => enforceEphemeralRateLimit(opts(3_600_001))).not.toThrow();
+  });
+
+  it("keeps separate buckets and separate keys apart", () => {
+    for (let i = 0; i < 3; i++) enforceEphemeralRateLimit(opts(0));
+    expect(() => enforceEphemeralRateLimit(opts(0))).toThrow();
+    expect(() =>
+      enforceEphemeralRateLimit({ ...opts(0), key: "signer-2" }),
+    ).not.toThrow();
+    expect(() =>
+      enforceEphemeralRateLimit({ ...opts(0), bucket: "other" }),
+    ).not.toThrow();
   });
 });

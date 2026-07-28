@@ -34,21 +34,21 @@ export default async function CompletePage({
   return (
     <main className="mx-auto w-full max-w-xl px-6 py-16 text-center">
       <h1 className="text-4xl font-semibold tracking-tight">Signed.</h1>
-      <p className="mt-4 text-lg text-zinc-700 dark:text-zinc-300">
+      <p className="mt-4 text-lg text-zinc-700">
         Thank you, {signer?.displayName ?? "friend"}. You signed v{version}.
       </p>
       <div className="mt-10 flex flex-col items-center gap-3">
         {signer ? (
           <Link
             href={`/signatories/${signer.id}`}
-            className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white dark:bg-zinc-50 dark:text-zinc-950"
+            className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white"
           >
             See your public page →
           </Link>
         ) : null}
         <Link
           href="/signatories"
-          className="text-sm font-medium text-zinc-700 underline-offset-4 hover:underline dark:text-zinc-300"
+          className="text-sm font-medium text-zinc-700 underline-offset-4 hover:underline"
         >
           See everyone who has signed
         </Link>

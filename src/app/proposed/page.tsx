@@ -29,6 +29,11 @@ export default async function ProposedPage() {
           </Link>{" "}
           to back them up.
         </p>
+        <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-zinc-600">
+          You&apos;re looking at the v{data.proposedVersion} working draft.
+          Highlight any line below to comment or suggest different wording — it
+          is open to everyone, and it is how the next version gets written.
+        </p>
       </section>
 
       <HeroSection />
@@ -65,6 +70,11 @@ export default async function ProposedPage() {
             These eleven commitments aren&apos;t a wishlist. They&apos;re the
             baseline. Companies that won&apos;t agree to them are telling
             you who they are.
+          </p>
+          <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-600">
+            Scroll back up and highlight anything you&apos;d word differently.
+            Comments are public, can be voted up or down, and the ones that hold
+            up get folded into the next published version.
           </p>
           <div className="mt-10 flex flex-col items-center gap-6">
             <Link
