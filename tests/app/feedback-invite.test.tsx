@@ -43,8 +43,10 @@ const proposed = (commentCount: number) => (
  *
  * The same change cuts the other way for *negative* assertions: membership
  * makes `not.toContain("text-center")` blind to `sm:text-center`, which would
- * let a responsive variant slip past a guard meant to exclude the class
- * entirely. Use `lacksClass` for negatives — it strips variant prefixes.
+ * let a variant slip past a guard meant to exclude the class entirely. So
+ * negatives run their tokens through `baseClasses` first, which reduces
+ * `sm:hover:bg-blue-600/90` to `bg-blue-600` and leaves `not.toContain` a real
+ * matcher.
  *
  * Class assertions are scoped to the element under test: a bare
  * `html.toContain("text-center")` would fire on any nested element picking up
@@ -91,9 +93,17 @@ const classesOf = (html: string, tag: string, discriminator?: string) => {
  * diff, so a failure names the class list instead of printing
  * `expected false to be true`.
  *
- * Reach: variant prefixes and opacity modifiers only. A different shade
- * (`bg-blue-500`) or an arbitrary value (`bg-[#2563eb]`) is out of scope and
- * will not be caught.
+ * Reach: *all* variant prefixes — not just responsive, but interaction states
+ * and `dark:` too — plus opacity modifiers. Two limits worth knowing, and they
+ * fail differently:
+ *
+ * - Out of scope, simply not caught: a different shade (`bg-blue-500`) or an
+ *   arbitrary value (`bg-[#2563eb]`).
+ * - Actively mangled: the split on `:` is unconditional, so a token with a
+ *   colon inside brackets — `[&:hover]:bg-blue-600`, `bg-[url(data:…)]` —
+ *   reduces to a fragment rather than a utility and quietly disarms the guard
+ *   for the very class it was aimed at. This assumes plain
+ *   `variant:utility/opacity` tokens.
  */
 const baseClasses = (tokens: string[]) =>
   tokens.map((token) => token.split(":").pop()!.split("/")[0]);
@@ -134,8 +144,12 @@ describe("FeedbackInvite (current)", () => {
 
     const button = classesOf(html, "button");
     expect(button).toContain("underline");
-    // The old filled pill button is gone: no fill, no pill — not behind a
-    // responsive variant or an opacity modifier either, hence baseClasses.
+    // The old filled pill button is gone: no fill, no pill, under *any* variant.
+    // `baseClasses` collapses interaction states too, so `hover:bg-blue-600`
+    // trips this as surely as `sm:bg-blue-600` does. That is deliberate — on a
+    // control styled as a text link, a hover fill is the pill coming back — but
+    // it means a genuine hover affordance has to be built without that class,
+    // not that the guard is misfiring.
     expect(baseClasses(button)).not.toContain("bg-blue-600");
     expect(baseClasses(button)).not.toContain("rounded-full");
 
@@ -177,8 +191,10 @@ describe("FeedbackInvite (proposed)", () => {
     // it has to fail on a structural change rather than quietly stop guarding.
     // `classesOf` throwing on anything but a unique match is what supplies that;
     // a decorative positive assertion here would only add a false-failure surface.
-    // Through `baseClasses`, not raw tokens: centering the grid on desktop only
-    // (`sm:text-center`) is exactly the regression this needs to catch.
+    // Through `baseClasses`, not raw tokens, so this excludes `text-center`
+    // under any variant — see its header for the reach. The responsive case
+    // (`sm:text-center`, centering the grid on desktop only) is the regression
+    // it was written for, not the only one it catches.
     expect(baseClasses(classesOf(html, "section"))).not.toContain("text-center");
   });
 });
