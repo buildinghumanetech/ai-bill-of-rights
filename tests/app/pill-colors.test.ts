@@ -64,6 +64,17 @@ describe("pill categories", () => {
     );
   });
 
+  it("keeps the UK pills off the cyan-adjacent hues", () => {
+    // Teal read at ~7.7 ΔE against the cyan comment highlights on the Proposed
+    // tab — the weakest pairing on the page. Pinned so a later palette tidy
+    // cannot quietly move it back next to cyan.
+    const uk = pillColor("uk-age-appropriate-design-code");
+    expect(uk).toContain("bg-lime-50");
+    for (const cyanAdjacent of ["teal", "cyan", "emerald"]) {
+      expect(uk).not.toContain(`bg-${cyanAdjacent}-50`);
+    }
+  });
+
   it("groups the regulatory families", () => {
     expect(slugsIn("eu-regulation").every((s) => /^(eu-ai-act|gdpr)/.test(s))).toBe(true);
     expect(slugsIn("eu-regulation").length).toBeGreaterThanOrEqual(8);
