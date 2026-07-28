@@ -37,8 +37,13 @@ const proposed = (commentCount: number) => (
  * `html.toContain("text-center")` would fire on any nested element picking up
  * the class, which is a different change than the one being guarded.
  */
-const classesOf = (html: string, tag: string) =>
-  new RegExp(`<${tag}[^>]*\\sclass="([^"]*)"`).exec(html)?.[1] ?? "";
+const classesOf = (html: string, tag: string) => {
+  // `(?=[\s>])` delimits the tag name: without it, "p" matches <path>, <pre>
+  // and <param>, and a wrong element's class list satisfies the assertion.
+  const match = new RegExp(`<${tag}(?=[\\s>])[^>]*\\sclass="([^"]*)"`).exec(html);
+  if (match === null) throw new Error(`no <${tag}> with a class attribute in markup`);
+  return match[1];
+};
 
 describe("FeedbackInvite (current)", () => {
   it("uses no em dashes", () => {
@@ -104,6 +109,11 @@ describe("FeedbackInvite (proposed)", () => {
     expect(text(proposed(12))).toContain("Select any text");
     expect(text(proposed(12))).toContain("Drag across a sentence. On a phone, press and hold.");
     expect(html).toContain("sm:grid-cols-3");
-    expect(classesOf(html, "section")).not.toContain("text-center");
+    // Anchor the lookup before negating: this is the suite's only guard that
+    // the step grid stays left-aligned, so it must fail on a structural
+    // rename rather than quietly stop guarding.
+    const section = classesOf(html, "section");
+    expect(section).toContain("rounded-xl");
+    expect(section).not.toContain("text-center");
   });
 });
