@@ -19,7 +19,13 @@ import {
 } from "@/lib/db/schema";
 
 /**
- * drizzle/0008 carries the existing discussion forward from v0.0.1 to v0.1.0.
+ * drizzle/0010 carries the existing discussion forward from v0.0.1 to v0.1.0.
+ *
+ * It was written as 0008 and renumbered when `main` turned out to have its own
+ * 0007 and 0008. The BACKUP TABLES keep their original `_0008` names on
+ * purpose — renaming them would orphan the backups in any database that has
+ * already run an earlier form of this file, which is the one population the
+ * migration's repair logic exists for.
  *
  * Comments are scoped to the version row they were written against, and the
  * homepage filters on the CURRENT version — so without this migration,
@@ -31,7 +37,7 @@ import {
 const MIGRATION = path.join(
   process.cwd(),
   "drizzle",
-  "0008_repoint_comments_to_v0_1_0.sql",
+  "0010_repoint_comments_to_v0_1_0.sql",
 );
 
 /**
@@ -265,7 +271,7 @@ async function editVersionOf(db: TestDb, editId: string) {
   return row.baseVersionId;
 }
 
-describe("0008 repoint comments to the new current version", () => {
+describe("0010 repoint comments to the new current version", () => {
   it("executes every statement in the file", () => {
     // Guards against a mangled `--> statement-breakpoint` collapsing chunks or
     // a statement being dropped. The assertions on the final statement are
@@ -602,7 +608,7 @@ describe("0008 repoint comments to the new current version", () => {
   });
 
   it("does not orphan a comment when the backup has no anchor to restore", async () => {
-    // An earlier form of 0008 created the backup tables with no anchor_id
+    // An earlier form of this migration created the backup tables with no anchor_id
     // column; step 1b adds it with nothing to backfill from, so those rows
     // carry NULL. The published rollback must not write that NULL over a live
     // anchor — a comment with neither an anchor nor a proposal is orphaned,

@@ -1,5 +1,14 @@
 -- Carry the existing discussion forward from v0.0.1 to v0.1.0.
 --
+-- NUMBERING: this was written as 0008 and renumbered to 0010 when the branch
+-- was merged with `main`, which had meanwhile added its own 0007 and 0008.
+-- The BACKUP TABLES below keep their original `comment_version_backup_0008` /
+-- `proposed_edit_version_backup_0008` names deliberately. Renaming them would
+-- orphan the backups in any database that already ran an earlier form of this
+-- file — which is precisely the population sections 1b and 3 exist to repair,
+-- and the only copy of the pre-move anchors. A table name is an identifier,
+-- not a version number; it does not get to drift just because the file did.
+--
 -- WHY: comments are scoped to the version row they were written against
 -- (comments.base_version_id), and the homepage queries filter on the CURRENT
 -- version. Publishing v0.1.0 therefore hides every existing thread on / and
@@ -231,7 +240,7 @@ UPDATE "proposed_edits"
 --        the pills still had their old slugs — they were authored on the target
 --        version, so they were never in scope of a src->tgt move.
 --      * Any environment where an EARLIER form of this migration already ran.
---        0008 was revised several times on this branch; a dev database that
+--        this file was revised several times on this branch; a dev database that
 --        applied a previous form has its rows on 0.1.0 with anchors that the
 --        earlier (unpadded, therefore no-op) CASE never touched.
 --
