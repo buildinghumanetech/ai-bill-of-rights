@@ -145,14 +145,52 @@ describe("renderBodyWithMentions", () => {
     expect(result[0]).toBe("cc @Erik_dev please");
   });
 
-  it("reads whole code points at the boundary, not UTF-16 units", () => {
-    // `body[i]` hands back a lone surrogate for an astral character, and a
-    // u-flagged class never matches one — so a mention butted against an astral
-    // letter would slip past a naive guard. 𝐀 (U+1D400) is \p{L} and astral.
+  it("highlights a mention butted against non-Latin prose", () => {
+    // THE CASE A CHARACTER CLASS CANNOT SERVE. Japanese and Chinese do not put
+    // spaces around a mention, so a Unicode-wide "word character" guard on either
+    // edge means a genuinely picked mention NEVER highlights for those authors —
+    // the feature simply does not work in those languages.
+    //
+    // Both edges have to allow it, so both are asserted.
     const erik = [{ id: "e1", displayName: "Erik" }];
-    const result = renderBodyWithMentions("cc @Erik\u{1D400}x", erik, ["e1"]);
+    expect(renderBodyWithMentions("よろしく@Erik", erik, ["e1"])).toHaveLength(2);
+    const trailing = renderBodyWithMentions("@Erikさん、ありがとう", erik, ["e1"]);
+    expect(spanText(trailing[0])).toBe("@Erik");
+    expect(trailing[1]).toBe("さん、ありがとう");
+  });
+
+  it("still suppresses a run-on when the run-on is a longer known name", () => {
+    // The protection that survives dropping the Unicode class: it asks whether a
+    // longer KNOWN name starts here, which is script-neutral. So a CJK author is
+    // still protected from the mis-attribution the class was guarding against,
+    // without losing highlighting on ordinary prose.
+    const signers2 = [
+      { id: "e1", displayName: "Erik" },
+      { id: "e2", displayName: "Erikさん" },
+    ];
+    const result = renderBodyWithMentions("cc @Erikさん", signers2, ["e1"]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("cc @Erik\u{1D400}x");
+    expect(result[0]).toBe("cc @Erikさん");
+  });
+
+  it("treats a combining mark as part of the preceding word", () => {
+    // A grapheme ending in a combining mark reads as non-wordish to a
+    // \p{L}/\p{N} class, so `मुझे@Erik.com` (final े is \p{Mn}) slipped the
+    // trailing guard. Here the mark follows the mention and must suppress it.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const result = renderBodyWithMentions("cc @Eriḱx", erik, ["e1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("cc @Eriḱx");
+  });
+
+  it("is not fooled by an astral character before the at-sign", () => {
+    // 𝐀 (U+1D400) is astral, so `body[at - 1]` is a lone LOW surrogate. It must
+    // not be mistaken for an email local part character — this is a real mention
+    // and must still highlight.
+    const erik = [{ id: "e1", displayName: "Erik" }];
+    const result = renderBodyWithMentions("cc \u{1D400}@Erik", erik, ["e1"]);
+    expect(result).toHaveLength(2);
+    expect(spanText(result[1])).toBe("@Erik");
   });
 
   it("still highlights a picked name followed by punctuation or end of text", () => {

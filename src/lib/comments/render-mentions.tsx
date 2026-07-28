@@ -17,9 +17,18 @@ import { mentionText } from "./resolved-mentions";
  * out of prose is the failure `resolved-mentions.ts` exists to end; the fix there
  * only held for delivery, and this closes the display half of the same gap.
  *
- * The needle is `mentionText(displayName)`, the same string the composer inserted
- * and the same one the server checked before sending mail, so display and
- * delivery cannot disagree about what counts as a mention.
+ * The needle is `mentionText(displayName)` — the same string the composer
+ * inserted and the same one the server checked before sending mail.
+ *
+ * Display is nonetheless strictly MORE CONSERVATIVE than delivery, and the
+ * asymmetry is deliberate. Delivery uses plain containment with no boundary
+ * rules at all, so a signer can be mailed for a body where their name only
+ * appears inside an email address (the over-keep documented in
+ * `resolved-mentions.ts`). Highlighting applies the boundary checks below on
+ * top, so it can decline to style a mention that was genuinely delivered. It can
+ * never do the reverse: nothing is styled that was not picked and recorded.
+ * Under-highlighting is the safe direction — a missing highlight is a cosmetic
+ * loss, a wrong one attributes someone's words to a person who never wrote them.
  */
 export function renderBodyWithMentions(
   body: string,
@@ -51,30 +60,43 @@ export function renderBodyWithMentions(
 }
 
 /**
- * Letters, digits and `_` — the characters that mean "this is still the same
- * word". `_` is in the class deliberately: it is neither `\p{L}` nor `\p{N}`, so
- * a class built from those two alone lets `@Erik_dev` slice into a styled
- * `@Erik` and a plain `_dev`.
+ * Characters that can appear in an email local part, which is what the leading
+ * edge is defending against and the ONLY thing it should reject.
+ *
+ * Deliberately ASCII. A previous version used `/[\p{L}\p{N}_]/u` here, and that
+ * broke space-less scripts outright: Japanese and Chinese prose butts a mention
+ * directly against surrounding text (`よろしく@Erik`), so a Unicode-wide class
+ * meant a genuinely picked mention NEVER highlighted for those authors. An email
+ * local part is effectively ASCII, so this catches `alice@Erik.com` without
+ * touching CJK.
+ *
+ * Being ASCII also removes the need to read whole code points on this edge: a
+ * lone surrogate can never match, which is the same answer a full astral code
+ * point would give.
  */
-const WORDISH = /[\p{L}\p{N}_]/u;
+const EMAIL_LOCAL_CHAR = /[A-Za-z0-9._%+-]/;
 
-function isWordish(codePoint: number | undefined): boolean {
-  // Compare whole code points, not UTF-16 units. `body[i]` hands back a lone
-  // surrogate for anything astral, which a `u`-flagged class never matches, so
-  // an emoji or an astral letter would slip past the guard.
-  return codePoint !== undefined && WORDISH.test(String.fromCodePoint(codePoint));
-}
+/**
+ * Characters that mean the mention "runs on" into a longer word on the trailing
+ * edge. `\p{M}` catches a grapheme ending in a combining mark (NFD `andré`, or
+ * Devanagari `मुझे`); `\p{Pc}` covers `_` and its lookalikes.
+ *
+ * ASCII-only, deliberately, for the same reason as above — see the run-on check
+ * below for why the non-ASCII case is handled by name lookup instead.
+ */
+const RUN_ON_CHAR = /[A-Za-z0-9\p{M}\p{Pc}]/u;
 
-/** The code point ending at `index`, or undefined at the start of the string. */
-function codePointBefore(s: string, index: number): number | undefined {
-  if (index <= 0) return undefined;
-  const unit = s.charCodeAt(index - 1);
-  // Low surrogate: step back one more to read the pair as one code point.
-  if (unit >= 0xdc00 && unit <= 0xdfff && index >= 2) {
-    const high = s.charCodeAt(index - 2);
-    if (high >= 0xd800 && high <= 0xdbff) return s.codePointAt(index - 2);
-  }
-  return unit;
+/** Does a longer known display name also start at this position? */
+function longerNameStartsHere(
+  body: string,
+  at: number,
+  needleLength: number,
+  knownSigners: readonly { id: string; displayName: string }[],
+): boolean {
+  return knownSigners.some((s) => {
+    const other = mentionText(s.displayName);
+    return other.length > needleLength && body.startsWith(other, at);
+  });
 }
 
 interface MentionRange {
@@ -112,23 +134,39 @@ function findMentionRanges(
     // Plain `indexOf`, never a constructed regex: a display name containing
     // regex metacharacters needs no escaping and cannot change the semantics.
     for (let at = body.indexOf(needle); at !== -1; at = body.indexOf(needle, at + needle.length)) {
-      // A match only counts when BOTH edges land on a word boundary.
+      // LEADING EDGE — is this `@` part of an email address? Without this,
+      // "@Erik" matches inside `alice@Erik.com`: the `bob!@alice.com` family of
+      // false positive this whole design exists to prevent, pinned on the
+      // delivery side in tests/server/comments.test.ts and easy to reintroduce
+      // on the display side alone.
+      if (at > 0 && EMAIL_LOCAL_CHAR.test(body[at - 1])) continue;
+
+      // TRAILING EDGE — does the match stop in the middle of something longer?
+      // Picking "Erik" and hand-typing "@Erika Anderson" puts "@Erik" inside text
+      // nobody picked; highlighting it slices that text into a styled "@Erik" and
+      // a plain remainder, attributing it to the wrong person. Longest-wins below
+      // only helps when BOTH names have rows, so this is the case it cannot see.
       //
-      // Trailing: picking "Erik" and hand-typing "@Erika Anderson" or "@Erik_dev"
-      // puts "@Erik" inside text that was never picked. Highlighting it slices
-      // that text into a styled "@Erik" plus a plain remainder and attributes it
-      // to the wrong person. Longest-wins below only helps when BOTH names have
-      // rows, so this is the case it cannot see.
+      // Two separate questions, because one test cannot answer both:
       //
-      // Leading: without it, "@Erik" matches inside `alice@Erik.com` — the
-      // `bob!@alice.com` family of false positive that this whole design exists
-      // to prevent, which the delivery side pins in tests/server/comments.test.ts
-      // and which a display-only guard would quietly reintroduce.
+      //   1. Does a longer KNOWN name start here? That is the real risk — the
+      //      run-on text is somebody else's name — and it is script-neutral,
+      //      which a character class is not.
+      //   2. Does an ASCII word character follow? Catches `@Erik_dev`, where the
+      //      run-on is a handle rather than a known name.
       //
-      // Under-highlighting is the safe direction: the mention is still
-      // delivered, it just is not dressed up.
-      if (isWordish(codePointBefore(body, at))) continue;
-      if (isWordish(body.codePointAt(at + needle.length))) continue;
+      // Deliberately NOT "any `\p{L}` follows". That over-rejects exactly the
+      // authors a character class cannot serve: `@Erikさん` is the ordinary way
+      // to write this in Japanese, and suppressing it means picked mentions never
+      // highlight in space-less scripts. Check (1) still protects those authors
+      // from mis-attribution, which is the failure that actually matters.
+      const next = body.codePointAt(at + needle.length);
+      const runsOn =
+        next !== undefined && RUN_ON_CHAR.test(String.fromCodePoint(next));
+      if (runsOn || longerNameStartsHere(body, at, needle.length, knownSigners)) {
+        continue;
+      }
+
       found.push({ start: at, end: at + needle.length, signerId: id });
     }
   }
