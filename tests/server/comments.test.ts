@@ -428,16 +428,23 @@ describe("write-time mention resolution (data layer)", () => {
     const mentions = read.fromComposer
       ? resolveSubmittedMentions(body, read.signerIds, known)
       : [];
-    for (const m of mentions.filter((m) => m.signerId !== authorSignerId)) {
+    // EVERY resolved mention gets a row, self-mentions included — the row is
+    // what the comment renders from, so dropping it would unstyle a name the
+    // author picked. The self-filter applies only to the email fan-out, which
+    // is why it is reported separately rather than applied here.
+    if (mentions.length > 0) {
       await db
         .insert(commentMentions)
-        .values({ commentId, mentionedSignerId: m.signerId })
+        .values(
+          mentions.map((m) => ({ commentId, mentionedSignerId: m.signerId })),
+        )
         .onConflictDoNothing();
     }
-    return db
+    const rows = await db
       .select()
       .from(commentMentions)
       .where(eq(commentMentions.commentId, commentId));
+    return { rows, mailed: mentions.filter((m) => m.signerId !== authorSignerId) };
   }
 
   it("notifies exactly the signer the composer resolved", async () => {
@@ -454,7 +461,7 @@ describe("write-time mention resolution (data layer)", () => {
       body,
     });
 
-    const rows = await recordMentions(db, commentId, body, [alice.id], known, signerId);
+    const { rows } = await recordMentions(db, commentId, body, [alice.id], known, signerId);
     expect(rows).toHaveLength(1);
     expect(rows[0].mentionedSignerId).toBe(alice.id);
   });
@@ -473,7 +480,7 @@ describe("write-time mention resolution (data layer)", () => {
       body,
     });
 
-    const rows = await recordMentions(db, commentId, body, [alice.id], [alice], signerId);
+    const { rows } = await recordMentions(db, commentId, body, [alice.id], [alice], signerId);
     expect(rows).toEqual([]);
   });
 
@@ -490,7 +497,7 @@ describe("write-time mention resolution (data layer)", () => {
     });
 
     // Composer resolved and found nothing — no ids submitted, marker still set.
-    const rows = await recordMentions(db, commentId, body, [], [alice], signerId);
+    const { rows } = await recordMentions(db, commentId, body, [], [alice], signerId);
     expect(rows).toEqual([]);
   });
 
@@ -526,7 +533,12 @@ describe("write-time mention resolution (data layer)", () => {
     expect(rows).toEqual([]);
   });
 
-  it("drops a self-mention", async () => {
+  it("records a self-mention but does not mail it", async () => {
+    // Two different questions, and they used to share one answer. The ROW means
+    // "this was a mention", which is true when you name yourself — and since
+    // highlighting renders from the rows, dropping it made an author's own pick
+    // show up as plain text while the composer still listed them under "Notifying".
+    // Suppressing the EMAIL is the separate, correct half: you know what you wrote.
     const { db, versionId, signerId } = await seed();
     const [me] = await db
       .select({ id: signers.id, displayName: signers.displayName })
@@ -541,7 +553,9 @@ describe("write-time mention resolution (data layer)", () => {
       body,
     });
 
-    const rows = await recordMentions(db, commentId, body, [me.id], [me], signerId);
-    expect(rows).toEqual([]);
+    const { rows, mailed } = await recordMentions(db, commentId, body, [me.id], [me], signerId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mentionedSignerId).toBe(me.id);
+    expect(mailed).toEqual([]);
   });
 });

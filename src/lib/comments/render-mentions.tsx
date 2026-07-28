@@ -85,6 +85,15 @@ function findMentionRanges(
     // Plain `indexOf`, never a constructed regex: a display name containing
     // regex metacharacters needs no escaping and cannot change the semantics.
     for (let at = body.indexOf(needle); at !== -1; at = body.indexOf(needle, at + needle.length)) {
+      // Skip a match that stops in the middle of a longer word. Picking "Erik"
+      // and then hand-typing "@Erika Anderson" puts "@Erik" inside a name that
+      // was never picked; highlighting it would slice that name into a styled
+      // "@Erik" plus a plain "a Anderson" and visually attribute the text to the
+      // wrong person. Longest-wins below only helps when BOTH names have rows,
+      // so this is the case it cannot see. Under-highlighting is the safe
+      // direction: the mention is still delivered, it just is not dressed up.
+      const next = body[at + needle.length];
+      if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
       found.push({ start: at, end: at + needle.length, signerId: id });
     }
   }

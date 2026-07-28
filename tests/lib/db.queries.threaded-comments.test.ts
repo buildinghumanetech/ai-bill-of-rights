@@ -272,9 +272,36 @@ describe("mentionedSignerIds", () => {
     const withMention = flat.find((c) => c.id === mentioning.id);
     const without = flat.find((c) => c.id !== mentioning.id);
     expect(withMention?.mentionedSignerIds).toEqual([bobId]);
+
     // Absent rows must be an empty array, not undefined — the render path
     // iterates it without a guard.
     expect(without?.mentionedSignerIds).toEqual([]);
+  });
+
+  it("collects every signer when one comment mentions two people", async () => {
+    // Exercises the accumulate branch in the grouping loop. Without a comment
+    // carrying two rows, replacing the push with an overwrite leaves the suite
+    // green while a two-person mention highlights only one of them.
+    const { db, versionId, aliceId, bobId } = await seed();
+    const [c] = await db
+      .insert(comments)
+      .values({
+        baseVersionId: versionId,
+        anchorId: "preamble-s-1",
+        signerId: aliceId,
+        body: "@Alice and @Bob both",
+      })
+      .returning({ id: comments.id });
+    await db.insert(commentMentions).values([
+      { commentId: c.id, mentionedSignerId: aliceId },
+      { commentId: c.id, mentionedSignerId: bobId },
+    ]);
+
+    const flat = flattenTree(await listThreadedCommentsForVersion(db, versionId, null));
+    // Row order is not guaranteed, so compare as a set.
+    expect([...(flat[0]?.mentionedSignerIds ?? [])].sort()).toEqual(
+      [aliceId, bobId].sort(),
+    );
   });
 
   it("keeps each comment's rows separate when several mention people", async () => {

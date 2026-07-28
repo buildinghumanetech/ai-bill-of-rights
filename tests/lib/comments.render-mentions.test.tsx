@@ -104,6 +104,34 @@ describe("renderBodyWithMentions", () => {
     expect(spanText(result[1])).toBe("@Erika Anderson");
   });
 
+  it("does not slice a longer hand-typed name that contains a picked one", () => {
+    // Erik was picked; "@Erika Anderson" was typed by hand and has no row. The
+    // needle "@Erik" is literally present inside it, so a naive scan would style
+    // "@Erik" and leave "a Anderson" plain — attributing someone else's name to
+    // Erik. Longest-wins cannot catch this: there is no competing range, because
+    // Erika was never picked.
+    //
+    // Erik genuinely was mailed (`resolveSubmittedMentions` has the same
+    // over-keep, documented in resolved-mentions.ts), so nothing is lying here.
+    // But a half-highlighted name reads as a rendering bug, and under-
+    // highlighting is the safe direction.
+    const overlapping = [
+      { id: "e1", displayName: "Erik" },
+      { id: "e2", displayName: "Erika Anderson" },
+    ];
+    const result = renderBodyWithMentions("cc @Erika Anderson", overlapping, ["e1"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("cc @Erika Anderson");
+  });
+
+  it("still highlights a picked name followed by punctuation or end of text", () => {
+    // The boundary check above must not swallow ordinary endings.
+    const overlapping = [{ id: "e1", displayName: "Erik" }];
+    expect(renderBodyWithMentions("cc @Erik, thanks", overlapping, ["e1"])).toHaveLength(3);
+    expect(renderBodyWithMentions("cc @Erik", overlapping, ["e1"])).toHaveLength(2);
+    expect(renderBodyWithMentions("cc @Erik's idea", overlapping, ["e1"])).toHaveLength(3);
+  });
+
   it("does not crash on a display name containing regex metacharacters", () => {
     // Matching is plain `indexOf`, never a constructed regex, so nothing here
     // needs escaping and no metacharacter can change the match semantics.
