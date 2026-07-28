@@ -3,29 +3,124 @@ import type { ReactNode } from "react";
 import { AnchorSentence } from "@/components/AnchorSentence";
 import type { CommentWithSelection } from "@/lib/db/queries";
 
-// Pastel pill palette. Tailwind sees these as full class strings so the
-// JIT will include them in the generated CSS. Pills are colored by a tiny
-// deterministic hash of the slug so the same pill always renders the same
-// color across the site.
-const PILL_COLORS = [
-  "border-pink-200 bg-pink-50 text-pink-900 hover:bg-pink-100",
-  "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
-  "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
-  "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
-  "border-violet-200 bg-violet-50 text-violet-900 hover:bg-violet-100",
-  "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
-  "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
-  "border-indigo-200 bg-indigo-50 text-indigo-900 hover:bg-indigo-100",
-  "border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100",
-  "border-orange-200 bg-orange-50 text-orange-900 hover:bg-orange-100",
+/**
+ * "Connects to" pill colour is a property of the pill's *category*, not of the
+ * individual pill.
+ *
+ * This replaced a hash of the slug. That was stable per pill, but it spread the
+ * six HumaneBench principles across five different colours, so the colour
+ * carried no meaning and read as noise. Grouping instead lets a reader learn
+ * "light blue means HumaneBench" once and have it hold everywhere on the site.
+ *
+ * Tailwind's JIT only sees full class strings, so these are written out in full
+ * rather than composed — do not refactor them into `border-${hue}-200`.
+ */
+export const US_LAW_SLUGS: ReadonlySet<string> = new Set([
+  "california-bot-disclosure-act-sb-1001",
+  "consumer-protection-law",
+  "coppa",
+  "eeoc-guidance-ai-employment",
+  "emerging-state-ai-legislation",
+  "ftc-act-section-5",
+  "ftc-guidance-deceptive-ai",
+  "nist-ai-risk-management-framework",
+  "white-house-ai-bill-of-rights-2022",
+]);
+
+/**
+ * How a category claims a slug. A union rather than a `matches` callback with
+ * an optional `slugs` field: a callback lets a list-based rule be written as
+ * `matches: (s) => MY_SET.has(s)` without declaring its domain, which compiles
+ * fine and then escapes the overlap test silently. Here a list-based rule
+ * *cannot* be expressed without `slugs`, so the test can always enumerate it.
+ */
+type PillCategoryRule =
+  // Every variant negates the other two discriminants. Excess-property
+  // checking against a union admits any key declared in *some* constituent, so
+  // without `catchAll?: undefined` here, `{ prefixes: [...], catchAll: true }`
+  // would typecheck, match this variant, and have its `catchAll` ignored — a
+  // category its author believes is the fallback quietly matching one prefix.
+  | { prefixes: readonly string[]; slugs?: undefined; catchAll?: undefined }
+  | { slugs: ReadonlySet<string>; prefixes?: undefined; catchAll?: undefined }
+  /** Matches everything; exactly one category may use it. */
+  | { catchAll: true; prefixes?: undefined; slugs?: undefined };
+
+export type PillCategory = { id: string; className: string } & PillCategoryRule;
+
+export function categoryMatches(
+  category: Readonly<PillCategory>,
+  slug: string,
+): boolean {
+  if (category.slugs) return category.slugs.has(slug);
+  if (category.prefixes) return category.prefixes.some((p) => slug.startsWith(p));
+  if (category.catchAll) return true;
+  // Reading `catchAll` explicitly rather than treating "neither of the above"
+  // as the catch-all: otherwise adding a fourth rule variant (`suffixes`, a
+  // regex) and forgetting the branch here would make that category silently
+  // claim *every* slug. The union closes the hole on the definition side; this
+  // keeps the consumer from re-opening it.
+  category satisfies never;
+  return false;
+}
+
+/**
+ * Also the last entry of `PILL_CATEGORIES`, and the `??` fallback below, so
+ * that reordering or narrowing the array degrades to a rose pill instead of
+ * throwing at render time and taking the homepage down with it.
+ */
+export const FALLBACK_CATEGORY: Readonly<PillCategory> = {
+  id: "research-advocacy",
+  catchAll: true,
+  className: "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100",
+};
+
+/**
+ * Ordered — the first match wins. `research-advocacy` is last and matches
+ * everything, so a slug can never render unstyled; `every pill lands in a
+ * category deliberately` in the tests keeps that from becoming a silent
+ * catch-all for slugs nobody classified.
+ */
+export const PILL_CATEGORIES: readonly Readonly<PillCategory>[] = [
+  {
+    id: "humanebench",
+    prefixes: ["humanebench"],
+    className: "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
+  },
+  {
+    id: "eu-regulation",
+    prefixes: ["eu-ai-act", "gdpr"],
+    className: "border-violet-200 bg-violet-50 text-violet-900 hover:bg-violet-100",
+  },
+  {
+    id: "us-law",
+    slugs: US_LAW_SLUGS,
+    className: "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
+  },
+  {
+    id: "uk-regulation",
+    prefixes: ["uk-"],
+    className: "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100",
+  },
+  FALLBACK_CATEGORY,
 ];
 
-function pillColor(slug: string): string {
-  let h = 0;
-  for (let i = 0; i < slug.length; i++) {
-    h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  }
-  return PILL_COLORS[h % PILL_COLORS.length];
+export function pillCategory(slug: string): Readonly<PillCategory> {
+  // `??`, not `!`: the non-null assertion would have relied on
+  // FALLBACK_CATEGORY staying last in an array that is exactly the kind of
+  // thing someone alphabetises. Getting that wrong should cost a rose pill,
+  // not a render-time crash on the homepage.
+  //
+  // `Readonly<>` on the return type, not just on the array: TypeScript ignores
+  // `readonly` property modifiers in assignability, so returning the mutable
+  // alias would let `pillCategory("coppa").className = …` typecheck and mutate
+  // the shared module literal for every later render.
+  return (
+    PILL_CATEGORIES.find((c) => categoryMatches(c, slug)) ?? FALLBACK_CATEGORY
+  );
+}
+
+export function pillColor(slug: string): string {
+  return pillCategory(slug).className;
 }
 
 interface Article {
@@ -600,11 +695,13 @@ export function HomepageArticles({
                     </span>
                   )}
                   {article.connects.map((pill) => {
-                    const pillClassName = `rounded-md border px-3 py-1 text-xs font-medium transition-colors ${
-                      mode === "interactive"
-                        ? "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
-                        : pillColor(pill.slug)
-                    }`;
+                    // Same colour in both modes. Interactive used to force
+                    // grayscale so the cyan comment highlights would read
+                    // clearly on top; the category palette is light enough
+                    // (`bg-*-50`) that cyan-100/200/300 still stands out.
+                    const pillClassName = `rounded-md border px-3 py-1 text-xs font-medium transition-colors ${pillColor(
+                      pill.slug,
+                    )}`;
                     if (mode === "interactive") {
                       const pillAnchorId = `article-${article.number}-connect-${pill.slug}`;
                       const pillComments = commentsByAnchor[pillAnchorId] ?? [];

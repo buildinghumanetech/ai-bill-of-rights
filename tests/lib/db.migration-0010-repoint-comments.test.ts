@@ -52,7 +52,9 @@ const MIGRATION = path.join(
  * load-bearing: change the padding in HomepageArticles.tsx and they fail here
  * instead of silently certifying a no-op migration.
  *
- * Mirrors src/app/HomepageArticles.tsx:539 (sentences) and :604 (pills).
+ * Mirrors the `anchorId` and `pillAnchorId` templates in
+ * src/app/HomepageArticles.tsx — searched by name rather than cited by line,
+ * because the line numbers went stale the first time that file was edited.
  */
 function articleNumber(oneBased: number): string {
   const article = articles[oneBased - 1];
