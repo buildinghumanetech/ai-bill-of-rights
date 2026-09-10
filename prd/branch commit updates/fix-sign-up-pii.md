@@ -1,5 +1,85 @@
 # Branch Progress: fix/sign-up-pii
 
+## Progress Update as of [2026-09-10 12:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Rebased the branch onto `origin/main`, which had moved **209 commits** ahead since
+the branch was cut. No commits were squashed or dropped — all five are preserved.
+The rebase was substantive rather than mechanical: `main` landed a security
+refactor (`ac49ca7`, `9fec3d0`) that moved every piece of core logic out of the
+`"use server"` action files, and it independently rebuilt the hard-delete cascade
+this branch was written to replace. Full suite **959/959 green**, `tsc --noEmit`
+clean.
+
+### Detail of changes made:
+- **`anonymizeSigner` moved to `src/server/signers/anonymize.ts`** (new plain
+  module). It previously lived in `src/server/actions/revoke.ts` as
+  `anonymizeSigner(dbClient = null, signerId)`. `main` has since established that
+  every export of a `"use server"` file is POST-reachable and that signer ids are
+  public by design, so that exact shape was the "destroy any account by id"
+  exploit documented in `src/server/signers/delete.ts` and `src/lib/db/lazy.ts`.
+  `db` is now a REQUIRED first argument; auth stays in the two callers
+  (`submitRevokeAction`, `deleteSignerAction`). This mirrors `./delete.ts` exactly
+  and keeps `tests/server/actions.guarded.test.ts` green.
+- **Selfie + attestation deltas re-homed.** `main` moved these functions into
+  `src/server/selfies/core.ts` and `src/server/attestations/core.ts`. This branch's
+  blob-cleanup changes (reject / report-hide / self-removal) and the
+  data-minimization changes (stop storing the original blob) were applied THERE
+  rather than resurrecting the copies in the action files — resurrecting them
+  would have reintroduced the hole `main` just closed.
+- **`getSignatureNumber` (`src/lib/db/queries.ts`) — merged, not chosen.** This
+  branch fixes an off-by-one by keeping the timestamp comparison entirely in SQL
+  (a JS `Date` round-trip truncates `timestamptz` microseconds on neon-http).
+  `main` independently switched the same function to `countDistinct(signer_id)` so
+  a multi-version signer doesn't advance everyone else's number. Both were kept.
+- **Dropped as net-zero:** commit 1 added `attestations.submitter_ip_hash` plus a
+  per-IP rate limit, and a later commit on this branch removed them again. Since
+  they net to nothing at the tip and would have required changing `main`'s
+  `attestations/core.ts` signature, they were not carried through the rebase.
+- **`pnpm-workspace.yaml`:** kept `main`'s `allowBuilds` block verbatim (real
+  booleans — the placeholder form breaks every `pnpm` script) and added this
+  branch's CVE `overrides` (js-cookie, postcss) on top.
+- **Fallout fixed:** `src/server/signers/delete.ts` and
+  `tests/server/signer-deletion.activity.test.ts` still referenced
+  `selfies.original_blob_url` / `original_mime` / `original_bytes`, which this
+  branch drops. Removed those references.
+- **Two admin-path tests retargeted.** `signer-deletion.activity.test.ts` and
+  `signer-deletion.referrals.test.ts` asserted that `deleteSignerAction` hard-
+  deletes and returns `undefined`. This branch makes the admin button anonymize
+  and return `{success, error?}`, so those two cases now assert the anonymize
+  contract. The `deleteSigner` and `removeMySignature` cases in both files were
+  left alone and still cover the hard-delete cascade.
+
+### Potential concerns to address:
+- **UNRESOLVED PRODUCT QUESTION — three removal paths, two behaviours.** `main`
+  added a third caller of the hard-delete cascade that did not exist when this
+  branch was cut: `removeMySignature` in `src/server/actions/me.ts`. This branch
+  converts `/account/revoke` and the admin button to anonymize but has no opinion
+  on `removeMySignature`, so it was left hard-deleting. The result is that
+  "remove my signature" destroys the account while "revoke" anonymizes it. Someone
+  needs to decide whether that is intended.
+- **One of this branch's two original rationales is now moot.** The PR body argues
+  for anonymize partly because hard-delete threw FK violations across ~14 tables.
+  `main` has since fixed that properly in `src/server/signers/delete.ts`. The
+  remaining — and still valid — argument is the consent text:
+  `content/consent/v1.md:26` promises "Revoking removes all private data above and
+  converts your public signature to 'Anonymized signer #N.'" `main` today
+  hard-deletes, so `main` is currently in violation of its own consent promise.
+- **Anonymize keeps the referral edge.** Because the inviter row survives,
+  `signers.referred_by_signer_id` is no longer nulled on the admin path. The edge
+  now points at a scrubbed row rather than being cleared. Documented in the
+  retargeted test; flagging in case that is not the desired privacy outcome.
+- **There is no CI in this repository.** `.github/workflows/` does not exist on
+  any branch and the Actions API reports `total_count: 0` runs, ever. The only
+  checks any PR here receives are Vercel's. A rebase cannot therefore "restore" a
+  CI run — there is none to restore.
+- **`pnpm lint` is red repo-wide on `main`** (141 errors, mostly
+  `@typescript-eslint/no-explicit-any` on the `db: any` convention). Unchanged by
+  this branch; nothing enforces it.
+
+---
+
 ## Progress Update as of [2026-05-29 18:00 Pacific]
 *(Most recent updates at top)*
 

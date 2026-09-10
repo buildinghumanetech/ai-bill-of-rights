@@ -163,15 +163,36 @@ describe("deleting a signer who referred someone", () => {
     await expectInviteeSurvivedUnattributed(inviteeId);
   });
 
-  it("succeeds via the admin path (deleteSignerAction)", async () => {
+  // The admin path ANONYMIZES rather than deletes (see @/server/signers/anonymize),
+  // so the inviter row survives with a scrubbed identity. That means the
+  // referral edge is NOT nulled here — it still points at a row, just one that
+  // no longer names anybody. The ON DELETE SET NULL behaviour this suite exists
+  // to protect is still covered by the deleteSigner and removeMySignature cases.
+  it("anonymizes the inviter via the admin path, leaving the edge pointing at a scrubbed row", async () => {
     const { inviterId, inviteeId } = await seedReferralPair();
     state.clerkUserId = "user_admin";
     const { deleteSignerAction } = await import("@/server/actions/admin");
 
-    await expect(deleteSignerAction(inviterId)).resolves.toBeUndefined();
+    await expect(deleteSignerAction(inviterId)).resolves.toEqual({
+      success: true,
+    });
 
-    await expectSignerGone(inviterId);
-    await expectInviteeSurvivedUnattributed(inviteeId);
+    const [inviter] = await db
+      .select()
+      .from(signers)
+      .where(eq(signers.id, inviterId));
+    expect(inviter).toBeDefined();
+    expect(inviter.displayName).toMatch(/^Anonymized (signer #\d+|account)$/);
+    expect(inviter.affiliation).toBeNull();
+    expect(inviter.locationText).toBeNull();
+
+    const [invitee] = await db
+      .select()
+      .from(signers)
+      .where(eq(signers.id, inviteeId));
+    expect(invitee).toBeDefined();
+    expect(invitee.displayName).toBe("user_invitee");
+    expect(invitee.referredBySignerId).toBe(inviterId);
   });
 
   it("nulls attribution for every person the deleted signer brought in", async () => {

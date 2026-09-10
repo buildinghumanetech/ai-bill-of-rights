@@ -413,11 +413,8 @@ describe("deleting a signer with activity", () => {
       .values({
         signerId: otherId,
         status: "approved",
-        originalBlobUrl: "mem://o",
         displayBlobUrl: "mem://d",
         thumbnailBlobUrl: "mem://t",
-        originalMime: "image/jpeg",
-        originalBytes: 10,
         captureMethod: "upload",
         reviewedAt: new Date(),
         reviewedBy: doomedId,
@@ -542,13 +539,42 @@ describe("deleting a signer with activity in every table", () => {
     await expectBystanderSurvived(otherComment, otherProposal);
   });
 
-  it("succeeds via the admin path (deleteSignerAction)", async () => {
+  // The admin "Remove signer" button ANONYMIZES rather than hard-deletes — it
+  // routes through @/server/signers/anonymize, the same path as /account/revoke,
+  // so that the signature keeps counting and the consent record survives as
+  // proof of what was agreed to. The signer row therefore REMAINS here; only
+  // the identity on it is scrubbed. The hard-delete cascade is still exercised
+  // by the deleteSigner and removeMySignature cases above.
+  it("anonymizes rather than deletes via the admin path (deleteSignerAction)", async () => {
     const { otherComment, otherProposal } = await seedBusySigner();
     state.clerkUserId = "user_admin";
     const { deleteSignerAction } = await import("@/server/actions/admin");
 
-    await expect(deleteSignerAction(doomedId)).resolves.toBeUndefined();
+    await expect(deleteSignerAction(doomedId)).resolves.toEqual({
+      success: true,
+    });
 
-    await expectBystanderSurvived(otherComment, otherProposal);
+    const [doomed] = await db
+      .select()
+      .from(signers)
+      .where(eq(signers.id, doomedId));
+    expect(doomed).toBeDefined();
+    expect(doomed.displayName).toMatch(/^Anonymized (signer #\d+|account)$/);
+    expect(doomed.affiliation).toBeNull();
+    expect(doomed.locationText).toBeNull();
+    expect(doomed.isAdmin).toBe(false);
+
+    // Bystander content is untouched either way.
+    const [comment] = await db
+      .select()
+      .from(comments)
+      .where(eq(comments.id, otherComment));
+    expect(comment).toBeDefined();
+    expect(comment.body).toBe("their comment");
+    const [proposal] = await db
+      .select()
+      .from(proposedEdits)
+      .where(eq(proposedEdits.id, otherProposal));
+    expect(proposal).toBeDefined();
   });
 });
