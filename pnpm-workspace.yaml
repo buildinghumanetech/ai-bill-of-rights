@@ -1,3 +1,9 @@
+# Security overrides (pnpm 11 reads `overrides` here, not from package.json):
+#  - js-cookie <3.0.6: cookie-attribute injection (GHSA-qjx8-664m-686j), via Clerk
+#  - postcss <8.5.10: XSS in CSS stringify (GHSA-qx2v-qp2m-jg93), via Next
+overrides:
+  js-cookie@<3.0.6: '>=3.0.6'
+  postcss@<8.5.10: '>=8.5.10'
 # Build scripts are DISABLED for all four of these, which is the state the
 # lockfile has always installed under — every `pnpm` script in this repo has
 # run against a tree where none of them executed a postinstall. This records

@@ -3,6 +3,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { consentRecords, signers } from "@/lib/db/schema";
 import { createAttestation } from "@/server/attestations/core";
+import { validateAttestationFields } from "@/lib/attestations/validate";
 import { getDb } from "@/lib/db/lazy";
 
 /**
@@ -34,6 +35,17 @@ export async function submitAttestationAction(formData: FormData): Promise<{
   if (orgName.length === 0 || productName.length === 0 || contactEmail.length === 0) {
     throw new Error("orgName, productName, and contactEmail are required");
   }
+
+  const validationError = validateAttestationFields({
+    orgName,
+    productName,
+    productUrl,
+    contactEmail,
+  });
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
   const result = await createAttestation(getDb(), {
     orgName,
     productName,
@@ -56,8 +68,8 @@ export async function submitAttestationAction(formData: FormData): Promise<{
     });
     const recipients = await getAdminVerifierEmails();
     if (recipients.length === 0) {
-      // No admins configured — fall back to the submitter so the system stays
-      // unblocked during the no-admins-yet bootstrap window.
+      // No admin verifier email resolved — fall back to the submitter so the
+      // verification flow stays unblocked rather than silently dropping.
       console.warn(
         "[email] no admins to verify attestation; falling back to submitter email",
       );

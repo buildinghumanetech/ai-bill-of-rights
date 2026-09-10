@@ -4,7 +4,6 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { signatures, signers, versions } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
-import { bootstrapAdminAction } from "@/server/actions/admin";
 import AdminRowActions from "./AdminRowActions";
 import AdminAddSignerForm from "./AdminAddSignerForm";
 import AdminAddNonSignerForm from "./AdminAddNonSignerForm";
@@ -14,40 +13,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminSignersPage() {
   const ctx = await getCurrentAdmin();
 
-  if (
-    ctx.state === "unauthenticated" ||
-    ctx.state === "not-a-signer" ||
-    ctx.state === "not-admin"
-  ) {
+  if (ctx.state !== "admin") {
     notFound();
-  }
-
-  if (ctx.state === "no-admins-yet") {
-    return (
-      <main className="mx-auto max-w-2xl px-6 py-24 text-center">
-        <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-          Admin bootstrap
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950">
-          No admins exist yet.
-        </h1>
-        <p className="mt-4 text-base leading-relaxed text-zinc-700">
-          You&apos;re signed in as{" "}
-          <span className="font-semibold">{ctx.signer.displayName}</span> but
-          there&apos;s no admin in the system. The first signer to claim it
-          becomes admin. Subsequent admins can only be granted by an existing
-          admin.
-        </p>
-        <form action={bootstrapAdminAction} className="mt-8">
-          <button
-            type="submit"
-            className="rounded-full bg-zinc-900 px-8 py-3 text-sm font-semibold text-white hover:bg-zinc-700"
-          >
-            Make me the first admin
-          </button>
-        </form>
-      </main>
-    );
   }
 
   // ctx.state === "admin": load the full signer list with admin-only fields.

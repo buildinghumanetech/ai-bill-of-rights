@@ -121,7 +121,6 @@ export async function deleteSigner(
   // 1) Best-effort delete the signer's selfie blobs before destroying rows.
   const signerSelfies = await db
     .select({
-      originalBlobUrl: selfies.originalBlobUrl,
       displayBlobUrl: selfies.displayBlobUrl,
       thumbnailBlobUrl: selfies.thumbnailBlobUrl,
     })
@@ -130,7 +129,6 @@ export async function deleteSigner(
   for (const s of signerSelfies) {
     await deleteSelfieBlobsByUrls(
       {
-        originalUrl: s.originalBlobUrl,
         displayUrl: s.displayBlobUrl,
         thumbnailUrl: s.thumbnailBlobUrl,
       },
