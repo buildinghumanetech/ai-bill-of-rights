@@ -137,34 +137,69 @@ export const signatures = pgTable(
   ],
 );
 
-export const proposedEdits = pgTable("proposed_edits", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  baseVersionId: uuid("base_version_id")
-    .notNull()
-    .references(() => versions.id),
-  proposerSignerId: uuid("proposer_signer_id")
-    .notNull()
-    .references(() => signers.id),
-  kind: text("kind", {
-    enum: ["replace", "insert_after", "delete"],
-  }).notNull(),
-  targetAnchorId: text("target_anchor_id").notNull(),
-  newText: text("new_text"),
-  rationale: text("rationale"),
-  status: text("status", {
-    enum: ["pending", "accepted", "rejected", "stale", "published"],
-  })
-    .notNull()
-    .default("pending"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  decidedAt: timestamp("decided_at", { withTimezone: true }),
-  decidedBy: uuid("decided_by").references(() => signers.id),
-  publishedInVersionId: uuid("published_in_version_id").references(
-    () => versions.id,
-  ),
-});
+export const proposedEdits = pgTable(
+  "proposed_edits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    baseVersionId: uuid("base_version_id")
+      .notNull()
+      .references(() => versions.id),
+    proposerSignerId: uuid("proposer_signer_id")
+      .notNull()
+      .references(() => signers.id),
+    // `new_article` is a proposal for a whole new Article rather than a change
+    // to an existing line. It is the same row shape deliberately: upvotes,
+    // the comment thread, the decision lifecycle and the version scoping are
+    // all already built here and all apply unchanged.
+    kind: text("kind", {
+      enum: ["replace", "insert_after", "delete", "new_article"],
+    }).notNull(),
+    // For `new_article` this is the sentinel NEW_ARTICLE_ANCHOR
+    // ("document-end"), not a real anchor: the column is NOT NULL and a new
+    // article attaches to nothing. Nothing in anchorTextMap() emits it.
+    targetAnchorId: text("target_anchor_id").notNull(),
+    newText: text("new_text"),
+    rationale: text("rationale"),
+    // `new_article` only. The Article heading, without the "Article N:" prefix
+    // — the number is assigned at publish time, not by the proposer.
+    title: text("title"),
+    // `new_article` only, optional. The closing line, mirroring how every
+    // article in v0.1.0 ends on its pull quote.
+    pullQuote: text("pull_quote"),
+    status: text("status", {
+      enum: ["pending", "accepted", "rejected", "stale", "published"],
+    })
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedBy: uuid("decided_by").references(() => signers.id),
+    publishedInVersionId: uuid("published_in_version_id").references(
+      () => versions.id,
+    ),
+    // Soft moderation, mirroring `comments`. A proposal is never hard-deleted:
+    // its upvotes and its comment thread are other people's work, and
+    // `comments.proposal_id` is a FK that a DELETE would have to break.
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    hiddenReason: text("hidden_reason"),
+  },
+  // Declared HERE, not only in drizzle/0011: the deploy path is
+  // `drizzle-kit push`, which reconciles against this file and drops indexes
+  // it does not know about (same trap documented on `signers` and `selfies`).
+  (t) => [
+    index("proposed_edits_kind_created_idx").on(t.kind, t.createdAt.desc()),
+    index("proposed_edits_status_created_idx").on(t.status, t.createdAt.desc()),
+  ],
+);
+
+/**
+ * `target_anchor_id` for a `new_article` proposal. Means "after the last
+ * article", which is where an accepted proposal gets spliced in. It is
+ * deliberately not a real anchor id — see the column comment above.
+ */
+export const NEW_ARTICLE_ANCHOR = "document-end";
 
 export const proposalUpvotes = pgTable(
   "proposal_upvotes",
@@ -181,6 +216,9 @@ export const proposalUpvotes = pgTable(
   },
   (t) => [
     uniqueIndex("proposal_upvotes_proposal_signer_unique").on(t.proposalId, t.signerId),
+    // Groups the count(*) behind the /propose queue. See the push-drops-what-
+    // it-does-not-know note on proposedEdits.
+    index("proposal_upvotes_proposal_idx").on(t.proposalId),
   ],
 );
 

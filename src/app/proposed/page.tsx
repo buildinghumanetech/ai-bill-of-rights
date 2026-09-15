@@ -78,6 +78,12 @@ export default async function ProposedPage() {
           </p>
           <div className="mt-10 flex flex-col items-center gap-6">
             <Link
+              href="/propose"
+              className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
+            >
+              A whole right is missing? Propose one →
+            </Link>
+            <Link
               href={`/v/${data.currentVersion}/as-code`}
               className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
             >
