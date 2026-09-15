@@ -197,17 +197,33 @@ export async function decideProposal(
 }
 
 /**
+ * Placeholder slot number for a proposal that has not been assigned one yet.
+ *
+ * Which slot a proposal takes is an editorial call made when the next version
+ * is assembled, not when it is accepted, so the admin preview renders the
+ * literal `N` that appears in the pasted block until an editor replaces it.
+ */
+export const ARTICLE_NUMBER_PLACEHOLDER = "N";
+
+/**
  * Render an accepted proposal as canonical markdown, ready to paste into the
  * next version file. `number` is assigned by the editor at publish time, which
- * is why the proposer never supplies it.
+ * is why the proposer never supplies it; pass `ARTICLE_NUMBER_PLACEHOLDER` for
+ * a preview of a proposal whose slot is still undecided.
  *
  * Sentence ids follow the `{#article-N-s-M}` convention in v0.1.0.md. The pull
  * quote is emitted as the final sentence, matching "every article now closes
  * with its pull quote" from the 0.1.0 changelog.
+ *
+ * THE ONLY renderer for this block. The admin preview on /admin/proposals used
+ * to inline its own copy of the split-and-anchor logic below, which meant the
+ * markdown an admin copied and the markdown published from an accepted
+ * proposal could drift apart silently — same input, two implementations, no
+ * test comparing them. Route every caller here.
  */
 export function renderProposalAsMarkdown(
   proposal: { title: string | null; newText: string | null; pullQuote: string | null },
-  number: number,
+  number: number | string,
 ): string {
   const sentences = splitIntoSentences(proposal.newText ?? "");
   if (proposal.pullQuote) sentences.push(proposal.pullQuote);

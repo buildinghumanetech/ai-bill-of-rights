@@ -4,6 +4,10 @@ import { getCurrentAdmin } from "@/lib/admin/check";
 import { getCurrentVersion } from "@/lib/db/queries";
 import { listProposedRights } from "@/lib/db/proposal-queries";
 import { getDb } from "@/lib/db/lazy";
+import {
+  renderProposalAsMarkdown,
+  ARTICLE_NUMBER_PLACEHOLDER,
+} from "@/server/proposals/core";
 import { AdminProposalActions } from "./AdminProposalActions";
 
 export const dynamic = "force-dynamic";
@@ -112,13 +116,17 @@ function Row({ p }: { p: Awaited<ReturnType<typeof listProposedRights>>[number] 
  * into the next `content/bill-of-rights/<version>.md`. The number is a
  * placeholder (`N`) on purpose: which slot it takes is an editorial call made
  * when the version is assembled, not when it is accepted.
+ *
+ * Delegates to `renderProposalAsMarkdown` rather than splitting sentences
+ * itself. This function used to carry its own copy of that logic, so the block
+ * an admin copied here and the block the renderer produces could diverge on
+ * any edit to either — the preview would then be a confident lie about what
+ * publishing actually emits. The row's `body` is `proposed_edits.new_text`,
+ * which is the field the renderer names `newText`.
  */
 function renderPreview(p: { title: string; body: string; pullQuote: string | null }) {
-  const sentences = p.body
-    .split(/(?<=[.!?])\s+(?=[A-Z"'“‘])/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (p.pullQuote) sentences.push(p.pullQuote);
-  const body = sentences.map((s, i) => `${s} {#article-N-s-${i + 1}}`).join(" ");
-  return `## Article N: ${p.title} {#article-N}\n\n${body}\n`;
+  return renderProposalAsMarkdown(
+    { title: p.title, newText: p.body, pullQuote: p.pullQuote },
+    ARTICLE_NUMBER_PLACEHOLDER,
+  );
 }

@@ -3,6 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { getCurrentVersion } from "@/lib/db/queries";
 import { listProposedRights, type ProposedRight } from "@/lib/db/proposal-queries";
+import { getDb } from "@/lib/db/lazy";
+import { classifyDbError, type DbErrorKind } from "@/lib/db/error-kind";
 import { signers } from "@/lib/db/schema";
 import { ProposeRightForm } from "@/components/ProposeRightForm";
 import { ProposedRightCard } from "@/components/ProposedRightCard";
@@ -17,6 +19,15 @@ export const metadata = {
 };
 
 /**
+ * What the queue section should show. An empty queue and a queue we could not
+ * read are different facts and get different screens — see the note on the
+ * catch below.
+ */
+type QueueState =
+  | { kind: "ok"; proposals: ProposedRight[] }
+  | { kind: "unavailable"; reason: DbErrorKind };
+
+/**
  * The gap this page fills: /proposed lets anyone comment on or reword a line
  * that already exists, and there was no way at all to say "a whole right is
  * missing". Every such suggestion arrived as a comment anchored to whatever
@@ -27,15 +38,13 @@ export default async function ProposePage() {
   const current = await getCurrentVersion().catch(() => null);
 
   let viewerSignerId: string | null = null;
-  let proposals: ProposedRight[] = [];
+  let queue: QueueState = { kind: "ok", proposals: [] };
 
   if (current) {
     try {
       const { userId } = await auth();
       if (userId) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { db } = require("@/lib/db") as { db: any };
-        const me = await db
+        const me = await getDb()
           .select({ id: signers.id })
           .from(signers)
           .where(eq(signers.clerkUserId, userId))
@@ -47,17 +56,34 @@ export default async function ProposePage() {
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { db } = require("@/lib/db") as { db: any };
-      proposals = await listProposedRights(db, {
-        baseVersionId: current.id,
-        viewerSignerId,
-      });
-    } catch {
-      // DB unavailable (preview/test builds) — render the page empty rather
-      // than 500ing, same posture as loadHomepageTabData.
+      queue = {
+        kind: "ok",
+        proposals: await listProposedRights(getDb(), {
+          baseVersionId: current.id,
+          viewerSignerId,
+        }),
+      };
+    } catch (err) {
+      // Still no 500 — same posture as loadHomepageTabData. But NOT a silent
+      // empty list: this page selects `proposed_edits.title`, added by
+      // drizzle/0011, and migrations here are applied by hand. Swallowing the
+      // error made an un-migrated deploy and a database outage both render as
+      // "Nothing proposed yet", so neither could be told from a queue that is
+      // simply empty, and neither would ever be noticed.
+      const reason = classifyDbError(err);
+      console.error(
+        `[propose] proposal queue unavailable (${reason}); rendering the ` +
+          `unavailable state instead of an empty queue.`,
+        reason === "schema"
+          ? "Has drizzle/0011_new_article_proposals.sql been applied? See README post-deploy steps."
+          : "",
+        err,
+      );
+      queue = { kind: "unavailable", reason };
     }
   }
+
+  const proposals = queue.kind === "ok" ? queue.proposals : [];
 
   return (
     <div className="flex-1 bg-white">
@@ -116,7 +142,9 @@ export default async function ProposePage() {
             signer — the same verified people who signed the document.
           </p>
 
-          {proposals.length === 0 ? (
+          {queue.kind === "unavailable" ? (
+            <QueueUnavailable reason={queue.reason} />
+          ) : proposals.length === 0 ? (
             <p className="mt-10 rounded-lg border border-dashed border-zinc-300 bg-white px-6 py-12 text-center text-base text-zinc-500">
               Nothing proposed yet. Yours would be the first.
             </p>
@@ -137,6 +165,37 @@ export default async function ProposePage() {
       {/* Mounted because the form and the endorse button both dispatch
           open-sign-modal, and this route has no TabbedDocument to catch it. */}
       <SignModalClient />
+    </div>
+  );
+}
+
+/**
+ * Shown when the queue could not be read at all. Deliberately NOT the dashed
+ * "nothing proposed yet" box: a reader who sees this must not conclude that
+ * nobody has proposed anything, and an operator seeing it on a fresh deploy
+ * should suspect the hand-applied migration before suspecting an empty table.
+ *
+ * Solid amber rather than dashed grey so the two states are distinguishable at
+ * a glance, and the form above stays usable either way.
+ */
+function QueueUnavailable({ reason }: { reason: DbErrorKind }) {
+  return (
+    <div
+      role="status"
+      className="mt-10 rounded-lg border border-amber-300 bg-amber-50 px-6 py-10 text-center"
+    >
+      <p className="text-base font-medium text-amber-900">
+        The queue of proposals could not be loaded.
+      </p>
+      <p className="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-amber-800">
+        {reason === "schema"
+          ? "This deploy is not finished setting up, so existing proposals cannot be listed yet. This is not an empty queue — nothing has been lost."
+          : "We could not reach the database just now. This is not an empty queue — try again in a moment."}
+      </p>
+      <p className="mt-3 text-xs text-amber-700">
+        You can still write a proposal above; it will appear here once the
+        listing recovers.
+      </p>
     </div>
   );
 }

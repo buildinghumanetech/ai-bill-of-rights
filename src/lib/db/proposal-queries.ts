@@ -1,10 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { proposedEdits, proposalUpvotes, comments, signers } from "./schema";
-
-function getDefaultDb() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("./index").db;
-}
+import { getDb } from "./lazy";
 
 export interface ProposedRight {
   id: string;
@@ -38,7 +34,7 @@ export interface ProposedRight {
  * it: hidden covers both author withdrawals and moderation removals.
  */
 export async function listProposedRights(
-  db: any = getDefaultDb(),
+  db: any = getDb(),
   opts: {
     baseVersionId: string;
     viewerSignerId?: string | null;
@@ -120,7 +116,7 @@ export async function listProposedRights(
 }
 
 export async function getProposedRight(
-  db: any = getDefaultDb(),
+  db: any = getDb(),
   proposalId: string,
 ): Promise<ProposedRight | null> {
   const rows = await db

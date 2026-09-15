@@ -1,5 +1,30 @@
 # Branch Progress: feat/propose-a-new-right
 
+## Progress Update as of [2026-09-14 18:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+
+Applied the reviewed patch to this branch unmodified (clean `git apply`, no rejects), then made the three corrections that came out of review: collapsed the admin markdown preview onto the one renderer, replaced the `require("@/lib/db")` idiom with `getDb()`, and stopped an unreadable proposal queue from rendering as an empty one. Also moved this log from `feat-propose-a-new-right.md` to `feat/propose-a-new-right.md` so it matches the branch name the way CLAUDE.md specifies and the other `feat/*` logs do.
+
+### Detail of changes made:
+
+- **Third sentence splitter removed.** `renderPreview` in `src/app/admin/proposals/page.tsx` carried its own copy of the split-and-anchor logic that `renderProposalAsMarkdown` in `src/server/proposals/core.ts` already implements, so the markdown an admin copied and the markdown publishing emits could drift apart silently on any edit to either. `renderProposalAsMarkdown` now takes `number: number | string` and exports `ARTICLE_NUMBER_PLACEHOLDER = "N"`; `renderPreview` is a four-line delegation that maps the row's `body` onto the renderer's `newText`. The `Article N` placeholder behaviour is unchanged and now has two tests, one of which asserts the placeholder render is character-identical to a numbered render after substituting the number.
+- **`splitIntoSentences` (core.ts) and `splitSentences` (HomepageArticles) remain separate, deliberately.** That separation is documented in both places and was NOT touched: the HomepageArticles one defines live comment anchors, and coupling a publish-time helper to it could re-point existing comments.
+- **One DB idiom.** `src/app/propose/page.tsx` used `require("@/lib/db")` behind two `eslint-disable` comments; both call sites now use `getDb()` from `@/lib/db/lazy`, matching `src/app/admin/proposals/page.tsx`. `src/lib/db/proposal-queries.ts` had a private `getDefaultDb()` — a third copy of the six-line resolver that `lazy.ts` exists to eliminate (see its header) — now folded onto `getDb()` too. Three `eslint-disable @typescript-eslint/no-require-imports` comments and the associated `{ db: any }` annotations are gone.
+- **An un-migrated database no longer looks like an empty one.** `listProposedRights` selects `proposed_edits.title`, added by `drizzle/0011`, which is applied by hand. The bare `catch {}` on `/propose` turned `column "title" does not exist` into "Nothing proposed yet", making an un-migrated deploy, a database outage and a genuinely empty queue the same screen — and the first two would never be noticed, because nobody is paged by an empty state. Added `src/lib/db/error-kind.ts` (`classifyDbError`) which classifies by SQLSTATE first (42703/42P01 → `schema`; class 08 and Node socket codes → `connection`), falls back to message regexes for errors that crossed a boundary and lost the code, and walks the `cause` chain because the Neon HTTP driver wraps the underlying fetch failure. `/propose` now holds a `QueueState` discriminated union and renders a distinct amber `QueueUnavailable` panel — different copy for `schema` vs `connection` — plus a `console.error` that names the likely missing migration. **The no-500 posture is unchanged**: the page still renders, the form above it still works.
+- **Tests**: `tests/lib/db.error-kind.test.ts` (10 new) covering both SQLSTATE and message-fallback paths, the wrapped-cause case, unset `DATABASE_URL`, code-beats-message precedence, and a cyclic cause chain. `tests/server/proposals.test.ts` gains 2 placeholder-contract tests. Full suite: 985 passed across 92 files. `tsc --noEmit` exits 0.
+
+### Potential concerns to address:
+
+- **`pnpm build` fails in this sandbox, and it is NOT this branch.** It fails prerendering `/resources/[slug]` with `@clerk/clerk-react: Missing publishableKey`, plus `DATABASE_URL is not set` warnings from `layout`. Both are missing environment variables; no file on this branch appears anywhere in the build log. Note the failure is NOT the Geist/Google-Fonts fetch reported from the authoring sandbox — there is no font error here at all.
+- **The `/propose` unavailable state now shows in preview/test builds without a `DATABASE_URL`**, where the old code showed an empty queue. That is the intended consequence of the fix, but it is a visible behaviour change for preview deploys.
+- **The migration is still not applied.** `drizzle/0011` is listed in README post-deploy and is Erika's call, by hand. Until it runs, `/propose` shows the amber `schema` panel rather than the queue.
+- **`classifyDbError` is heuristic at the edges.** SQLSTATE matching is exact, but the message regexes are a fallback and a driver that reworded its errors could fall through to `unknown`, which renders the generic connection copy. That is a safe default (never "empty"), but it is not a guarantee.
+- Everything in the previous entry's concerns list still stands — no moderation ceiling on the public queue, comment threads counted but not rendered, accepted proposals spliced by hand.
+
+---
+
 ## Progress Update as of [2026-09-11 12:45 Pacific]
 *(Most recent updates at top)*
 

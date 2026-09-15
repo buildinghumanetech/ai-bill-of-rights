@@ -9,6 +9,7 @@ import {
   renderProposalAsMarkdown,
   toggleProposalUpvote,
   unhideProposal,
+  ARTICLE_NUMBER_PLACEHOLDER,
 } from "@/server/proposals/core";
 import { listProposedRights } from "@/lib/db/proposal-queries";
 import { validateNewArticle } from "@/lib/proposals/validate";
@@ -223,5 +224,33 @@ describe("new-article proposals", () => {
     expect(md).toContain("First sentence. {#article-12-s-1}");
     expect(md).toContain("Second sentence. {#article-12-s-2}");
     expect(md).toContain("Closing. {#article-12-s-3}");
+  });
+
+  /**
+   * The admin preview on /admin/proposals used to inline its own copy of this
+   * split-and-anchor logic, so the block an admin copied could drift from the
+   * block publishing emits. It now calls this renderer with the placeholder;
+   * these lock in the contract that made that collapse possible.
+   */
+  it("accepts the placeholder slot for a proposal with no number yet", () => {
+    const md = renderProposalAsMarkdown(
+      { title: "A Title", newText: "First sentence. Second sentence.", pullQuote: "Closing." },
+      ARTICLE_NUMBER_PLACEHOLDER,
+    );
+    expect(md).toContain("## Article N: A Title {#article-N}");
+    expect(md).toContain("First sentence. {#article-N-s-1}");
+    expect(md).toContain("Second sentence. {#article-N-s-2}");
+    expect(md).toContain("Closing. {#article-N-s-3}");
+  });
+
+  it("numbers the placeholder render exactly as a numbered one", () => {
+    const proposal = {
+      title: "A Title",
+      newText: "First sentence. Second sentence.",
+      pullQuote: "Closing.",
+    };
+    expect(
+      renderProposalAsMarkdown(proposal, ARTICLE_NUMBER_PLACEHOLDER).replace(/\bN\b/g, "12"),
+    ).toBe(renderProposalAsMarkdown(proposal, 12));
   });
 });
