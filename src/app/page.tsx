@@ -115,6 +115,12 @@ export default async function Home() {
               Suggest a change to v{data.proposedVersion} →
             </Link>
             <Link
+              href="/propose"
+              className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
+            >
+              A whole right is missing? Propose one →
+            </Link>
+            <Link
               href={`/v/${data.currentVersion}/as-code`}
               className="text-sm text-zinc-600 underline underline-offset-8 hover:text-zinc-900"
             >
