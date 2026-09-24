@@ -350,6 +350,29 @@ export async function createSignerFromModal(
       return { success: false, error: "Not authenticated. Please retry." };
     }
 
+    // Look up an existing signer BEFORE validating the name. A returning
+    // signer who comes in through the modal's "Sign in" path is never shown the
+    // name fields, and must not be refused for leaving them blank.
+    const { db: prodDb } = await import("@/lib/db");
+    const { signers } = await import("@/lib/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    const existing = await prodDb
+      .select({ id: signers.id, displayName: signers.displayName })
+      .from(signers)
+      .where(eq(signers.clerkUserId, userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Signer already exists — nothing to do, return their current info.
+      return {
+        success: true,
+        alreadyExists: true,
+        signerId: existing[0].id,
+        displayName: existing[0].displayName,
+      };
+    }
+
     const firstName = input.firstName.trim();
     const lastName = input.lastName.trim();
     if (!firstName || !lastName) {
@@ -402,28 +425,6 @@ export async function createSignerFromModal(
 
     const verificationMethod: "email" | "sms" =
       input.method === "email" ? "email" : "sms";
-
-    // upsertSignerProfile returns existing profile when clerkUserId already exists.
-    // We detect that by querying first so we can set alreadyExists accurately.
-    const { db: prodDb } = await import("@/lib/db");
-    const { signers } = await import("@/lib/db/schema");
-    const { eq } = await import("drizzle-orm");
-
-    const existing = await prodDb
-      .select({ id: signers.id, displayName: signers.displayName })
-      .from(signers)
-      .where(eq(signers.clerkUserId, userId))
-      .limit(1);
-
-    if (existing.length > 0) {
-      // Signer already exists — nothing to do, return their current info.
-      return {
-        success: true,
-        alreadyExists: true,
-        signerId: existing[0].id,
-        displayName: existing[0].displayName,
-      };
-    }
 
     const profile = await upsertSignerProfile(prodDb, {
       clerkUserId: userId,

@@ -24,7 +24,7 @@ export function ProposedRightCard({
   proposal: ProposedRight;
   viewerSignerId: string | null;
 }) {
-  const { isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +40,8 @@ export function ProposedRightCard({
 
   function handleEndorse() {
     setError(null);
+    // Undefined while Clerk loads — not the same as signed out.
+    if (!isLoaded) return;
     if (!isSignedIn) {
       window.dispatchEvent(
         new CustomEvent("open-sign-modal", { detail: { mode: "comment-only" } }),
