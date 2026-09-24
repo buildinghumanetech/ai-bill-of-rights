@@ -235,3 +235,26 @@ describe("GitHub mirror payload", () => {
     expect(mirrored).toHaveLength(0);
   });
 });
+
+/**
+ * The two refusals are different facts about the visitor, and the form offers a
+ * different way forward for each. "Sign the Bill of Rights first" said to
+ * someone who HAS signed but isn't signed in is wrong, so pin that no session
+ * never produces the not-a-signer answer.
+ */
+describe("signer gate refusals", () => {
+  it("no session: says not signed in, never 'sign the Bill of Rights'", async () => {
+    state.clerkUserId = null;
+    const res = await submitNewRightAction(form(GOOD));
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe("not_signed_in");
+    expect(res.error).not.toMatch(/sign the bill of rights/i);
+  });
+
+  it("session with no signer row: says only signers can file", async () => {
+    state.clerkUserId = "u_clerk_only";
+    const res = await submitNewRightAction(form(GOOD));
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe("not_signer");
+  });
+});

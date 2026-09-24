@@ -25,16 +25,24 @@ import { LICENSE_FIELD } from "@/lib/proposals/license";
 type Me = { id: string; isAdmin: boolean };
 
 /**
- * Stable code for "signed in to Clerk, but no signer row". The form matches on
- * this, not on the message text, to turn the rejection into a way to sign.
+ * Two different refusals, kept apart on purpose. No session says nothing about
+ * whether someone has signed, so it must never be answered with "sign the Bill
+ * of Rights". The form matches on these codes, not the message text, to offer
+ * a sign-in button for one and a sign button for the other.
  */
-const NOT_SIGNER = "not_signer" as const;
+type GateCode = "not_signed_in" | "not_signer";
 
 async function requireSigner(): Promise<
-  { ok: true; me: Me } | { ok: false; error: string; code?: typeof NOT_SIGNER }
+  { ok: true; me: Me } | { ok: false; error: string; code?: GateCode }
 > {
   const { userId } = await auth();
-  if (!userId) return { ok: false, error: "Not signed in." };
+  if (!userId) {
+    return {
+      ok: false,
+      code: "not_signed_in",
+      error: "You're not signed in. Sign in, then file it — your text is still here.",
+    };
+  }
   const db = getDb();
   const rows = await db
     .select({ id: signers.id, softBannedAt: signers.softBannedAt, isAdmin: signers.isAdmin })
@@ -47,7 +55,7 @@ async function requireSigner(): Promise<
   if (rows.length === 0) {
     return {
       ok: false,
-      code: NOT_SIGNER,
+      code: "not_signer",
       error: "Only signers can file a proposal. Sign the Bill of Rights, then file it.",
     };
   }

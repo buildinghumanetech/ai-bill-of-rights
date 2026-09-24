@@ -31,6 +31,12 @@ interface Props {
   onClose: () => void;
   /** "sign" = full sign-the-bill flow (default). "comment-only" = create an account to comment without signing. */
   mode?: "sign" | "comment-only";
+  /**
+   * Open on the returning-visitor sign-in (phone/email + code only) instead of
+   * create-account. For "you're not signed in" prompts, where the visitor may
+   * well have signed already.
+   */
+  startInSignIn?: boolean;
 }
 
 type Step = "form" | "otp" | "done";
@@ -218,7 +224,12 @@ function clerkErrorMessage(err: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Props) {
+export default function SignModal({
+  open,
+  onClose,
+  mode: modeProp = "sign",
+  startInSignIn = false,
+}: Props) {
   const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } =
     useSignUp();
   const { signIn, isLoaded: signInLoaded, setActive: setSignInActive } =
@@ -326,6 +337,12 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setFlow("signUp");
     }
   }, [open, modeProp]);
+
+  // Start on sign-in when the opener asked for it. The reset above clears it
+  // on close, so each open starts where its caller wanted.
+  useEffect(() => {
+    if (open && startInSignIn) setSignInOnly(true);
+  }, [open, startInSignIn]);
 
   // When the modal opens with a signed-in user, fetch whether they've
   // already signed the current version so we can show the "already signed" view instead
