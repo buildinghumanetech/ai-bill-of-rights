@@ -23,7 +23,16 @@ export default function SignatureCount() {
 /** Hero sub-headline: the viewer's own number once they've signed, else the live count. */
 export function LiveSignatureHeadline() {
   const { count, viewer } = useLiveSigners();
-  if (viewer) return <SignerHeadline {...viewer} count={count} />;
+  if (viewer) {
+    return (
+      <SignerHeadline
+        signerId={viewer.signerId}
+        signerNumber={viewer.signerNumber}
+        newVersion={viewer.newVersion}
+        count={count}
+      />
+    );
+  }
   return <SignatureHeadline count={count} />;
 }
 
@@ -47,6 +56,13 @@ export function LiveSignatureMomentumPanel({
 /** Caption under the floating button: the viewer's number once they've signed, else the live count. */
 export function LiveSignatureMomentumChip() {
   const { count, viewer } = useLiveSigners();
-  if (viewer) return <SignerMomentumChip {...viewer} />;
+  if (viewer) {
+    return (
+      <SignerMomentumChip
+        signerId={viewer.signerId}
+        signerNumber={viewer.signerNumber}
+      />
+    );
+  }
   return <SignatureMomentumChip count={count} />;
 }

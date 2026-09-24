@@ -165,10 +165,13 @@ export function SignatureHeadline({ count }: { count: number }) {
 export function SignerHeadline({
   signerId,
   signerNumber,
+  newVersion = null,
   count,
 }: {
   signerId: string;
   signerNumber: number;
+  /** The current version, when they signed only an earlier one. */
+  newVersion?: string | null;
   /** The live count, for the milestone line. */
   count: number;
 }) {
@@ -186,7 +189,41 @@ export function SignerHeadline({
       </Link>
       . Thank you.
       {line ? <span className="block">{line}</span> : null}
+      {newVersion ? (
+        <NewVersionLink
+          version={newVersion}
+          className="mt-2 block text-base font-normal text-zinc-500"
+        />
+      ) : null}
     </>
+  );
+}
+
+/**
+ * "v0.1.0 is out. See what changed." for someone who signed an earlier
+ * version. Deliberately a quiet line, not a button: their signature stands,
+ * and adding their name to the new text is a choice they make on
+ * /v/<version> after reading it. A span, so it can sit inside a heading or a
+ * paragraph.
+ */
+export function NewVersionLink({
+  version,
+  className,
+}: {
+  version: string;
+  className?: string;
+}) {
+  return (
+    <span className={className}>
+      v{version} is out.{" "}
+      <Link
+        href={`/v/${version}#what-changed`}
+        className="underline underline-offset-4 hover:text-zinc-900"
+      >
+        See what changed
+      </Link>
+      .
+    </span>
   );
 }
 
@@ -239,7 +276,7 @@ export function SignatureMomentumPanel({
 }: {
   count: number;
   sample?: MomentumSigner[];
-  /** The viewer, when they have signed the current version. */
+  /** The viewer, when they have signed any version. */
   viewerSignerId?: string | null;
   viewerSignerNumber?: number | null;
 }) {

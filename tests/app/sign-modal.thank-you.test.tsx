@@ -374,6 +374,79 @@ describe("someone who has already signed", () => {
   });
 });
 
+describe("someone who signed an earlier version", () => {
+  const SIGNED_EARLIER = {
+    ...SIGNED,
+    state: "signed-earlier",
+    version: "0.0.1",
+    requestedVersion: "0.1.0",
+    firstSignedAt: "2026-06-01T00:00:00.000Z",
+    firstVersion: "0.0.1",
+  };
+  const whatChanged = () =>
+    [...container.querySelectorAll("a")].find(
+      (a) => a.textContent === "See what changed",
+    );
+
+  it("lands on share, with an optional link to what changed and no way to re-sign here", async () => {
+    goLive("sess_existing");
+    userState.user = { firstName: "Ada" };
+    statusState.value = SIGNED_EARLIER;
+    await open();
+    expect(heading()).toBe("Ada, you're signer #92.");
+    expect(shareInput().value).toContain(`/s/${SLUG}`);
+    expect(text()).toContain("v0.1.0 is out. See what changed.");
+    expect(whatChanged()?.getAttribute("href")).toBe("/v/0.1.0#what-changed");
+    // Re-signing lives only at the bottom of /v/0.1.0.
+    expect(text()).not.toMatch(/already signed|Add my name/i);
+    expect(recordSignatureFromModal).not.toHaveBeenCalled();
+  });
+
+  it("lands on share after filling in the sign form, and is not signed again", async () => {
+    signUpCreate.mockRejectedValueOnce(clerkError("form_identifier_exists"));
+    // Two things can get them to share: the status fetch that follows the
+    // sign-in, and the action's alreadySigned answer. Whichever lands first,
+    // they must end on share, never on an error or a second signature.
+    statusState.value = { state: "anonymous" };
+    recordSignatureFromModal.mockImplementation(async () => {
+      statusState.value = SIGNED_EARLIER;
+      return {
+        success: false,
+        alreadySigned: true,
+        error: "You've already signed the AI Bill of Rights.",
+      };
+    });
+    await open();
+    await fillAndSubmitSignForm();
+    await enterCode();
+    expect(heading()).toBe("Ada, you're signer #92.");
+    expect(text()).toContain("v0.1.0 is out. See what changed.");
+    expect(text()).not.toMatch(/already signed/i);
+  });
+
+  it.each(["signed-other", "signed-version-unknown"])(
+    "lands on share with no what-changed link when there is no newer version to sign (%s)",
+    async (state) => {
+      goLive("sess_existing");
+      userState.user = { firstName: "Ada" };
+      statusState.value = { ...SIGNED, state, requestedVersion: "0.1.0" };
+      await open();
+      expect(heading()).toBe("Ada, you're signer #92.");
+      expect(whatChanged()).toBeUndefined();
+      expect(text()).not.toMatch(/Add my name|Manage my signature/);
+    },
+  );
+
+  it("shows a signer of the current version no what-changed link", async () => {
+    goLive("sess_existing");
+    userState.user = { firstName: "Ada" };
+    statusState.value = SIGNED;
+    await open();
+    expect(heading()).toBe("Ada, you're signer #92.");
+    expect(whatChanged()).toBeUndefined();
+  });
+});
+
 describe("copy helpers", () => {
   it("greets by real first name, or plainly when there is none", () => {
     expect(signerGreeting("Ada", 92)).toBe("Ada, you're signer #92.");

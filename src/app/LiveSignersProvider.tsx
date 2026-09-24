@@ -88,7 +88,7 @@ export function LiveSignersProvider({
   // every render, and an identity check would undo setViewer() each time.
   const [viewer, setViewer] = useState<ViewerSignature | null>(initialViewer);
   const initialViewerKey = initialViewer
-    ? `${initialViewer.signerId}:${initialViewer.signerNumber}`
+    ? `${initialViewer.signerId}:${initialViewer.signerNumber}:${initialViewer.newVersion ?? ""}`
     : "";
   const [seenViewerKey, setSeenViewerKey] = useState(initialViewerKey);
   if (initialViewerKey !== seenViewerKey) {

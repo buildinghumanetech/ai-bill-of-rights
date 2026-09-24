@@ -5,6 +5,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { readReferralAttribution } from "@/lib/referral/request";
 import { upsertSignerProfile } from "@/server/profile/upsert";
 import { recordSignature } from "@/server/signatures/record";
+import { hasSignedAnyVersion } from "@/server/signatures/has-signed";
 import { getDb } from "@/lib/db/lazy";
 import {
   renderConsentText,
@@ -112,6 +113,19 @@ export async function recordSignatureFromModal(
     const { userId } = await auth();
     if (!userId) {
       return { success: false, error: "Not authenticated. Please retry." };
+    }
+
+    // Someone who has signed ANY version is never signed again from the
+    // modal: a returning signer who fills in the form lands on their share
+    // view instead. Adding their name to a newer version is a deliberate act
+    // on /v/<version> (reaffirmMySignature). Checked before the profile
+    // upsert so a retyped name can't overwrite the one they signed under.
+    if (await hasSignedAnyVersion(getDb(), userId)) {
+      return {
+        success: false,
+        alreadySigned: true,
+        error: "You've already signed the AI Bill of Rights.",
+      };
     }
 
     const firstName = input.firstName.trim();
