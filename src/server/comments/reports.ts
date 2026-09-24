@@ -11,7 +11,7 @@
 import { and, eq } from "drizzle-orm";
 import { commentReports } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
-import { errorText, errorCode } from "@/lib/errors";
+import { errorText } from "@/lib/errors";
 
 /** Pure data-layer insert. Idempotent via unique constraint. */
 export async function reportComment(

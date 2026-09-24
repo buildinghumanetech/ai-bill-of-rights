@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { auth } from "@clerk/nextjs/server";
-import { signatures, signers } from "@/lib/db/schema";
+import { signers } from "@/lib/db/schema";
 import {
   resolveSignatureStatus,
   type SignerSignatureStatus,

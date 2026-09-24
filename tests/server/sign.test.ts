@@ -280,7 +280,7 @@ describe("recordSignature", () => {
         signerId: signer.id,
         versionString: "0.0.1",
         consentTextHash: "f".repeat(64),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         capturedFields: makeCapturedFields(),
       }),
     ).rejects.toThrow(/no longer open for signing/i);
@@ -335,7 +335,7 @@ describe("recordSignature", () => {
       versionString: "0.0.1",
       allowArchivedVersion: true,
       consentTextHash: "9".repeat(64),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       capturedFields: makeCapturedFields(),
     });
 

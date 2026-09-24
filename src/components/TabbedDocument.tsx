@@ -76,6 +76,10 @@ export function TabbedDocument({
     const c = url.searchParams.get("c");
     if (!c) return;
     // Switch to proposed tab
+    // Intentional: reads window.location on mount to honour a ?c=<commentId> deep link.
+    // The URL is not a prop and is unavailable during server render, so state derived
+    // from it can only be set afterwards.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab("proposed");
     setActiveCommentId(c);
     // Scroll to the highlight after a tick so the DOM is settled
@@ -85,7 +89,7 @@ export function TabbedDocument({
         (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 100);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Clicking outside any highlight span clears the active comment.

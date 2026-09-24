@@ -1,5 +1,60 @@
 # Branch Progress: fix/lint-clean
 
+## Progress Update as of [2026-09-24 02:05 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+**Zero errors AND zero warnings** — `eslint --max-warnings 0` passes. Lint is now a
+CI step alongside typecheck and tests. Suite 1005/1005, tsc clean.
+
+### Detail of changes made:
+- **`react-hooks/set-state-in-effect` — 1 fixed properly, 7 disabled with reasons.**
+  This needs stating plainly, because the split is a judgement call:
+  - **Fixed:** `MentionTextarea`. Resetting the highlighted row now uses React's
+    documented "adjust state when a prop changes" pattern — compare against the
+    previous value during render and set immediately. This is a genuine behaviour
+    improvement, not just rule satisfaction: the effect painted one frame with a
+    stale index first (highlighting row 3 of a list that just became two rows
+    long) before correcting. 27 mention tests cover it and pass.
+  - **Disabled, per-site, with a written justification each:** `SignedAt` (the
+    server has no timezone, so re-formatting in local time after hydration is the
+    whole point), `TabbedDocument` (reads `window.location` on mount for a
+    `?c=` deep link — the URL is not a prop and does not exist during server
+    render), `SignModal`'s async status fetch (a request that can only start after
+    mount), `LiveSignerBanner` (an animation timeline that deliberately lags the
+    prop), `CommentsColumn` (centralised so a keyboard user does not leave the
+    dedupe guard stale), and the two modal reset-on-close effects.
+  - The rule cannot distinguish "derived state written the wrong way" from "a real
+    side effect whose result is state". For the first, it is right and was fixed.
+    For the rest, refactoring to satisfy it would change user-visible behaviour in
+    components with no browser-test coverage — a bad trade against a linter.
+  - **The two modal resets are the weakest of the seven.** `key` on the caller is
+    the idiomatic fix and would genuinely be better; it changes every call site, so
+    it is flagged as a follow-up rather than smuggled into a lint PR.
+- **10 `no-unused-vars` warnings cleared** by deleting genuinely dead imports
+  (`sum`, `signatures`, `getSignerById`, `eq`, `and`, a stray `Db` my own earlier
+  edit added). One was a bare `await import("drizzle-orm")` left with no binding.
+- **`eslint.config.mjs` now knows the `_` convention.** `_reason` / `_comments` are
+  deliberate "required by the signature, unused" bindings that the codebase already
+  uses, so `no-unused-vars` gets `argsIgnorePattern: "^_"` rather than each site
+  carrying a standing warning.
+- **CI runs `eslint --max-warnings 0`**, and all three steps are `!cancelled()` so
+  one red run reports lint, types and tests together rather than stopping at the
+  first.
+
+### Potential concerns to address:
+- **The CI job was renamed** `typecheck + tests` -> `lint + typecheck + tests`. If
+  it had been configured as a required status check, that rename would break the
+  requirement. Nothing is required yet, so this is the cheapest moment to do it —
+  but whoever sets branch protection should use the new name.
+- **`--max-warnings 0` is stricter than `pnpm lint`.** Deliberate: a warning nobody
+  fails on is how this reached 149 unnoticed. The cost is that a newly-noisy rule
+  fails CI until someone decides about it, which is the intended forcing function.
+- **7 disables are suppression, not repair.** Each says why, but they are a real
+  backlog item: the two modal resets in particular have a known better fix.
+
+---
+
 ## Progress Update as of [2026-09-24 01:55 Pacific]
 *(Most recent updates at top)*
 
