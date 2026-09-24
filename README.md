@@ -203,4 +203,12 @@ See `docs/superpowers/specs/2026-05-18-ai-bill-of-rights-design.md` for the cano
 
 ## License
 
-See `LICENSE`.
+Code and text are licensed separately.
+
+**The Bill of Rights text** in `content/bill-of-rights/` (every published version, including the `.md`, `.agents.md` and `.spec.json` files) is licensed under [Creative Commons Attribution 4.0 International](LICENSE-CONTENT) (CC BY 4.0). Share it, translate it, adapt it, build it into your product. Credit "AI Bill of Rights, Building Humane Tech" and link to the source.
+
+**The site code** (everything else in this repository) is licensed under the [MIT License](LICENSE).
+
+Third-party material quoted in `content/resources/`, such as statutes, regulations and excerpts from other organizations, stays under its original terms.
+
+Neither license grants rights to the Building Humane Tech or HumaneBench names or logos.
