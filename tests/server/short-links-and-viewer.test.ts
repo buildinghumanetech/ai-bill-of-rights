@@ -6,8 +6,8 @@
  *  - short links degrade, never break: with the share_links table missing
  *    (migration 0014 unapplied) every entry point returns null instead of
  *    throwing, so callers fall back to the long link;
- *  - the homepage only thanks someone for the CURRENT version — an
- *    earlier-version signer still gets the re-affirm prompt.
+ *  - the homepage thanks anyone who has signed ANY version, and tells an
+ *    earlier-version signer which newer version is out.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,6 +30,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 }));
 
 import { getViewerSignature } from "@/lib/viewer/signature";
+import { hasSignedAnyVersion } from "@/server/signatures/has-signed";
 
 const md = (v: string) => `---
 version: ${v}
@@ -155,17 +156,42 @@ describe("getViewerSignature", () => {
     await sign(me, "1.0.0");
 
     state.clerkUserId = "user_me";
-    expect(await getViewerSignature(db)).toEqual({ signerId: me, signerNumber: 2 });
+    expect(await getViewerSignature(db)).toEqual({
+      signerId: me,
+      signerNumber: 2,
+      newVersion: null,
+    });
   });
 
-  it("is null for someone who signed only an earlier version (they get re-affirm instead)", async () => {
+  it("names someone who signed only an earlier version, with the newer version they haven't signed", async () => {
     await publish(["1.0.0"], "1.0.0");
     const me = await addSigner("user_me");
     await sign(me, "1.0.0");
     await publish(["1.0.0", "1.1.0"], "1.1.0");
 
     state.clerkUserId = "user_me";
-    expect(await getViewerSignature(db)).toBeNull();
+    expect(await getViewerSignature(db)).toEqual({
+      signerId: me,
+      signerNumber: 1,
+      newVersion: "1.1.0",
+    });
+  });
+
+  it("drops newVersion once they have signed the current version too, and keeps their number", async () => {
+    await publish(["1.0.0"], "1.0.0");
+    const me = await addSigner("user_me");
+    await sign(me, "1.0.0");
+    const later = await addSigner("user_later");
+    await sign(later, "1.0.0");
+    await publish(["1.0.0", "1.1.0"], "1.1.0");
+    await sign(me, "1.1.0");
+
+    state.clerkUserId = "user_me";
+    expect(await getViewerSignature(db)).toEqual({
+      signerId: me,
+      signerNumber: 1,
+      newVersion: null,
+    });
   });
 
   it("is null, not a thrown error, when the lookup fails", async () => {
@@ -178,5 +204,26 @@ describe("getViewerSignature", () => {
     };
     expect(await getViewerSignature(broken)).toBeNull();
     err.mockRestore();
+  });
+});
+
+describe("hasSignedAnyVersion", () => {
+  it("is false with no signer row, and for a signer with no signature", async () => {
+    await publish(["1.0.0"], "1.0.0");
+    expect(await hasSignedAnyVersion(db, "user_nobody")).toBe(false);
+    await addSigner("user_commenter");
+    expect(await hasSignedAnyVersion(db, "user_commenter")).toBe(false);
+  });
+
+  it("is true for a signer of an earlier version as well as the current one", async () => {
+    await publish(["1.0.0"], "1.0.0");
+    const early = await addSigner("user_early");
+    await sign(early, "1.0.0");
+    await publish(["1.0.0", "1.1.0"], "1.1.0");
+    const now = await addSigner("user_now");
+    await sign(now, "1.1.0");
+
+    expect(await hasSignedAnyVersion(db, "user_early")).toBe(true);
+    expect(await hasSignedAnyVersion(db, "user_now")).toBe(true);
   });
 });

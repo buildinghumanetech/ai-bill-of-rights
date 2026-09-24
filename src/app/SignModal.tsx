@@ -13,11 +13,11 @@ import {
 } from "@/server/actions/invite";
 import {
   getMySignatureStatus,
-  reaffirmMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
 import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { useOptionalLiveSigners } from "./LiveSignersProvider";
+import { NewVersionLink } from "@/components/SignatureMomentum";
 import { SelfieCapture } from "@/components/SelfieCapture";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
 import { buildShareText } from "@/lib/share/share-text";
@@ -48,6 +48,21 @@ type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
 
 const VERSION = "0.1.0";
+
+/** Every state in which the person has signed some version of the Bill. */
+function isSignedStatus(
+  status: SignatureStatus | { state: "loading" },
+): status is Extract<
+  SignatureStatus,
+  { state: "signed" | "signed-earlier" | "signed-other" | "signed-version-unknown" }
+> {
+  return (
+    status.state === "signed" ||
+    status.state === "signed-earlier" ||
+    status.state === "signed-other" ||
+    status.state === "signed-version-unknown"
+  );
+}
 
 /**
  * The selfie step is out of the post-sign flow for now: sharing is the
@@ -140,15 +155,6 @@ const COUNTRIES: ReadonlyArray<Country> = [
   { id: "RU", code: "+7", flag: "🇷🇺", name: "Russia" },
   { id: "UA", code: "+380", flag: "🇺🇦", name: "Ukraine" },
 ];
-
-function formatSignedDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "2-digit",
-  });
-}
 
 function formatNamePreview(
   first: string,
@@ -292,7 +298,6 @@ export default function SignModal({
   const [signatureStatus, setSignatureStatus] = useState<
     SignatureStatus | { state: "loading" } | null
   >(null);
-  const [reaffirming, setReaffirming] = useState(false);
   const [shareLocation, setShareLocation] = useState(true);
   const [nameDisplayFormat, setNameDisplayFormat] = useState<
     "initials" | "first-initial" | "full"
@@ -314,6 +319,9 @@ export default function SignModal({
   const [signerNumber, setSignerNumber] = useState<number | null>(null);
   // Their short-link slug; null means the long link (see short-links.ts).
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  // The current version, when they signed only an earlier one: shown as the
+  // optional "v0.1.0 is out. See what changed." line on the share view.
+  const [newVersion, setNewVersion] = useState<string | null>(null);
   const liveSigners = useOptionalLiveSigners();
   const [signerName, setSignerName] = useState<string>("");
   const [copied, setCopied] = useState(false);
@@ -383,7 +391,7 @@ export default function SignModal({
       setInvitePending(false);
       setInviteResult(null);
       setSignatureStatus(null);
-      setReaffirming(false);
+      setNewVersion(null);
       setSignInOnly(false);
       setFlow("signUp");
     }
@@ -396,8 +404,8 @@ export default function SignModal({
   }, [open, startInSignIn]);
 
   // When the modal opens with a signed-in user, fetch whether they've
-  // already signed the current version so we can show the "already signed" view instead
-  // of asking them to sign again.
+  // signed any version, so a signer lands on their share view instead of
+  // being asked to sign again.
   useEffect(() => {
     if (!open) return;
     if (!isSignedIn) {
@@ -423,18 +431,24 @@ export default function SignModal({
   }, [open, isSignedIn]);
 
   /**
-   * Someone who has already signed this version lands on their share view —
-   * their card, their why and the share buttons — never on a screen of
-   * account controls. (Removing a signature or deleting the account lives on
-   * /account.) Called wherever a status arrives: on open, after a sign-in by
-   * a returning signer, and after a re-affirm.
+   * Anyone who has signed ANY version lands on their share view — their card,
+   * their why and the share buttons — never on a blocking "you've already
+   * signed" screen or a screen of account controls. (Removing a signature or
+   * deleting the account lives on /account; adding their name to a newer
+   * version lives at the bottom of /v/<version>.) Called wherever a status
+   * arrives: on open, and after a sign-in by a returning signer.
    */
   function landOnShareIfSigned(status: SignatureStatus) {
-    if (status.state !== "signed" || !status.signerId) return;
+    if (!isSignedStatus(status) || !status.signerId) return;
     setMode("sign");
     setSignerId(status.signerId);
     setSignerNumber(status.signerNumber ?? null);
     setShareSlug(status.shareSlug ?? null);
+    // Only "signed-earlier" has a newer version open for signing; the other
+    // states have nothing to point at.
+    setNewVersion(
+      status.state === "signed-earlier" ? status.requestedVersion : null,
+    );
     const why = status.whyISigned ?? null;
     setWhySaved(why);
     setWhyInput(why ?? "");
@@ -447,37 +461,8 @@ export default function SignModal({
   useEffect(() => {
     if (step !== "done" || mode !== "sign") return;
     if (!signerId || signerNumber === null) return;
-    setViewer?.({ signerId, signerNumber });
-  }, [step, mode, signerId, signerNumber, setViewer]);
-
-  /**
-   * One-click re-affirm for someone who signed an earlier version. Reuses the
-   * profile they already gave us — re-entering their name to say "yes, this
-   * one too" would be busywork — but writes a genuinely new signature row,
-   * stamped with the new version's markdown hash. Their earlier signature is
-   * left untouched.
-   */
-  async function handleReaffirm() {
-    setReaffirming(true);
-    setError(null);
-    try {
-      const res = await reaffirmMySignature(VERSION);
-      if (!res.success) {
-        setError(res.error ?? "We couldn't record your signature.");
-        return;
-      }
-      const status = await getMySignatureStatus(VERSION);
-      setSignatureStatus(status);
-      landOnShareIfSigned(status);
-      router.refresh();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "We couldn't record your signature.",
-      );
-    } finally {
-      setReaffirming(false);
-    }
-  }
+    setViewer?.({ signerId, signerNumber, newVersion });
+  }, [step, mode, signerId, signerNumber, newVersion, setViewer]);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -563,6 +548,7 @@ export default function SignModal({
     let res: {
       success: boolean;
       error?: string;
+      alreadySigned?: boolean;
       signerId?: string;
       displayName?: string;
       referred?: boolean;
@@ -587,6 +573,19 @@ export default function SignModal({
         nameDisplayFormat,
         notificationPreference,
       });
+    }
+
+    // They filled in the sign form but had already signed some version:
+    // show their share view, not an error. Signing a newer version is a
+    // choice made on /v/<version>, so the server records nothing here.
+    if (res.alreadySigned) {
+      try {
+        landOnShareIfSigned(await getMySignatureStatus(VERSION));
+        router.refresh();
+        return;
+      } catch {
+        // Fall through to the error below.
+      }
     }
 
     if (!res.success) {
@@ -1018,196 +1017,9 @@ export default function SignModal({
 
         {step === "form" &&
           (signatureStatus?.state === "loading" ||
-            signatureStatus?.state === "signed") && (
+            (signatureStatus !== null && isSignedStatus(signatureStatus))) && (
           <div className="py-16 text-center text-sm text-zinc-500">
             Checking your signature…
-          </div>
-        )}
-
-        {/*
-          They signed a different version and THIS one is not open for signing —
-          superseded, or simply archived. Its own branch rather than folded into
-          "signed", because that copy says "you've already signed *this*" and
-          shows the version they signed rather than the one being viewed.
-          Nothing here is destructive: removing a signature and deleting the
-          account both live on /account, never in this modal.
-        */}
-        {step === "form" && signatureStatus?.state === "signed-other" && (
-          <div>
-            <h2
-              id="sign-modal-title"
-              className="text-2xl font-semibold tracking-tight text-zinc-950"
-            >
-              You&apos;ve signed the AI Bill of Rights as:
-            </h2>
-            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-              <div className="text-xl font-semibold">
-                {signatureStatus.displayName}
-              </div>
-              <div className="mt-1 text-sm">
-                Verified by{" "}
-                {signatureStatus.verificationMethod === "sms"
-                  ? "Phone"
-                  : "Email"}{" "}
-                — v{signatureStatus.version} on{" "}
-                {formatSignedDate(signatureStatus.signedAt)}
-              </div>
-            </div>
-
-            <p className="mt-5 text-sm text-zinc-600">
-              You&apos;re looking at v{signatureStatus.requestedVersion}, which
-              is no longer open for signing. Your signature on v
-              {signatureStatus.version} stands.
-            </p>
-
-            <div className="mt-6 flex flex-col gap-2">
-              <a
-                href="/account"
-                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
-              >
-                Manage my signature
-              </a>
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/*
-          They signed, and the version this page asks about has no row at all —
-          the deployed VERSION constant is ahead of the database, or we are
-          mid-way through an unsync/re-sync. Separate from signed-other because
-          "no longer open for signing" would be FALSE here, and stating it about
-          the version the site is campaigning for is worse than saying nothing.
-
-          So this says nothing about the requested version — the one claim that
-          holds whatever the cause. resolveSignatureStatus logs the fault
-          server-side, which is where it can actually be acted on.
-        */}
-        {step === "form" &&
-          signatureStatus?.state === "signed-version-unknown" && (
-            <div>
-              <h2
-                id="sign-modal-title"
-                className="text-2xl font-semibold tracking-tight text-zinc-950"
-              >
-                You&apos;ve signed the AI Bill of Rights as:
-              </h2>
-              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-                <div className="text-xl font-semibold">
-                  {signatureStatus.displayName}
-                </div>
-                <div className="mt-1 text-sm">
-                  Verified by{" "}
-                  {signatureStatus.verificationMethod === "sms"
-                    ? "Phone"
-                    : "Email"}{" "}
-                  — v{signatureStatus.version} on{" "}
-                  {formatSignedDate(signatureStatus.signedAt)}
-                </div>
-              </div>
-
-              <p className="mt-5 text-sm text-zinc-600">
-                Your signature stands and still appears in the public list.
-              </p>
-
-              <div className="mt-6 flex flex-col gap-2">
-                <a
-                  href="/account"
-                  className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
-                >
-                  Manage my signature
-                </a>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-
-        {step === "form" && signatureStatus?.state === "signed-earlier" && (
-          <div>
-            <h2
-              id="sign-modal-title"
-              className="text-2xl font-semibold tracking-tight text-zinc-950"
-            >
-              You&apos;ve already signed the AI Bill of Rights as:
-            </h2>
-            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-              <div className="text-xl font-semibold">
-                {signatureStatus.displayName}
-              </div>
-              <div className="mt-1 text-sm">
-                Verified by{" "}
-                {signatureStatus.verificationMethod === "sms"
-                  ? "Phone"
-                  : "Email"}{" "}
-                — signing since{" "}
-                {formatSignedDate(signatureStatus.firstSignedAt)} (v
-                {signatureStatus.firstVersion})
-                {signatureStatus.version !== signatureStatus.firstVersion ? (
-                  <>
-                    , most recently v{signatureStatus.version} on{" "}
-                    {formatSignedDate(signatureStatus.signedAt)}
-                  </>
-                ) : null}
-              </div>
-            </div>
-
-            {/*
-              Deliberately does NOT name or count the new Articles. That copy
-              would be a second, unguarded transcription of the document text,
-              free to drift from content/bill-of-rights/ with no test to catch
-              it — and it would be wrong for any version pair other than the one
-              it was written for. The document itself is one click away.
-            */}
-            <p className="mt-5 text-sm text-zinc-600">
-              Your signature still counts and still appears in the public list —
-              nothing has changed. v{signatureStatus.requestedVersion} is a
-              newer version of the document than the one you signed. If you want
-              your name on it too, add it below.
-            </p>
-
-            {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="mt-6 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleReaffirm}
-                disabled={reaffirming}
-                className="w-full rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {reaffirming
-                  ? "Adding your name…"
-                  : `Add my name to v${signatureStatus.requestedVersion}`}
-              </button>
-              <a
-                href={`/v/${signatureStatus.requestedVersion}`}
-                className="w-full rounded-full bg-zinc-100 px-6 py-3 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
-              >
-                Read what changed first
-              </a>
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full px-6 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
-              >
-                Not now
-              </button>
-            </div>
           </div>
         )}
 
@@ -1652,6 +1464,11 @@ export default function SignModal({
                   {milestone}
                 </p>
               ) : null}
+              {mode === "sign" && newVersion ? (
+                <p className="mt-1 text-sm text-zinc-500">
+                  <NewVersionLink version={newVersion} />
+                </p>
+              ) : null}
               {mode === "sign" ? (
                 <div className="mt-5">
                   <p className="text-xl font-semibold tracking-tight text-blue-700">
@@ -1674,9 +1491,8 @@ export default function SignModal({
                     signer lands here too, and offering them a signature they
                     already gave reads as though it didn't exist. While the
                     status is still loading, say nothing rather than guess. */}
-                {signatureStatus?.state !== "signed" &&
-                signatureStatus?.state !== "signed-earlier" &&
-                signatureStatus?.state !== "loading" ? (
+                {signatureStatus?.state !== "loading" &&
+                !(signatureStatus && isSignedStatus(signatureStatus)) ? (
                   <p className="mt-2 text-xs">
                     <button
                       type="button"
