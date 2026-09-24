@@ -19,6 +19,11 @@ export default function LiveSignerBanner() {
   // When a new currentEvent arrives and we have nothing rendered, accept it.
   useEffect(() => {
     if (rendered === null && currentEvent !== null) {
+      // Intentional: this is an animation timeline, not derived state. A new event is
+      // deliberately NOT adopted until the previous one has finished exiting, so
+      // `rendered` lags `currentEvent` on purpose. Computing it during render would
+      // defeat the whole mechanism.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRendered(currentEvent);
       setPhase("enter");
     }

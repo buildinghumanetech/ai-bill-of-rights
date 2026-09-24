@@ -4,7 +4,6 @@ config({ path: ".env.local" });
 async function main() {
   const { db } = await import("@/lib/db");
   const { signers } = await import("@/lib/db/schema");
-  const { eq } = await import("drizzle-orm");
   const all = await db.select({
     id: signers.id,
     clerkUserId: signers.clerkUserId,

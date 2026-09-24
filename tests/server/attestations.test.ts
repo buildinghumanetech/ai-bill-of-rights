@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { attestations } from "@/lib/db/schema";

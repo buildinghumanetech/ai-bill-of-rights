@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, listRecentSignersSince } from "@/lib/db/queries";
 import { signers, consentRecords, signatures, versions } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 import { capturedFields as makeCapturedFields } from "../_helpers/captured-fields";

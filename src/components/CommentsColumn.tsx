@@ -99,6 +99,12 @@ export function CommentsColumn({
   // guard stale and be unable to re-select the same phrase. Guarded on
   // pendingSelection so it doesn't fire when nothing was open.
   useEffect(() => {
+    // Intentional, and deliberately centralised. Mouse users are incidentally rescued by
+    // the container's mousedown reset, but a keyboard user activating a highlight would
+    // otherwise leave the dedupe guard stale and be unable to re-select the same phrase.
+    // Moving this into every activation handler reintroduces that gap the first time one
+    // is missed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeCommentId && pendingSelection) closeComposer();
   }, [activeCommentId, pendingSelection, closeComposer]);
 
