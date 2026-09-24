@@ -15,7 +15,12 @@ export const dynamic = "force-dynamic";
  * An unknown slug (or a missing share_links table) goes to the homepage rather
  * than a 404: whoever clicked still came to sign.
  */
-export async function GET(req: NextRequest, ctx: RouteContext<"/s/[slug]">) {
+// Typed by hand rather than with Next's generated `RouteContext` global, which
+// only exists after `next dev`/`next build` — CI typechecks without either.
+export async function GET(
+  req: NextRequest,
+  ctx: { params: Promise<{ slug: string }> },
+) {
   const { slug } = await ctx.params;
   const signerId = await resolveShareSlug(getDb(), slug);
   const channel = parseChannel(req.nextUrl.searchParams) ?? undefined;

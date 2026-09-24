@@ -89,7 +89,9 @@ export async function submitSignAction(formData: FormData): Promise<void> {
       // long /signatories/<id>?ref=<id> link inside the template.
       const { getOrCreateShareSlug } = await import("@/lib/share/short-links");
       const { getDb } = await import("@/lib/db/lazy");
-      const shareSlug = await getOrCreateShareSlug(getDb(), signer.id);
+      const shareSlug = await getOrCreateShareSlug(getDb(), signer.id).catch(
+        () => null,
+      );
       const tpl = signConfirmation({
         // The REAL first name — never the display name, which may be masked.
         firstName: userObj.firstName?.trim() || null,

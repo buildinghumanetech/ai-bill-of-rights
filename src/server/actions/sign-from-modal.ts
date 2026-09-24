@@ -248,7 +248,9 @@ export async function recordSignatureFromModal(
         }
         // Never throws: null (e.g. migration 0014 not applied) falls back to
         // the long /signatories/<id>?ref=<id> link inside the template.
-        const shareSlug = await getOrCreateShareSlug(getDb(), profile.id);
+        const shareSlug = await getOrCreateShareSlug(getDb(), profile.id).catch(
+          () => null,
+        );
         const tpl = signConfirmation({
           // The REAL first name — never the display name, which may be masked
           // ("E**** A*******"). Typed name first, then the Clerk account's.

@@ -1,5 +1,23 @@
 # Branch Progress: feat/post-sign-share
 
+## Progress Update as of 2026-09-24 09:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+CI failed on PR #94 at the typecheck step (tests all passed): `src/app/s/[slug]/route.ts` used Next's `RouteContext` global, which only exists after `next dev`/`next build` generates `.next/types` — present locally because the dev server had run, absent in CI. The route now types its context by hand. Also hardened both confirmation-email paths so a (supposedly impossible) throwing slug lookup can no longer drop the email.
+
+### Detail of changes made:
+- `src/app/s/[slug]/route.ts`: `ctx: { params: Promise<{ slug: string }> }` instead of `RouteContext<"/s/[slug]">`. Verified by running `tsc --noEmit` with `.next/types` moved aside, which is what CI sees.
+- `src/server/actions/sign-from-modal.ts` and `src/server/actions/sign.ts`: `getOrCreateShareSlug(...).catch(() => null)`. The helper already never throws; this guards the email against that promise being broken later, so it still goes out with the long link.
+- `tests/server/sign-from-modal.attribution.test.ts`: the "lookup blows up" case now also asserts the confirmation email is sent, with the long `?ref=` link. Previously it only asserted the signature, and the email was silently dropped in that case.
+- Full suite: 107 files, 1,124 tests pass.
+
+### Potential concerns to address:
+- Still blocked on applying migrations 0013 + 0014 to production before merge (see previous entry and the PR).
+- Local typechecks can pass on generated `.next/types` that CI lacks; run `tsc` with `.next/types` absent (or `next typegen` in CI) before trusting a green local typecheck.
+
+---
+
 ## Progress Update as of 2026-09-24 07:00 Pacific
 *(Most recent updates at top)*
 

@@ -232,13 +232,18 @@ describe("recordSignatureFromModal — confirmation email copy and short links",
     expect(mail.text).toContain(`/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`);
   });
 
-  it("still records the signature when the short-link lookup blows up anyway", async () => {
+  it("still records the signature AND sends the email when the short-link lookup blows up anyway", async () => {
     // Belt and braces: the helper promises never to throw, but if it ever did
-    // the email is best-effort and signing must not notice.
+    // neither signing nor the confirmation email may notice — the email just
+    // goes out with the long link.
     getOrCreateShareSlug.mockRejectedValue(new Error('relation "share_links" does not exist'));
     const res = await recordSignatureFromModal(INPUT);
     expect(res.success).toBe(true);
     expect(res.signerId).toBe(SIGNER_ID);
+
+    const mail = confirmationEmail()!;
+    expect(mail).toBeDefined();
+    expect(mail.text).toContain(`/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`);
   });
 });
 
