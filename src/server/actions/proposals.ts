@@ -24,18 +24,41 @@ import { LICENSE_FIELD } from "@/lib/proposals/license";
 
 type Me = { id: string; isAdmin: boolean };
 
+/**
+ * Two different refusals, kept apart on purpose. No session says nothing about
+ * whether someone has signed, so it must never be answered with "sign the Bill
+ * of Rights". The form matches on these codes, not the message text, to offer
+ * a sign-in button for one and a sign button for the other.
+ */
+type GateCode = "not_signed_in" | "not_signer";
+
 async function requireSigner(): Promise<
-  { ok: true; me: Me } | { ok: false; error: string }
+  { ok: true; me: Me } | { ok: false; error: string; code?: GateCode }
 > {
   const { userId } = await auth();
-  if (!userId) return { ok: false, error: "Not signed in." };
+  if (!userId) {
+    return {
+      ok: false,
+      code: "not_signed_in",
+      error: "You're not signed in. Sign in, then file it — your text is still here.",
+    };
+  }
   const db = getDb();
   const rows = await db
     .select({ id: signers.id, softBannedAt: signers.softBannedAt, isAdmin: signers.isAdmin })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
-  if (rows.length === 0) return { ok: false, error: "Sign the Bill of Rights first." };
+  // Intended: proposals and endorsements come from verified signers (PR #82).
+  // The lookup is by Clerk user id only — `signers` stores no email or phone —
+  // so a Clerk account that never got a signer row reads as a non-signer here.
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      code: "not_signer",
+      error: "Only signers can file a proposal. Sign the Bill of Rights, then file it.",
+    };
+  }
   if (rows[0].softBannedAt) {
     return { ok: false, error: "This account is suspended pending moderator review." };
   }
@@ -44,9 +67,9 @@ async function requireSigner(): Promise<
 
 export async function submitNewRightAction(
   formData: FormData,
-): Promise<{ ok: boolean; error?: string; field?: string; id?: string }> {
+): Promise<{ ok: boolean; error?: string; code?: string; field?: string; id?: string }> {
   const gate = await requireSigner();
-  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!gate.ok) return { ok: false, error: gate.error, code: gate.code };
   const db = getDb();
 
   // The base version is resolved SERVER-SIDE from `is_current`, never read from

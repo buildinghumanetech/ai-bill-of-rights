@@ -17,6 +17,8 @@ vi.mock("@clerk/nextjs", () => ({
   // refuses). A mock that omits it leaves `isLoaded` undefined, so submit
   // returns before ever calling the action.
   useAuth: () => ({ isLoaded: true, isSignedIn: true }),
+  useUser: () => ({ user: null }),
+  useClerk: () => ({ signOut: async () => {} }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
