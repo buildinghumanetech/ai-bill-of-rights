@@ -21,20 +21,23 @@ permissions:
 jobs:
   check:
     name: typecheck + tests
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which migrates to Ubuntu 26 on
+    # 2026-10-19: a runner image that changes under us turns an unrelated push
+    # into the thing that broke CI. Bump deliberately, with its own run to prove it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # pnpm MUST be installed before setup-node: setup-node's `cache: pnpm`
       # shells out to `pnpm store path` to find what to cache, so without the
       # binary already present that step fails.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm

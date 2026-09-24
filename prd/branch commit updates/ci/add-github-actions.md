@@ -1,5 +1,36 @@
 # Branch Progress: ci/add-github-actions
 
+## Progress Update as of [2026-09-24 00:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The first CI run went green (all steps, 2m31s) but raised two runner annotations.
+Addressed both: bumped all three actions to `@v5` and pinned `ubuntu-24.04`.
+
+### Detail of changes made:
+- **Actions bumped v4 -> v5** (`actions/checkout`, `actions/setup-node`,
+  `pnpm/action-setup`). All three at v4 declare `runs.using: node20`, which
+  GitHub has deprecated — the runner force-ran them on Node 24 and annotated the
+  run. Confirmed against each repo's `action.yml` that v5 declares `node24` for
+  all three, so v5 is the version that actually clears the warning rather than
+  just a number bump.
+- **`runs-on: ubuntu-latest` -> `ubuntu-24.04`.** `ubuntu-latest` migrates to
+  Ubuntu 26 on 2026-10-19. Pinning means an unrelated push is never the thing
+  that broke CI because the image moved underneath it; bumping becomes a
+  deliberate change with its own run to prove it.
+
+### Potential concerns to address:
+- **v5 is not the newest.** Latest releases are `actions/checkout@v7.0.1`,
+  `actions/setup-node@v7.0.0`, `pnpm/action-setup@v6.1.0`. v5 was chosen because
+  it is the minimum that moves off the deprecated Node 20 runtime; going further
+  is a larger change (v5->v6/v7 carry their own breaking changes) and was not
+  needed to clear the annotation. Worth revisiting on its own.
+- **The pin now needs periodic attention.** `ubuntu-24.04` will eventually be
+  retired by GitHub. That is the trade for not being surprised — but it does mean
+  the version is now something a human has to move.
+
+---
+
 ## Progress Update as of [2026-09-24 00:30 Pacific]
 *(Most recent updates at top)*
 
