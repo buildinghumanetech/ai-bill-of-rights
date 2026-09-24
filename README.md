@@ -129,24 +129,15 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 ### Post-deploy steps for the 0.1.0 publish
 
-Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.** After the deploy:
+Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-```
-pnpm tsx scripts/apply-migration.ts drizzle/0009_signatures_signer_signed_at_idx.sql
-pnpm tsx scripts/apply-migration.ts drizzle/0010_repoint_comments_to_v0_1_0.sql
-pnpm tsx scripts/apply-migration.ts drizzle/0011_new_article_proposals.sql
-pnpm tsx scripts/apply-migration.ts drizzle/0012_proposal_license.sql
-```
+**Nothing is pending.** 0009, 0010, 0011 and 0012 have all been applied to production; this was checked against the production schema and data on 2026-09-24. When a new migration ships, add its `apply-migration.ts` command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
 
-0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). **Apply it before the deploy that ships it, not after**: that code writes both columns on every submission and reads them for the queue, so an un-migrated database refuses new proposals and shows the "could not be loaded" panel. It is additive and harmless to the code already running. It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`. Safe to re-run.
+0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`.
 
-0011 backs the "propose a new right" flow at `/propose`. It adds `title`, `pull_quote`, `hidden_at` and `hidden_reason` to `proposed_edits` plus three indexes; no existing row is touched, and every statement is `IF NOT EXISTS`. **`/propose` reads and writes nothing until it has run** — `listProposedRights` selects `title`, so the page throws `column "title" does not exist` on an un-migrated database. The page does not 500: it catches that, classifies it as a schema failure and renders a "could not be loaded" panel that is deliberately distinct from the empty-queue state, and logs a line naming this migration. An un-migrated deploy therefore looks un-migrated rather than looking like a queue nobody has posted to. Safe to re-run.
+0009 added two indexes on `signatures`: `(signer_id, signed_at DESC)` for the signer lists behind `/signers` and `/signatories`, and `(signed_at DESC)` for `/api/signers/recent`. 0010 moved the 32 existing comments from v0.0.1 onto v0.1.0 and snapshotted each one's original version and anchor into `comment_version_backup_0008`; that backup is what the rollback below depends on, so do not drop it. 0011 added the proposal columns (`title`, `pull_quote`, `hidden_at`, `hidden_reason`) and indexes behind `/propose`; until it and 0012 are applied, `/propose` shows a "could not be loaded" panel, deliberately distinct from an empty queue.
 
-0009 adds **two** indexes on `signatures` — `(signer_id, signed_at DESC)` for the deduplicated signer lists behind `/signers` and `/signatories`, and `(signed_at DESC)` for the `signed_at > cutoff` scan behind `/api/signers/recent`, the homepage ticker polled about once a minute by every open tab. Correctness is unaffected either way; without them those queries fall back to full scans. 0010 carries the existing discussion forward. Both are safe to re-run.
-
-0010 only moves comments onto v0.1.0 while v0.1.0 is the *current* version, so running it out of order — for instance after a later version has taken over — is a no-op rather than a move that would leave threads hidden with their original scoping destroyed.
-
-**These two were written as 0007 and 0008 and renumbered on merge**, because `main` had meanwhile added its own `0007_why_i_signed_and_referrals.sql` and `0008_referral_fk_on_delete_set_null.sql`. Migrations here are applied by hand off this list, so two files sharing a number is an ordering trap rather than a cosmetic problem. Note the consequence you will see at the psql prompt: 0010's backup tables are still named `comment_version_backup_0008` / `proposed_edit_version_backup_0008`. That is deliberate — renaming them would orphan the backups in any database that already ran an earlier form of the file, and those are the only copy of the pre-move anchors.
+**0009 and 0010 were written as 0007 and 0008 and renumbered on merge**, because `main` had meanwhile added its own `0007_why_i_signed_and_referrals.sql` and `0008_referral_fk_on_delete_set_null.sql`. Migrations here are applied by hand off the list above, so two files sharing a number is an ordering trap rather than a cosmetic problem. Note the consequence you will see at the psql prompt: 0010's backup tables are still named `comment_version_backup_0008` / `proposed_edit_version_backup_0008`. That is deliberate — renaming them would orphan the backups in any database that already ran an earlier form of the file, and those are the only copy of the pre-move anchors.
 
 ### Rolling back the 0.1.0 publish
 
