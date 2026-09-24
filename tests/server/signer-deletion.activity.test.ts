@@ -539,18 +539,28 @@ describe("deleting a signer with activity in every table", () => {
     await expectBystanderSurvived(otherComment, otherProposal);
   });
 
-  // The admin "Remove signer" button ANONYMIZES rather than hard-deletes — it
-  // routes through @/server/signers/anonymize, the same path as /account/revoke,
-  // so that the signature keeps counting and the consent record survives as
-  // proof of what was agreed to. The signer row therefore REMAINS here; only
-  // the identity on it is scrubbed. The hard-delete cascade is still exercised
-  // by the deleteSigner and deleteMyAccount cases above.
-  it("anonymizes rather than deletes via the admin path (deleteSignerAction)", async () => {
+  it("succeeds via the admin Delete button (deleteSignerAction)", async () => {
     const { otherComment, otherProposal } = await seedBusySigner();
     state.clerkUserId = "user_admin";
     const { deleteSignerAction } = await import("@/server/actions/admin");
 
     await expect(deleteSignerAction(doomedId)).resolves.toEqual({
+      success: true,
+    });
+
+    await expectBystanderSurvived(otherComment, otherProposal);
+  });
+
+  // The admin "Anonymize" button keeps the row: it routes through
+  // @/server/signers/anonymize, the same path as /account/revoke, so the
+  // signature keeps counting and the consent record survives as proof of what
+  // was agreed to. Only the identity on the row is scrubbed.
+  it("anonymizes rather than deletes via the admin Anonymize button (anonymizeSignerAction)", async () => {
+    const { otherComment, otherProposal } = await seedBusySigner();
+    state.clerkUserId = "user_admin";
+    const { anonymizeSignerAction } = await import("@/server/actions/admin");
+
+    await expect(anonymizeSignerAction(doomedId)).resolves.toEqual({
       success: true,
     });
 

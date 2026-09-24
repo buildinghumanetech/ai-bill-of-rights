@@ -163,17 +163,28 @@ describe("deleting a signer who referred someone", () => {
     await expectInviteeSurvivedUnattributed(inviteeId);
   });
 
-  // The admin path ANONYMIZES rather than deletes (see @/server/signers/anonymize),
-  // so the inviter row survives with a scrubbed identity. That means the
-  // referral edge is NOT nulled here — it still points at a row, just one that
-  // no longer names anybody. The ON DELETE SET NULL behaviour this suite exists
-  // to protect is still covered by the deleteSigner and deleteMyAccount cases.
-  it("anonymizes the inviter via the admin path, leaving the edge pointing at a scrubbed row", async () => {
+  it("succeeds via the admin Delete button (deleteSignerAction)", async () => {
     const { inviterId, inviteeId } = await seedReferralPair();
     state.clerkUserId = "user_admin";
     const { deleteSignerAction } = await import("@/server/actions/admin");
 
     await expect(deleteSignerAction(inviterId)).resolves.toEqual({
+      success: true,
+    });
+
+    await expectSignerGone(inviterId);
+    await expectInviteeSurvivedUnattributed(inviteeId);
+  });
+
+  // The admin Anonymize button keeps the row (see @/server/signers/anonymize),
+  // so the inviter survives with a scrubbed identity and the referral edge is
+  // NOT nulled: it still points at a row, just one that names nobody.
+  it("anonymizes the inviter via the admin Anonymize button, leaving the edge pointing at a scrubbed row", async () => {
+    const { inviterId, inviteeId } = await seedReferralPair();
+    state.clerkUserId = "user_admin";
+    const { anonymizeSignerAction } = await import("@/server/actions/admin");
+
+    await expect(anonymizeSignerAction(inviterId)).resolves.toEqual({
       success: true,
     });
 
