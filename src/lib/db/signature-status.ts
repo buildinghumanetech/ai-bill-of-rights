@@ -6,25 +6,28 @@ import { signatures, versions } from "./schema";
 type AnyDb = PgDatabase<PgQueryResultHKT, Record<string, unknown>, TablesRelationalConfig>;
 
 /**
- * The person has a signature against the version being asked about.
+ * Filled in by `getMySignatureStatus` (not by `resolveSignatureStatus`) for
+ * anyone who has signed ANY version, so a returning signer lands straight on
+ * their share view: the card and the share links need the id, the greeting
+ * needs the number, and the why box opens with what they already wrote.
  */
-export interface SignedStatus {
-  state: "signed";
-  displayName: string;
-  verificationMethod: "email" | "sms";
-  signedAt: string; // ISO so it crosses the server/client boundary cleanly
-  version: string;
-  /**
-   * Filled in by `getMySignatureStatus` (not by `resolveSignatureStatus`) so a
-   * returning signer can land straight on their share view: the card and the
-   * share links need the id, the greeting needs the number, and the why box
-   * opens with what they already wrote.
-   */
+export interface SignerShareFields {
   signerId?: string;
   signerNumber?: number;
   whyISigned?: string | null;
   /** Their short-link slug; null when it couldn't be made (long link instead). */
   shareSlug?: string | null;
+}
+
+/**
+ * The person has a signature against the version being asked about.
+ */
+export interface SignedStatus extends SignerShareFields {
+  state: "signed";
+  displayName: string;
+  verificationMethod: "email" | "sms";
+  signedAt: string; // ISO so it crosses the server/client boundary cleanly
+  version: string;
 }
 
 /**
@@ -44,7 +47,7 @@ export interface SignedStatus {
  * `version` is the version they actually signed; `requestedVersion` is the one
  * that was asked about.
  */
-export interface SignedEarlierStatus {
+export interface SignedEarlierStatus extends SignerShareFields {
   state: "signed-earlier";
   displayName: string;
   verificationMethod: "email" | "sms";
@@ -75,7 +78,7 @@ export interface SignedEarlierStatus {
  * version, so it could only ever fail. Copy about "what's been added since you
  * signed" would also be wrong or backwards.
  */
-export interface SignedOtherStatus {
+export interface SignedOtherStatus extends SignerShareFields {
   state: "signed-other";
   displayName: string;
   verificationMethod: "email" | "sms";
@@ -98,7 +101,7 @@ export interface SignedOtherStatus {
  * The UI for this state says nothing about the requested version at all, which
  * is the only claim that stays true whatever the cause.
  */
-export interface SignedVersionUnknownStatus {
+export interface SignedVersionUnknownStatus extends SignerShareFields {
   state: "signed-version-unknown";
   displayName: string;
   verificationMethod: "email" | "sms";

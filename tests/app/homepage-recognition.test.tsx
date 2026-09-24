@@ -7,8 +7,10 @@
  *
  * Signing used to end with the page unchanged — "Be signer #93", a Sign button,
  * and the live banner announcing the signer to themselves as someone else. For
- * a signer of the CURRENT version the headline, floating button, its caption
- * and the banner now all know who they are; for anyone else nothing changes.
+ * anyone who has signed ANY version the headline, floating button, its caption
+ * and the banner now all know who they are; someone who signed only an
+ * earlier version also gets a quiet "See what changed" line. For anyone else
+ * nothing changes.
  * The provider is real; only its poll (fetch) and the sign modal are stubbed.
  */
 
@@ -33,7 +35,11 @@ import type { ViewerSignature } from "@/lib/viewer/signature";
 const ME: ViewerSignature = {
   signerId: "eeeb0d40-7bee-4bc9-8808-fecb955a8db0",
   signerNumber: 92,
+  newVersion: null,
 };
+
+/** Signed v0.0.1 only; v0.1.0 is current. */
+const EARLIER: ViewerSignature = { ...ME, newVersion: "0.1.0" };
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -94,6 +100,11 @@ describe("a signer of the current version", () => {
     expect(text()).not.toContain("Be signer");
   });
 
+  it("sees no what-changed link", async () => {
+    await render(ME);
+    expect(text()).not.toContain("See what changed");
+  });
+
   it("gets Share instead of Sign, captioned with their number", async () => {
     await render(ME);
     const button = container.querySelector("button")!;
@@ -126,6 +137,29 @@ describe("a signer of the current version", () => {
     expect(text()).toContain("That's you.");
     expect(text()).toContain("Welcome, signer #92.");
     expect(text()).not.toContain("just signed");
+  });
+});
+
+describe("a signer of an earlier version only", () => {
+  it("is thanked by number like anyone else, with an optional link to what changed", async () => {
+    await render(EARLIER);
+    expect(text()).toContain("You're signer #92. Thank you.");
+    expect(text()).toContain("v0.1.0 is out. See what changed.");
+    const link = [...container.querySelectorAll("a")].find(
+      (a) => a.textContent === "See what changed",
+    );
+    expect(link?.getAttribute("href")).toBe("/v/0.1.0#what-changed");
+    expect(container.querySelector("button")!.textContent).toContain(
+      "Share the AI Bill of Rights",
+    );
+  });
+
+  it("loses the link once they have added their name to the new version", async () => {
+    await render(EARLIER);
+    expect(text()).toContain("See what changed");
+    await render(ME);
+    expect(text()).toContain("You're signer #92. Thank you.");
+    expect(text()).not.toContain("See what changed");
   });
 });
 
