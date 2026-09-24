@@ -13,7 +13,7 @@ async function main() {
     ORDER BY table_name, ordinal_position
   `);
   console.log("Columns:");
-  for (const c of cols as any[]) {
+  for (const c of cols as Array<Record<string, unknown>>) {
     console.log(
       `  ${c.table_name}.${c.column_name} (${c.data_type}, null=${c.is_nullable})`,
     );
@@ -27,7 +27,7 @@ async function main() {
     ORDER BY tablename, indexname
   `);
   console.log("\nIndexes:");
-  for (const i of idx as any[]) {
+  for (const i of idx as Array<Record<string, unknown>>) {
     console.log(`  ${i.tablename}.${i.indexname}`);
     console.log(`    ${i.indexdef}`);
   }

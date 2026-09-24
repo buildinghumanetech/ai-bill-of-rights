@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { selfies, selfieReports, signers } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
+import { sql } from "drizzle-orm";
 
 async function makeSigner(db: Db, clerkId: string) {
   const [row] = await db
@@ -98,14 +99,16 @@ describe("selfies schema", () => {
       .returning({ id: selfies.id });
     // Mark first as replaced
     await db.execute(
-      `update selfies set replaced_by_selfie_id = '${second.id}' where id = '${first.id}'` as any,
+      sql.raw(
+        `update selfies set replaced_by_selfie_id = '${second.id}' where id = '${first.id}'`,
+      ),
     );
     // Now approving second must NOT violate the partial unique
     await db.execute(
-      `update selfies set status = 'approved' where id = '${second.id}'` as any,
+      sql.raw(`update selfies set status = 'approved' where id = '${second.id}'`),
     );
     const approved = await db.select().from(selfies);
-    expect(approved.filter((r: any) => r.status === "approved")).toHaveLength(2);
+    expect(approved.filter((r) => r.status === "approved")).toHaveLength(2);
   });
 
   it("inserts a selfie_report and prevents duplicate reporter on same selfie", async () => {
