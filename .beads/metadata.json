@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ai_bill_of_rights",
+  "project_id": "66a33411-6994-49a7-bf51-f76349584006"
+}
