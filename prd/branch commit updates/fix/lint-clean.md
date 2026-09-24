@@ -1,5 +1,51 @@
 # Branch Progress: fix/lint-clean
 
+## Progress Update as of [2026-09-24 01:55 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Cleared every remaining `no-explicit-any` and the unescaped-entity errors.
+**59 -> 8 errors**, all 8 now the single rule left: `react-hooks/set-state-in-effect`.
+tsc clean, suite 1005/1005.
+
+### Detail of changes made:
+- **`scripts/*` raw-SQL reads -> `Array<Record<string, unknown>>`.** These use the
+  neon client directly (not drizzle), so `rowsOf` does not apply. `unknown` rather
+  than a named shape is the proportionate level for one-off diagnostics that only
+  print: it still forces narrowing for anything beyond printing, which `any` did
+  not. `inspect-signer.ts` needed a real narrow, not a cast, because it indexes
+  into `captured_fields`.
+- **`tests/_helpers/captured-fields.ts` — a fixture builder.** Nine `{} as any`
+  casts were hiding that `recordSignature` wants a complete 13-field
+  `CapturedFields` (in production it always comes from `extractCapturedFields()`).
+  The cast would equally have accepted a typo'd or renamed key. Now a rename
+  breaks the fixture, which is the point. Defaults are empty strings so a test
+  that depends on a value has to say so in its own override.
+- **`sql.raw()` instead of `as any`** for the two literal UPDATE statements in
+  `db.schema.selfies.test.ts` — that is the typed way to hand `execute()` a string.
+- **Row predicates lost their `(r: any)`** in five test files. Nothing replaced
+  them: the selects are properly typed now, so inference does the work. That is
+  the clearest evidence the `Db` change bought something real.
+- **Two casts kept, deliberately, and re-pointed at what they mean.** Passing
+  `"garbage"` as a `RejectionReason` and omitting both `anchorId` and `proposalId`
+  are the invalid inputs those tests exist to reject. They are now
+  `as unknown as RejectionReason` / `as unknown as Parameters<...>[1]` with a
+  comment, so the cast documents "the type is right, I am testing the runtime
+  guard" instead of switching checking off.
+- **`src/app/sign/profile/page.tsx`** — `&apos;` / `&ldquo;`-`&rdquo;`, matching the
+  house style already used elsewhere in `src/` (49 `&apos;`, 7 `&ldquo;`).
+
+### Potential concerns to address:
+- **The 8 remaining errors are the only ones that can change runtime behaviour.**
+  `react-hooks/set-state-in-effect` fires on a synchronous `setState` inside an
+  effect, which causes an extra render pass and can loop. Each needs reading on its
+  own; a blanket transformation would be a behaviour change disguised as a lint fix.
+  Handled next, in their own commit, so they are reviewable separately.
+- `pnpm lint` still reports 14 warnings. Warnings do not fail `eslint`, so they do
+  not block adding lint to CI — but if CI ever adds `--max-warnings 0` they will.
+
+---
+
 ## Progress Update as of [2026-09-24 01:45 Pacific]
 *(Most recent updates at top)*
 

@@ -15,7 +15,7 @@ export default async function ProfilePage({
     <main className="mx-auto w-full max-w-2xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight">Sign — Step 1 of 2</h1>
       <p className="mt-2 text-sm text-zinc-600">
-        These three fields are public. Everything else stays private — you'll
+        These three fields are public. Everything else stays private — you&apos;ll
         see exactly what on the next screen.
       </p>
       <form action={submitProfileAction} className="mt-8 flex flex-col gap-6">
@@ -36,7 +36,8 @@ export default async function ProfilePage({
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium">Location (optional)</span>
           <span className="text-xs text-zinc-500">
-            Examples: "Seoul", "rural Ohio", "Nairobi". As specific or general
+            Examples: &ldquo;Seoul&rdquo;, &ldquo;rural Ohio&rdquo;, &ldquo;Nairobi&rdquo;. As specific
+            or general
             as you want.
           </span>
           <input
@@ -49,7 +50,7 @@ export default async function ProfilePage({
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium">Affiliation (optional)</span>
           <span className="text-xs text-zinc-500">
-            Your role, organization, or how you'd describe yourself in this
+            Your role, organization, or how you&apos;d describe yourself in this
             context.
           </span>
           <input

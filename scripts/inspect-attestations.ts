@@ -9,7 +9,7 @@ const sql = neon(process.env.DATABASE_URL!);
 
 async function main() {
   const reg = await sql(`SELECT to_regclass('public.attestations') AS r`);
-  console.log("attestations table:", (reg as any[])[0]?.r ?? "(none)");
+  console.log("attestations table:", (reg as Array<Record<string, unknown>>)[0]?.r ?? "(none)");
 
   const cols = await sql(`
     SELECT column_name, data_type, is_nullable
@@ -18,7 +18,7 @@ async function main() {
     ORDER BY ordinal_position
   `);
   console.log("\nColumns:");
-  for (const c of cols as any[]) {
+  for (const c of cols as Array<Record<string, unknown>>) {
     console.log(`  ${c.column_name} (${c.data_type}, null=${c.is_nullable})`);
   }
 
@@ -28,7 +28,7 @@ async function main() {
     WHERE conrelid = 'public.attestations'::regclass AND contype = 'f'
   `);
   console.log("\nForeign keys:");
-  for (const f of fks as any[]) {
+  for (const f of fks as Array<Record<string, unknown>>) {
     console.log(`  ${f.conname}: ${f.def}`);
   }
 
@@ -38,7 +38,7 @@ async function main() {
     WHERE schemaname = 'public' AND tablename = 'attestations'
   `);
   console.log("\nIndexes:");
-  for (const i of idx as any[]) {
+  for (const i of idx as Array<Record<string, unknown>>) {
     console.log(`  ${i.indexname}: ${i.indexdef}`);
   }
 
@@ -46,8 +46,8 @@ async function main() {
     SELECT id, org_name, product_name, contact_email, published, hidden_at, claimed_at
     FROM attestations ORDER BY claimed_at ASC
   `);
-  console.log(`\nRows: ${(rows as any[]).length}`);
-  for (const r of rows as any[]) {
+  console.log(`\nRows: ${(rows as Array<Record<string, unknown>>).length}`);
+  for (const r of rows as Array<Record<string, unknown>>) {
     console.log(`  ${r.org_name} / ${r.product_name} (published=${r.published}, contact=${r.contact_email})`);
   }
 }

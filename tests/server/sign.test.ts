@@ -5,6 +5,7 @@ import { signatures, consentRecords, signers } from "@/lib/db/schema";
 import { syncVersions } from "@/lib/db/sync";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
+import { capturedFields as makeCapturedFields } from "../_helpers/captured-fields";
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -46,7 +47,7 @@ describe("recordSignature", () => {
       versionString: "1.0.0",
       consentTextHash:
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-      capturedFields: { ip: "203.0.113.45" } as any,
+      capturedFields: makeCapturedFields({ ip: "203.0.113.45" }),
     });
 
     const sigs = await db.select().from(signatures);
@@ -86,14 +87,14 @@ describe("recordSignature", () => {
       signerId: signer.id,
       versionString: "1.0.0",
       consentTextHash: "a".repeat(64),
-      capturedFields: {} as any,
+      capturedFields: makeCapturedFields(),
     });
     await expect(
       recordSignature(db, {
         signerId: signer.id,
         versionString: "1.0.0",
         consentTextHash: "b".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       }),
     ).rejects.toThrow();
   });
@@ -159,7 +160,7 @@ describe("recordSignature", () => {
       signerId: signer.id,
       versionString: "1.0.0",
       consentTextHash: expectedHash,
-      capturedFields: capturedFields as any,
+      capturedFields: makeCapturedFields(capturedFields),
     });
 
     const records = await db.select().from(consentRecords);
@@ -212,7 +213,7 @@ describe("recordSignature", () => {
       signerId: signer.id,
       versionString: "1.0.0",
       consentTextHash: "a".repeat(64),
-      capturedFields: {} as any,
+      capturedFields: makeCapturedFields(),
     });
 
     await expect(
@@ -220,7 +221,7 @@ describe("recordSignature", () => {
         signerId: signer.id,
         versionString: "1.0.0",
         consentTextHash: "b".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       }),
     ).rejects.toThrow();
 
@@ -280,7 +281,7 @@ describe("recordSignature", () => {
         versionString: "0.0.1",
         consentTextHash: "f".repeat(64),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       }),
     ).rejects.toThrow(/no longer open for signing/i);
 
@@ -335,7 +336,7 @@ describe("recordSignature", () => {
       allowArchivedVersion: true,
       consentTextHash: "9".repeat(64),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      capturedFields: {} as any,
+      capturedFields: makeCapturedFields(),
     });
 
     expect(await db.select().from(signatures)).toHaveLength(1);

@@ -4,6 +4,7 @@ import { syncVersions } from "@/lib/db/sync";
 import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
 import { signers, consentRecords, signatures, versions } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
+import { capturedFields as makeCapturedFields } from "../_helpers/captured-fields";
 
 const sample = (version: string, isCurrent: boolean) => ({
   version,
@@ -134,7 +135,7 @@ describe("listRecentSignersSince", () => {
       .values({
         signerId: signer.id,
         consentTextHash: "a".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       })
       .returning({ id: consentRecords.id });
     const [versionRow] = await db.select().from(versions).limit(1);
@@ -283,7 +284,7 @@ describe("getSignatureNumber", () => {
       .values({
         signerId: signer.id,
         consentTextHash: "a".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       })
       .returning({ id: consentRecords.id });
     const [v] = await db.select().from(versions).limit(1);
@@ -344,7 +345,7 @@ describe("signer list queries", () => {
       .values({
         signerId: signerRow.id,
         consentTextHash: "a".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       })
       .returning({ id: consentRecords.id });
     const versionRow = await db.select().from(versions).limit(1);

@@ -22,6 +22,7 @@ import {
 } from "@/server/selfies/core";
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
+import { capturedFields as makeCapturedFields } from "../_helpers/captured-fields";
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -67,7 +68,7 @@ describe("anonymizeSigner", () => {
       signerId: signer.id,
       versionString: "1.0.0",
       consentTextHash: "a".repeat(64),
-      capturedFields: { ip: "203.0.113.45", ip_geo_city: "A city" } as any,
+      capturedFields: makeCapturedFields({ ip: "203.0.113.45", ip_geo_city: "A city" }),
     });
 
     // Rows in comment-system tables that the OLD hard-delete never cascaded —
