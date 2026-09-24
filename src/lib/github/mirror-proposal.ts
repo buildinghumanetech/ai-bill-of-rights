@@ -19,6 +19,8 @@
  * the site does not care and does not sync.
  */
 
+import { PROPOSAL_LICENSE } from "@/lib/proposals/license";
+
 export interface MirrorInput {
   proposalId: string;
   title: string;
@@ -58,6 +60,8 @@ export async function mirrorProposalToGitHub(input: MirrorInput): Promise<void> 
         ``,
         `Endorsements are counted on the site, by verified signers, not here:`,
         url,
+        ``,
+        `Submitted under [${PROPOSAL_LICENSE.shortName}](${PROPOSAL_LICENSE.url}) by its author.`,
         ``,
         `_Mirrored automatically. Edits made in this issue are not read back._`,
       ].join("\n"),

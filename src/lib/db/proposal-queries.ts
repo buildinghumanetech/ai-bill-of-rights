@@ -19,6 +19,9 @@ export interface ProposedRight {
   viewerHasUpvoted: boolean;
   hiddenAt: Date | null;
   hiddenReason: string | null;
+  /** Licence granted on submission; null means none was recorded. */
+  license: string | null;
+  licenseGrantedAt: Date | null;
 }
 
 /**
@@ -93,6 +96,8 @@ export async function listProposedRights(
       proposerAffiliation: signers.affiliation,
       hiddenAt: proposedEdits.hiddenAt,
       hiddenReason: proposedEdits.hiddenReason,
+      license: proposedEdits.license,
+      licenseGrantedAt: proposedEdits.licenseGrantedAt,
       upvoteCount,
       commentCount,
       viewerHasUpvoted,

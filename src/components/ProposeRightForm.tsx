@@ -12,6 +12,7 @@ import {
   PULL_QUOTE_MAX,
   BODY_MIN,
 } from "@/lib/proposals/validate";
+import { LICENSE_FIELD, PROPOSAL_LICENSE } from "@/lib/proposals/license";
 
 /**
  * Composer for a whole new Article.
@@ -68,6 +69,9 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
       fd.set("body", body);
       fd.set("rationale", rationale);
       fd.set("pullQuote", pullQuote);
+      // The grant shown beside the button below. The server records it on the
+      // row and refuses a submission that didn't carry it.
+      fd.set(LICENSE_FIELD, PROPOSAL_LICENSE.id);
       const res = await submitNewRightAction(fd);
       if (!res.ok) {
         if (res.field) setErrors({ [res.field]: res.error ?? "" });
@@ -175,13 +179,31 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-full bg-blue-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-      >
-        {pending ? "Filing…" : "File this proposal"}
-      </button>
+      {/* The licence grant. It sits directly above the button, always
+          visible, because submitting IS the act of consent — a grant hidden
+          in a footer or behind a toggle is not one the person gave. */}
+      <div className="space-y-4">
+        <p className="text-sm leading-relaxed text-zinc-700">
+          By submitting, you agree to license your proposed text under Creative
+          Commons Attribution 4.0 International (
+          <a
+            href={PROPOSAL_LICENSE.url}
+            target="_blank"
+            rel="noopener noreferrer license"
+            className="text-blue-600 underline underline-offset-4"
+          >
+            {PROPOSAL_LICENSE.shortName}
+          </a>
+          ), which allows it to be published and reused with credit to you.
+        </p>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-blue-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+        >
+          {pending ? "Filing…" : "File this proposal"}
+        </button>
+      </div>
     </form>
   );
 }

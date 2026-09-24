@@ -13,6 +13,7 @@ import {
 } from "@/server/proposals/core";
 import { listProposedRights } from "@/lib/db/proposal-queries";
 import { validateNewArticle } from "@/lib/proposals/validate";
+import { PROPOSAL_LICENSE } from "@/lib/proposals/license";
 
 const sampleMarkdown = `---
 version: 1.0.0
@@ -30,6 +31,7 @@ const GOOD = {
   rationale:
     "Article 4 covers the system acting against you and Article 9 covers your attention. Neither covers a system that serves you so smoothly you stop developing judgment.",
   pullQuote: "Fluency is not understanding.",
+  license: PROPOSAL_LICENSE.id,
 };
 
 async function seed() {
@@ -252,5 +254,69 @@ describe("new-article proposals", () => {
     expect(
       renderProposalAsMarkdown(proposal, ARTICLE_NUMBER_PLACEHOLDER).replace(/\bN\b/g, "12"),
     ).toBe(renderProposalAsMarkdown(proposal, 12));
+  });
+});
+
+describe("licence grant on new-article proposals", () => {
+  it("records the licence and when it was granted on the row itself", async () => {
+    const { db, versionId, alice } = await seed();
+    const before = Date.now();
+    const res = await createNewArticleProposal(db, {
+      baseVersionId: versionId,
+      proposerSignerId: alice,
+      ...GOOD,
+    });
+    expect(res.ok).toBe(true);
+
+    const [row] = await db.select().from(proposedEdits);
+    expect(row.license).toBe("CC-BY-4.0");
+    expect(row.licenseGrantedAt).toBeInstanceOf(Date);
+    expect(row.licenseGrantedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it("refuses a submission that did not carry the current licence id", async () => {
+    // A tab rendered before the notice existed posts no licence at all. Filing
+    // it would stamp a grant on text whose author never saw the terms.
+    const { db, versionId, alice } = await seed();
+    for (const license of ["", "CC-BY-SA-4.0", undefined]) {
+      const res = await createNewArticleProposal(db, {
+        baseVersionId: versionId,
+        proposerSignerId: alice,
+        ...GOOD,
+        license: license as string,
+      });
+      expect(res.ok).toBe(false);
+    }
+    expect(await db.select().from(proposedEdits)).toHaveLength(0);
+  });
+
+  it("exposes the recorded licence to the admin queue, null when none was granted", async () => {
+    const { db, versionId, alice } = await seed();
+    await createNewArticleProposal(db, {
+      baseVersionId: versionId,
+      proposerSignerId: alice,
+      ...GOOD,
+    });
+    // A row filed before the grant existed: written directly, as the old code did.
+    await db.insert(proposedEdits).values({
+      baseVersionId: versionId,
+      proposerSignerId: alice,
+      kind: "new_article",
+      targetAnchorId: "document-end",
+      title: "Filed Before The Notice",
+      newText: GOOD.body,
+      rationale: GOOD.rationale,
+    });
+
+    const list = await listProposedRights(db, {
+      baseVersionId: versionId,
+      includeHidden: true,
+    });
+    const granted = list.find((p) => p.title === GOOD.title)!;
+    const ungranted = list.find((p) => p.title === "Filed Before The Notice")!;
+    expect(granted.license).toBe("CC-BY-4.0");
+    expect(granted.licenseGrantedAt).toBeInstanceOf(Date);
+    expect(ungranted.license).toBeNull();
+    expect(ungranted.licenseGrantedAt).toBeNull();
   });
 });
