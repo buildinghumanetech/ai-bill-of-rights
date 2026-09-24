@@ -7,6 +7,8 @@ import {
   listSignaturesForSigner,
 } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
+import { getDb } from "@/lib/db/lazy";
+import { getOrCreateShareSlug } from "@/lib/share/short-links";
 import { normalizeWhyISigned } from "@/lib/why-i-signed";
 import { SITE_NAME, buildPageMetadata } from "@/lib/site-metadata";
 import { VerificationBadge } from "@/components/VerificationBadge";
@@ -67,6 +69,11 @@ export default async function SignerProfile({
   const isSignedInViewer = Boolean(userId);
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://ai-for-people.org";
+  // Only the owner shares from this page, so only the owner's view needs (or
+  // creates) a short link. Never throws; null means the long link.
+  const shareSlug = isOwner
+    ? await getOrCreateShareSlug(getDb(), signer.id)
+    : null;
 
   // Same normaliser the write path and the OG card use — never a bare trim.
   // This is the surface that displays the statement most prominently, so a
@@ -152,6 +159,7 @@ export default async function SignerProfile({
           signerId={signer.id}
           siteUrl={siteUrl}
           whyISigned={whyISigned}
+          shareSlug={shareSlug}
         />
       ) : (
         <section className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
@@ -225,11 +233,10 @@ export default async function SignerProfile({
       {isOwner ? (
         <p className="mt-14 text-center text-xs text-zinc-500">
           Your data, your choice.{" "}
-          <Link
-            href="/account/revoke"
-            className="underline underline-offset-4"
-          >
-            Remove your signature
+          {/* /account, not /account/revoke: revoke anonymizes the signature
+              and keeps it; removing a signature lives on /account. */}
+          <Link href="/account" className="underline underline-offset-4">
+            Manage or remove your signature
           </Link>{" "}
           any time.
         </p>

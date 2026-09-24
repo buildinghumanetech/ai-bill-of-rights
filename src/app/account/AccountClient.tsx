@@ -8,6 +8,7 @@ import {
   removeMySignatureForVersionAction,
   updateMyProfileAction,
 } from "@/server/actions/account";
+import { deleteMyAccount } from "@/server/actions/me";
 import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
 import { SelfieCard, type SelfieCardData } from "@/components/SelfieCard";
@@ -64,6 +65,33 @@ export default function AccountClient({
     router.refresh();
   }
   const [removingVersion, setRemovingVersion] = useState<string | null>(null);
+
+  // "Delete my account" — the full hard-delete cascade. Two clicks: the first
+  // only reveals the confirmation block listing everything that goes.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await deleteMyAccount();
+      if (!res.success) {
+        setDeleteError(res.error ?? "Couldn't delete your account.");
+        return;
+      }
+      // The signer row is gone, so this page has nothing left to show.
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Couldn't delete your account.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   function handleProfileSave(e: FormEvent) {
     e.preventDefault();
@@ -134,8 +162,15 @@ export default function AccountClient({
   }
 
   async function handleRemoveVersion(version: string) {
+    // Say what this does NOT do as plainly as what it does. The sign modal used
+    // to put "Delete my account" where people went to remove a signature, and
+    // someone lost their whole account that way. This removes one signature
+    // row; removeMySignatureForVersionAction keeps the signer, profile,
+    // comments and statement.
+    const others = signatures.some((s) => s.version !== version);
     const confirmed = window.confirm(
-      `Remove your signature on v${version}? This deletes that one signature; your other version signatures stay.`,
+      `Remove your signature from v${version}? Your account, profile, comments and 'why I signed' statement stay, and you can sign again any time.` +
+        (others ? " Your signatures on other versions stay." : ""),
     );
     if (!confirmed) return;
     setRemovingVersion(version);
@@ -310,9 +345,10 @@ export default function AccountClient({
                   onClick={() => handleRemoveVersion(s.version)}
                   disabled={removingVersion === s.version}
                   className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 hover:bg-red-100 disabled:opacity-50"
-                  aria-label={`Remove my signature on v${s.version}`}
                 >
-                  {removingVersion === s.version ? "…" : "×"}
+                  {removingVersion === s.version
+                    ? "Removing…"
+                    : `Remove my signature from v${s.version}`}
                 </button>
               </li>
             ))}
@@ -329,20 +365,117 @@ export default function AccountClient({
           Sign out
         </button>
         {/*
-          This is the main entry point to the full account cascade in
-          src/server/signers/delete.ts — signatures, profile, comments,
-          proposed edits, other people's comments on those edits, votes,
-          endorsements and photo blobs. The label has to name that, not just
-          the signatures and the profile, or people arrive at
-          /account/revoke expecting something far narrower than what the
-          page then describes. Keep it in step with that page's list.
+          /account/revoke does NOT delete anything wholesale. submitRevokeAction
+          calls anonymizeSigner (src/server/signers/anonymize.ts): the signature
+          stays and still counts, relabelled "Anonymized signer #N"; name,
+          location and affiliation come off the public list; the private capture
+          fields are scrubbed; photos are deleted. That is what
+          content/consent/v1.md promises revoking does. The full hard delete is
+          "Delete my account" below. Keep this label in step with the list on
+          src/app/account/revoke/page.tsx.
         */}
         <Link
           href="/account/revoke"
           className="text-sm font-medium text-red-700 underline-offset-4 hover:underline"
         >
-          Delete my account — signatures, comments, proposals and photos →
+          Revoke consent: anonymize my signature and remove my personal data →
         </Link>
+      </section>
+
+      <section
+        aria-labelledby="delete-account-heading"
+        className="mt-10 border-t border-zinc-200 pt-8"
+      >
+        <h2
+          id="delete-account-heading"
+          className="text-base font-semibold text-red-800"
+        >
+          Delete your account
+        </h2>
+        {deleteError ? (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {deleteError}
+          </p>
+        ) : null}
+        {confirmingDelete ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-5">
+            {/*
+              This button does NOT just remove a signature — it runs the
+              full account cascade in src/server/signers/delete.ts. The
+              copy has to name everything that cascade destroys, or people
+              are consenting to something the dialog never described.
+              If you widen the cascade, widen this list in the same commit.
+            */}
+            <p className="text-sm font-semibold text-red-900">
+              Delete your account and everything in it?
+            </p>
+            {/*
+              Says "every version" explicitly. deleteMyAccount deletes the
+              signer row and EVERY signature it owns — someone reading
+              "your signature" next to a version number reasonably takes it
+              to mean that one. The wording is what prevents that reading.
+            */}
+            <p className="mt-1 text-sm text-red-800">
+              This is irreversible. It permanently deletes:
+            </p>
+            <ul className="mt-2 list-disc pl-5 text-sm text-red-800">
+              <li>
+                Your signature on{" "}
+                <strong className="font-semibold">every version</strong> you
+                have signed, and your
+                name, location and affiliation from the public signers list
+              </li>
+              <li>Your profile photo, including all backup copies</li>
+              <li>
+                Every comment you&apos;ve written, and every proposed edit
+                you&apos;ve made
+              </li>
+              <li>
+                Your votes, upvotes and endorsements, and your
+                &ldquo;why I signed&rdquo; statement
+              </li>
+              <li>
+                <strong className="font-semibold">
+                  Other people&apos;s comments on your proposals
+                </strong>{" "}
+                — their replies to your proposed edits go with the proposal
+              </li>
+            </ul>
+            <p className="mt-2 text-sm text-red-800">
+              Replies other people wrote to your comments are kept. Your
+              email or phone is freed up, so you can sign again later.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 rounded-full bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleting ? "Deleting…" : "Yes, delete everything"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+                className="flex-1 rounded-full bg-white px-6 py-2.5 text-sm font-medium text-zinc-900 ring-1 ring-inset ring-zinc-300 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteError(null);
+              setConfirmingDelete(true);
+            }}
+            className="mt-4 rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100"
+          >
+            Delete my account
+          </button>
+        )}
       </section>
     </>
   );

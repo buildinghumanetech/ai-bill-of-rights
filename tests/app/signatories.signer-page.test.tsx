@@ -10,6 +10,13 @@ vi.mock("@/lib/db/queries", () => ({
   listSignaturesForSigner: vi.fn(),
 }));
 
+// The owner's view asks for a short-link slug. Null (the default here) is the
+// long-link fallback, which the ref/via assertions below are written against.
+vi.mock("@/lib/db/lazy", () => ({ getDb: vi.fn(() => ({})) }));
+vi.mock("@/lib/share/short-links", () => ({
+  getOrCreateShareSlug: vi.fn(async () => null),
+}));
+
 vi.mock("@/lib/selfie/queries", () => ({
   getActiveSelfieForSigner: vi.fn(),
 }));
@@ -31,6 +38,7 @@ vi.mock("@/app/SignModal", () => ({ default: () => null }));
 import { auth } from "@clerk/nextjs/server";
 import { getSignerById, listSignaturesForSigner } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
+import { getOrCreateShareSlug } from "@/lib/share/short-links";
 import { articles } from "@/app/HomepageArticles";
 import { gist } from "@/components/CommitmentsSummary";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
@@ -80,6 +88,7 @@ async function renderPage(): Promise<string> {
 describe("signer page as a landing page for a stranger", () => {
   beforeEach(() => {
     vi.mocked(auth).mockReset();
+    vi.mocked(getOrCreateShareSlug).mockClear();
     vi.mocked(getSignerById).mockReset();
     vi.mocked(listSignaturesForSigner).mockReset();
     vi.mocked(getActiveSelfieForSigner).mockReset();
@@ -99,8 +108,8 @@ describe("signer page as a landing page for a stranger", () => {
     viewerIs("user_someone_else");
     const html = await renderPage();
     expect(html).not.toContain("Share your signature");
-    // ...nor the owner-only revoke link.
-    expect(html).not.toContain("Remove your signature");
+    // ...nor the owner-only manage link.
+    expect(html).not.toContain("Manage or remove your signature");
   });
 
   it("shows the share box and revoke link to the owner", async () => {
@@ -108,7 +117,11 @@ describe("signer page as a landing page for a stranger", () => {
     viewerIs(OWNER_CLERK_ID);
     const html = await renderPage();
     expect(html).toContain("Share your signature");
-    expect(html).toContain("Remove your signature");
+    // Points at /account (remove one signature, keep the account), not at the
+    // anonymizing /account/revoke page.
+    expect(html).toContain("Manage or remove your signature");
+    expect(html).toContain('href="/account"');
+    expect(html).not.toContain('href="/account/revoke"');
     // The owner already signed — no "add your name" ask.
     expect(html).not.toContain("Add your name");
   });
@@ -119,16 +132,32 @@ describe("signer page as a landing page for a stranger", () => {
     const html = await renderPage();
     // Copy field carries the copy channel.
     expect(html).toContain(
-      `https://ai-for-people.org/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&amp;via=copy`,
+      `https://theaibill.org/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&amp;via=copy`,
     );
     // X and LinkedIn links are URL-encoded inside the intent/share URLs.
     for (const channel of ["x", "linkedin", "email"]) {
       expect(html).toContain(
         encodeURIComponent(
-          `https://ai-for-people.org/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=${channel}`,
+          `https://theaibill.org/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=${channel}`,
         ).replace(/&/g, "&amp;"),
       );
     }
+  });
+
+  it("uses the owner's short link, with no raw id, when they have a slug", async () => {
+    vi.mocked(getOrCreateShareSlug).mockResolvedValueOnce("k7m2p9q");
+    mockSigner();
+    viewerIs(OWNER_CLERK_ID);
+    const html = await renderPage();
+    expect(html).toContain("https://theaibill.org/s/k7m2p9q?via=copy");
+    expect(html).not.toContain(`/signatories/${SIGNER_ID}?ref=`);
+  });
+
+  it("never creates a slug for a visitor's view", async () => {
+    mockSigner();
+    viewerIs("user_someone_else");
+    await renderPage();
+    expect(getOrCreateShareSlug).not.toHaveBeenCalled();
   });
 
   it("shows the sign CTA and the eleven commitments to a non-owner", async () => {

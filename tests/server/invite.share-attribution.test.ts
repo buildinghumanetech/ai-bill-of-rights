@@ -23,41 +23,56 @@ import {
   REF_PARAM,
   CHANNEL_PARAM,
   isShareChannel,
+  signerShareUrl,
 } from "@/lib/share/urls";
 
 const SITE_URL = "https://ai-for-people.org";
+/**
+ * The origin share links are WRITTEN with, which is not necessarily SITE_URL:
+ * production links go out on the short share domain (see `shareOrigin` in
+ * src/lib/share/urls.ts). Derived rather than hard-coded so this file tests
+ * attribution, not which domain is in fashion.
+ */
+const LINK_ORIGIN = new URL(signerShareUrl(SITE_URL, "x")).origin;
 const INVITER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 
 /**
- * `dbStub` lives INSIDE `vi.hoisted` alongside the mutable state, not in a
- * module-scope `const` below the mocks. `vi.mock` factories and the `import` of
- * the action under test are both hoisted above every `const` in this file, so a
- * factory closing over a module-scope `dbStub` is only safe while nothing in
- * the graph statically imports `@/lib/db` — the day `invite.ts` swaps its lazy
- * `require` for a normal `import`, that factory fires during hoisted evaluation
- * and throws `ReferenceError: Cannot access 'dbStub' before initialization`
- * instead of mocking. Hoisting the stub removes the trap rather than relying on
- * the import graph staying the shape it is today.
+ * Mutable state lives INSIDE `vi.hoisted`, not in module-scope `const`s below
+ * the mocks: `vi.mock` factories and the `import` of the action under test are
+ * both hoisted above every `const` in this file, so a factory closing over a
+ * module-scope binding throws `ReferenceError: Cannot access ... before
+ * initialization` the day `invite.ts` swaps its lazy `require` for a normal
+ * `import`.
  *
- * The stub is a stand-in for the drizzle chain `invite.ts` runs:
- * `db.select().from(signers).where(eq(...)).limit(1)`. Nothing about the query
- * itself is under test here — only what the action does with the row it gets.
+ * `db` is a fresh pglite database per test (seeded with the inviter's signer
+ * row). It used to be a hand-rolled stub of the one `select` chain the action
+ * ran; the action now also claims each address in `invitations` (see
+ * invite.once-per-person.test.ts), and a real database is simpler and more
+ * honest than stubbing an insert/on-conflict/returning chain.
  */
 const state = vi.hoisted(() => {
   const s = {
     clerkUserId: null as string | null,
-    signerRows: [] as unknown[],
+    /** This test's database. */
+    current: null as unknown,
+    /**
+     * What `require("@/lib/db").db` hands the action. `invite.ts` memoises the
+     * first db it gets for the life of the module, so it must be one stable
+     * object that forwards to whichever database the current test built —
+     * otherwise every test after the first runs against the first test's db.
+     */
     db: null as unknown,
   };
-  s.db = {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => s.signerRows,
-        }),
-      }),
-    }),
-  };
+  s.db = new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        const target = s.current as Record<string | symbol, unknown>;
+        const v = target[prop];
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    },
+  );
   return s;
 });
 
@@ -94,6 +109,10 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@clerk/nextjs/server", () => ({
   auth: async () => ({ userId: state.clerkUserId }),
+  // Nobody the tests invite has a Clerk account, so nobody is already-signed.
+  clerkClient: async () => ({
+    users: { getUserList: async () => ({ data: [], totalCount: 0 }) },
+  }),
 }));
 
 const sentEmails: Array<{ to: string; subject: string; text: string }> = [];
@@ -105,6 +124,10 @@ vi.mock("@/lib/email/send", () => ({
 }));
 
 import { sendInvitationsAction } from "@/server/actions/invite";
+import { createTestDb } from "../_helpers/pglite-db";
+import { signers } from "@/lib/db/schema";
+import { resolveShareSlug } from "@/lib/share/short-links";
+import { sql } from "drizzle-orm";
 
 /**
  * `process.env` is ONE object shared by every file in a Vitest worker, so
@@ -119,31 +142,55 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   sentEmails.length = 0;
   state.clerkUserId = "user_inviter";
-  state.signerRows = [{ id: INVITER_ID, displayName: "Ada Lovelace" }];
+  const db = await createTestDb();
+  await db.insert(signers).values({
+    id: INVITER_ID,
+    clerkUserId: "user_inviter",
+    displayName: "Ada Lovelace",
+    verificationMethod: "email",
+    verifiedAt: new Date(),
+  });
+  state.current = db;
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", SITE_URL);
 });
 
 /** Every absolute site URL in the invitation body, in order of appearance. */
 function siteLinks(text: string): string[] {
-  return [...text.matchAll(/https:\/\/ai-for-people\.org\S*/g)].map((m) => m[0]);
+  const origin = LINK_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...text.matchAll(new RegExp(`${origin}\\S*`, "g"))].map((m) => m[0]);
 }
 
 async function invite(to = "friend@example.com") {
   const res = await sendInvitationsAction([to]);
-  expect(res.sent).toBe(1);
+  expect(res.sent).toEqual([to]);
   const mail = sentEmails.find((m) => m.to === to);
   expect(mail).toBeDefined();
   return mail!;
 }
 
 describe("sendInvitationsAction — share attribution", () => {
-  it("tags the inviter's signature-page link with their ref and the invite channel", async () => {
+  it("links the inviter's signature page through their short link, tagged invite", async () => {
+    const mail = await invite();
+    const link = siteLinks(mail.text).find((u) => u.startsWith(`${LINK_ORIGIN}/s/`));
+    expect(link).toBeDefined();
+    expect(link).toContain(`${CHANNEL_PARAM}=invite`);
+    // No raw id in the link; the slug resolves to the inviter, and /s/[slug]
+    // redirects with ?ref=<inviter>, so attribution is unchanged.
+    expect(link).not.toContain(INVITER_ID);
+    const slug = new URL(link!).pathname.split("/")[2];
+    expect(await resolveShareSlug(state.current, slug)).toBe(INVITER_ID);
+  });
+
+  it("falls back to the long, ref-tagged link when share_links is missing (0014 unapplied)", async () => {
+    await (state.current as { execute: (q: unknown) => Promise<unknown> }).execute(
+      sql`DROP TABLE share_links`,
+    );
     const mail = await invite();
     const link = siteLinks(mail.text).find((u) =>
-      u.startsWith(`${SITE_URL}/signatories/`),
+      u.startsWith(`${LINK_ORIGIN}/signatories/`),
     );
     expect(link).toBeDefined();
     expect(link).toContain(`${REF_PARAM}=${INVITER_ID}`);
@@ -155,7 +202,7 @@ describe("sendInvitationsAction — share attribution", () => {
     // this channel, and it was carrying nothing at all.
     const mail = await invite();
     const link = siteLinks(mail.text).find(
-      (u) => !u.startsWith(`${SITE_URL}/signatories/`),
+      (u) => !u.startsWith(`${LINK_ORIGIN}/signatories/`),
     );
     expect(link).toBeDefined();
     expect(link).toContain(`${REF_PARAM}=${INVITER_ID}`);
@@ -173,8 +220,15 @@ describe("sendInvitationsAction — share attribution", () => {
     const links = siteLinks(mail.text);
     expect(links.length).toBeGreaterThanOrEqual(2);
     for (const link of links) {
-      expect(link).toContain(`${REF_PARAM}=${INVITER_ID}`);
       expect(link).toContain(`${CHANNEL_PARAM}=invite`);
+      // Either it names the inviter as ref, or it is their short link, which
+      // resolves to them and redirects with ?ref= on the far side.
+      if (new URL(link).pathname.startsWith("/s/")) {
+        const slug = new URL(link).pathname.split("/")[2];
+        expect(await resolveShareSlug(state.current, slug)).toBe(INVITER_ID);
+      } else {
+        expect(link).toContain(`${REF_PARAM}=${INVITER_ID}`);
+      }
     }
   });
 
@@ -189,7 +243,7 @@ describe("sendInvitationsAction — share attribution", () => {
   it("sends nothing when the caller is not signed in", async () => {
     state.clerkUserId = null;
     const res = await sendInvitationsAction(["friend@example.com"]);
-    expect(res.sent).toBe(0);
+    expect(res.sent).toEqual([]);
     expect(sentEmails).toHaveLength(0);
   });
 
@@ -197,9 +251,9 @@ describe("sendInvitationsAction — share attribution", () => {
     // No row means no id to put in `?ref=`. Sending an untagged invitation
     // anyway is the failure mode this whole file is about, so the action
     // refuses instead.
-    state.signerRows = [];
+    state.clerkUserId = "user_without_a_signer_row";
     const res = await sendInvitationsAction(["friend@example.com"]);
-    expect(res.sent).toBe(0);
+    expect(res.sent).toEqual([]);
     expect(sentEmails).toHaveLength(0);
   });
 });

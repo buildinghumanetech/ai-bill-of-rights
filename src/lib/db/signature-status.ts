@@ -14,6 +14,17 @@ export interface SignedStatus {
   verificationMethod: "email" | "sms";
   signedAt: string; // ISO so it crosses the server/client boundary cleanly
   version: string;
+  /**
+   * Filled in by `getMySignatureStatus` (not by `resolveSignatureStatus`) so a
+   * returning signer can land straight on their share view: the card and the
+   * share links need the id, the greeting needs the number, and the why box
+   * opens with what they already wrote.
+   */
+  signerId?: string;
+  signerNumber?: number;
+  whyISigned?: string | null;
+  /** Their short-link slug; null when it couldn't be made (long link instead). */
+  shareSlug?: string | null;
 }
 
 /**

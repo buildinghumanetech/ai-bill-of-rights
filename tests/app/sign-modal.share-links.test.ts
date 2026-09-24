@@ -31,7 +31,7 @@ vi.mock("@/server/actions/sign-from-modal", () => ({
 vi.mock("@/server/actions/invite", () => ({ sendInvitationsAction: vi.fn() }));
 vi.mock("@/server/actions/me", () => ({
   getMySignatureStatus: vi.fn(),
-  removeMySignature: vi.fn(),
+  deleteMyAccount: vi.fn(),
 }));
 vi.mock("@/server/actions/why-i-signed", () => ({ saveWhyISigned: vi.fn() }));
 vi.mock("@/components/SelfieCapture", () => ({ SelfieCapture: () => null }));
@@ -40,6 +40,8 @@ import { buildPostSignShareLinks } from "@/app/SignModal";
 
 const SIGNER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 const ORIGIN = "https://ai-for-people.org";
+// Production share links are written on the short domain; see shareOrigin().
+const SHARE = "https://theaibill.org";
 
 const links = buildPostSignShareLinks({
   origin: ORIGIN,
@@ -50,28 +52,28 @@ const links = buildPostSignShareLinks({
 describe("buildPostSignShareLinks", () => {
   it("tags the copyable link with ref and the copy channel", () => {
     expect(links.shareUrl).toBe(
-      `${ORIGIN}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=copy`,
+      `${SHARE}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=copy`,
     );
   });
 
   it("tags the X link with ref and via=x", () => {
     const url = decodeURIComponent(/&url=([^&\s]+)$/.exec(links.twitterHref)![1]);
     expect(url).toBe(
-      `${ORIGIN}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=x`,
+      `${SHARE}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=x`,
     );
   });
 
   it("tags the LinkedIn link with ref and via=linkedin", () => {
     const url = decodeURIComponent(/\?url=([^&\s]+)$/.exec(links.linkedinHref)![1]);
     expect(url).toBe(
-      `${ORIGIN}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`,
+      `${SHARE}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`,
     );
   });
 
   it("tags the mailto body with ref and via=email", () => {
     const body = decodeURIComponent(/&body=([^&\s]+)$/.exec(links.emailHref)![1]);
     expect(body).toContain(
-      `${ORIGIN}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=email`,
+      `${SHARE}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=email`,
     );
   });
 

@@ -73,8 +73,10 @@ export async function submitSignAction(formData: FormData): Promise<void> {
       const { signConfirmation } = await import("@/lib/email/templates");
       const { sendEmail } = await import("@/lib/email/send");
       const { getSignatureCount, getSignatureNumber } = await import("@/lib/db/queries");
-      let signatureNumber = 1;
-      let totalSignatures = 1;
+      // Null when the count queries fail: the email then leaves the numbers
+      // out rather than calling everyone "signer #1".
+      let signatureNumber: number | null = null;
+      let totalSignatures: number | null = null;
       try {
         [signatureNumber, totalSignatures] = await Promise.all([
           getSignatureNumber(signer.id),
@@ -83,8 +85,17 @@ export async function submitSignAction(formData: FormData): Promise<void> {
       } catch (err) {
         console.warn("[email] failed to fetch signature counts:", err);
       }
+      // Never throws: null (e.g. migration 0014 not applied) falls back to the
+      // long /signatories/<id>?ref=<id> link inside the template.
+      const { getOrCreateShareSlug } = await import("@/lib/share/short-links");
+      const { getDb } = await import("@/lib/db/lazy");
+      const shareSlug = await getOrCreateShareSlug(getDb(), signer.id).catch(
+        () => null,
+      );
       const tpl = signConfirmation({
-        displayName: signer.displayName,
+        // The REAL first name — never the display name, which may be masked.
+        firstName: userObj.firstName?.trim() || null,
+        shareSlug,
         version: versionString,
         signerPageUrl,
         revokeUrl: `${siteUrl}/account/revoke`,

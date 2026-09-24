@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { upsertSignerProfile } from "@/server/profile/upsert";
 import { getDb } from "@/lib/db/lazy";
+import { readReferralAttribution } from "@/lib/referral/request";
 
 /**
  * The write itself lives in `@/server/profile/upsert`, a plain module,
@@ -39,6 +40,11 @@ export async function submitProfileAction(formData: FormData): Promise<void> {
     affiliation,
     locationText,
     verificationMethod: method,
+    // The ref cookie the proxy stamped on arrival. Without this, anyone who
+    // came in through a share link and created their signer row here (the
+    // older /sign/profile flow) was never credited to the person who shared
+    // it. `upsertSignerProfile` validates it and applies it on INSERT only.
+    referredBySignerId: (await readReferralAttribution()).ref,
   });
 
   redirect(`/sign/consent?version=${encodeURIComponent(version)}`);

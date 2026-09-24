@@ -5,6 +5,8 @@ import {
   SignatureHeadline,
   SignatureMomentumChip,
   SignatureMomentumPanel,
+  SignerHeadline,
+  SignerMomentumChip,
   type MomentumSigner,
 } from "@/components/SignatureMomentum";
 
@@ -18,9 +20,10 @@ export default function SignatureCount() {
   return <>{count.toLocaleString()}</>;
 }
 
-/** Hero sub-headline, driven by the live count. */
+/** Hero sub-headline: the viewer's own number once they've signed, else the live count. */
 export function LiveSignatureHeadline() {
-  const { count } = useLiveSigners();
+  const { count, viewer } = useLiveSigners();
+  if (viewer) return <SignerHeadline {...viewer} count={count} />;
   return <SignatureHeadline count={count} />;
 }
 
@@ -30,12 +33,20 @@ export function LiveSignatureMomentumPanel({
 }: {
   sample?: MomentumSigner[];
 }) {
-  const { count } = useLiveSigners();
-  return <SignatureMomentumPanel count={count} sample={sample} />;
+  const { count, viewer } = useLiveSigners();
+  return (
+    <SignatureMomentumPanel
+      count={count}
+      sample={sample}
+      viewerSignerId={viewer?.signerId ?? null}
+      viewerSignerNumber={viewer?.signerNumber ?? null}
+    />
+  );
 }
 
-/** Caption under the floating sign button, driven by the live count. */
+/** Caption under the floating button: the viewer's number once they've signed, else the live count. */
 export function LiveSignatureMomentumChip() {
-  const { count } = useLiveSigners();
+  const { count, viewer } = useLiveSigners();
+  if (viewer) return <SignerMomentumChip {...viewer} />;
   return <SignatureMomentumChip count={count} />;
 }

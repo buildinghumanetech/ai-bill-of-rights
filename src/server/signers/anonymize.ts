@@ -21,6 +21,7 @@ import {
   selfies,
   selfieReports,
   consentRecords,
+  invitations,
 } from "@/lib/db/schema";
 import { deleteSelfieBlobsByUrls } from "@/lib/storage/blob";
 import type { SelfieBlobBackend } from "@/lib/storage/blob";
@@ -93,6 +94,17 @@ export async function anonymizeSigner(
     .update(consentRecords)
     .set({ capturedFields: null, revokedAt: new Date() })
     .where(eq(consentRecords.signerId, signerId));
+
+  // 2b) Forget who this signer invited. The signer row survives anonymization,
+  //     so the FK's ON DELETE SET NULL never fires here; without this, the
+  //     anonymized row would keep a link to every (hashed) address its owner
+  //     personally invited — private social-graph data the consent text says
+  //     revoking removes. The invitation rows themselves stay: they are what
+  //     stops those addresses being emailed a second time.
+  await db
+    .update(invitations)
+    .set({ inviterSignerId: null })
+    .where(eq(invitations.inviterSignerId, signerId));
 
   // 3) Selfies are private biometric data — delete blobs + rows LAST (the only
   //    irreversible step). Reports are deleted first (FK to selfies): both those

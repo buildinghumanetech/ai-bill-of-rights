@@ -9,6 +9,8 @@ import {
   type SignerSignatureStatus,
 } from "@/lib/db/signature-status";
 import { reaffirmSignature } from "@/lib/db/reaffirm";
+import { getSignatureNumber } from "@/lib/db/queries";
+import { getOrCreateShareSlug } from "@/lib/share/short-links";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
 import { sha256Hex } from "@/lib/consent/hash";
@@ -48,13 +50,26 @@ export async function getMySignatureStatus(
       id: signers.id,
       displayName: signers.displayName,
       verificationMethod: signers.verificationMethod,
+      whyISigned: signers.whyISigned,
     })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
   if (signerRows.length === 0) return { state: "no-signer" };
+  const signer = signerRows[0];
 
-  return resolveSignatureStatus(db, signerRows[0], versionString);
+  const status = await resolveSignatureStatus(db, signer, versionString);
+  if (status.state !== "signed") return status;
+  // A signer of this version opens the modal on their share view, which needs
+  // who they are and where they fall — not just that they signed.
+  return {
+    ...status,
+    signerId: signer.id,
+    signerNumber: await getSignatureNumber(signer.id, db),
+    whyISigned: signer.whyISigned ?? null,
+    // Never throws; null (long link) if migration 0014 isn't applied yet.
+    shareSlug: await getOrCreateShareSlug(db, signer.id),
+  };
 }
 
 /**
@@ -161,7 +176,7 @@ export async function reaffirmMySignature(
  * preferences. The cascade is manual because neon-http has no transaction
  * support.
  */
-export async function removeMySignature(): Promise<{
+export async function deleteMyAccount(): Promise<{
   success: boolean;
   error?: string;
 }> {

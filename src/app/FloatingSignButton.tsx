@@ -3,12 +3,16 @@
 import { useState } from "react";
 import SignModal from "./SignModal";
 import { LiveSignatureMomentumChip } from "./SignatureCount";
+import { useLiveSigners } from "./LiveSignersProvider";
 
 const buttonClasses =
   "glass-button pointer-events-auto rounded-full bg-gradient-to-b from-blue-500/85 to-blue-700/85 px-8 py-3.5 text-sm font-semibold text-white backdrop-blur-md backdrop-saturate-150 transition-transform hover:scale-[1.03] sm:px-10 sm:py-4 sm:text-base";
 
 export default function FloatingSignButton() {
   const [open, setOpen] = useState(false);
+  // A signer gets Share, not Sign: the same modal opens straight onto their
+  // card and share links (SignModal lands a current-version signer there).
+  const { viewer } = useLiveSigners();
 
   return (
     <>
@@ -18,7 +22,7 @@ export default function FloatingSignButton() {
           onClick={() => setOpen(true)}
           className={buttonClasses}
         >
-          Sign the{" "}
+          {viewer ? "Share" : "Sign"} the{" "}
           <span className="block sm:inline">AI Bill of Rights</span>
         </button>
 

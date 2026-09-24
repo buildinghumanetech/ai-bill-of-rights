@@ -37,7 +37,8 @@ import {
 
 const SIGNER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 const ORIGIN = "https://ai-for-people.org";
-const SIGNER_PAGE = `${ORIGIN}/signatories/${SIGNER_ID}`;
+// Production share links are written on the short domain; see shareOrigin().
+const SIGNER_PAGE = `https://theaibill.org/signatories/${SIGNER_ID}`;
 
 /**
  * Every href in a rendered box, HTML-unescaped enough to compare queries.
@@ -98,7 +99,7 @@ describe("ShareSignature share hrefs", () => {
     expect(text, "X href has no text= param at all").not.toBeNull();
     expect(text!.trim().length).toBeGreaterThan(0);
     expect(text).not.toContain(SIGNER_PAGE);
-    expect(text).not.toContain("ai-for-people.org");
+    expect(text).not.toContain("theaibill.org");
   });
 
   it("tags the LinkedIn href with ref and via=linkedin", () => {

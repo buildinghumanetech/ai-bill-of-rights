@@ -1,6 +1,8 @@
 import { buildShareText } from "@/lib/share/share-text";
+import { milestoneLine } from "@/lib/milestones";
 import {
   shareHrefs,
+  signerShareLink,
   withShareParams,
   type ShareChannel,
 } from "@/lib/share/urls";
@@ -23,21 +25,24 @@ You can also sign the bill itself any time from your account page: ${opts.accoun
   };
 }
 
-function getNextMilestone(current: number): number {
-  const milestones = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
-  for (const m of milestones) {
-    if (current < m) return m;
-  }
-  return Math.ceil(current / 5000) * 5000 + 5000;
-}
-
 export function signConfirmation(opts: {
-  displayName: string;
+  /**
+   * The signer's REAL first name — what they typed, or their account's first
+   * name. Never derived from the public display name: display names can be
+   * masked ("E**** A*******"), and greeting someone as "E****" is worse than
+   * not greeting them by name. Null/blank greets without a name.
+   */
+  firstName?: string | null;
   version: string;
   signerPageUrl: string;
   revokeUrl: string;
-  signatureNumber?: number;
-  totalSignatures?: number;
+  /**
+   * This signer's number and the live total. Either may be null when the
+   * count query failed — the email then says nothing about numbers rather
+   * than telling signer #500 they are signer #1.
+   */
+  signatureNumber?: number | null;
+  totalSignatures?: number | null;
   /**
    * Signer id, so every SHARE link carries ?ref= attribution. Null degrades
    * to an untagged-but-still-channelled link rather than crediting whoever
@@ -52,15 +57,35 @@ export function signConfirmation(opts: {
    * param for it would be a promise the template can never keep.
    */
   signerId?: string | null;
+  /**
+   * The signer's short-link slug (src/lib/share/short-links.ts). When present
+   * every share link is the short /s/<slug>?via=<channel> form, which carries
+   * no raw id; /s/[slug] redirects with ?ref= so attribution is unchanged.
+   * Null falls back to the long /signatories/<id>?ref=<id> link.
+   */
+  shareSlug?: string | null;
 }): { subject: string; text: string; html: string } {
-  const sigNum = opts.signatureNumber ?? 1;
-  const total = opts.totalSignatures ?? sigNum;
-  const milestone = getNextMilestone(total);
-  const firstName = opts.displayName.split(/\s+/)[0];
+  const sigNum =
+    typeof opts.signatureNumber === "number" && opts.signatureNumber > 0
+      ? opts.signatureNumber
+      : null;
+  const total =
+    typeof opts.totalSignatures === "number" && opts.totalSignatures > 0
+      ? opts.totalSignatures
+      : null;
+  // The same goal story the site tells (src/lib/milestones.ts). Measured from
+  // the larger of the two numbers: the live count can lag this signer's own
+  // number, and "you're #92 — 9 more to reach 100" would be off by one.
+  const milestoneCount = Math.max(sigNum ?? 0, total ?? 0);
+  const milestone = milestoneCount > 0 ? milestoneLine(milestoneCount) : null;
+  const firstName = opts.firstName?.trim() || null;
 
   const ref = opts.signerId ?? null;
+  const siteOrigin = new URL(opts.signerPageUrl).origin;
   const shareUrlFor = (channel: ShareChannel) =>
-    withShareParams(opts.signerPageUrl, { ref, channel });
+    ref
+      ? signerShareLink(siteOrigin, ref, opts.shareSlug ?? null, channel)
+      : withShareParams(opts.signerPageUrl, { ref: null, channel });
   const shareTextFor = (channel: ShareChannel) => buildShareText({ channel });
 
   /**
@@ -74,7 +99,8 @@ export function signConfirmation(opts: {
    * would sit in the slot a genuine later referral needed. The database
    * rejects self-referral, so the harm isn't bad data — it's a swallowed
    * referral. The share buttons below keep their `ref`; those really do go to
-   * someone else.
+   * someone else. (The short link is a share link too: it redirects WITH ref,
+   * so it is never used for these.)
    */
   const ownPageUrl = withShareParams(opts.signerPageUrl, {
     ref: null,
@@ -91,13 +117,17 @@ export function signConfirmation(opts: {
   // actually paste. It gets their sentence too.
   const suggestedMessage = `${shareTextFor("linkedin")} ${shareUrlFor("linkedin")}`;
 
-  const text = `Hi ${opts.displayName},
+  // "You're signer #92. 8 more to reach 100."
+  const numberLine = sigNum
+    ? `You're signer #${sigNum.toLocaleString("en-US")}.${milestone ? ` ${milestone}` : ""}`
+    : milestone;
 
-You're Signer #${sigNum.toLocaleString()} of the AI Bill of Rights (v${opts.version}). Thank you for helping ensure a future with AI that supports human flourishing.
+  const text = `${firstName ? `Hi ${firstName},` : "Hi,"}
 
-We're at ${total.toLocaleString()} signatures — help us reach ${milestone.toLocaleString()}!
-
-Bring two friends — share your signature:
+Thank you for signing the AI Bill of Rights (v${opts.version}) and helping ensure a future with AI that supports human flourishing.
+${numberLine ? `\n${numberLine}\n` : ""}
+Bring Two Friends.
+Who else should be on this list?
 
   Suggested message for LinkedIn (copy & paste):
   "${suggestedMessage}"
@@ -115,6 +145,27 @@ ${opts.revokeUrl}
 `;
 
   const esc = escapeHtml;
+  const numberBlock = sigNum
+    ? `
+  <!-- Signer number + milestone -->
+  <div style="padding:24px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
+    <p style="margin:0 0 2px;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">You're</p>
+    <p style="margin:0;font-size:36px;font-weight:800;color:#111827;">Signer #${sigNum.toLocaleString("en-US")}</p>${
+      milestone
+        ? `
+    <p style="margin:8px 0 0;font-size:14px;color:#6b7280;">${esc(milestone)}</p>`
+        : ""
+    }
+  </div>
+`
+    : milestone
+      ? `
+  <!-- Milestone -->
+  <div style="padding:20px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
+    <p style="margin:0;font-size:14px;color:#6b7280;">${esc(milestone)}</p>
+  </div>
+`
+      : "";
   const html = `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:system-ui,-apple-system,sans-serif;">
@@ -123,21 +174,14 @@ ${opts.revokeUrl}
   <!-- Green congrats banner -->
   <div style="background:#059669;padding:28px 28px 24px;text-align:center;">
     <div style="display:inline-block;width:48px;height:48px;line-height:48px;border-radius:50%;background:rgba(255,255,255,0.2);font-size:24px;color:#fff;">&#10003;</div>
-    <h1 style="margin:12px 0 0;font-size:22px;font-weight:700;color:#fff;">Thank you for signing, ${esc(firstName)}!</h1>
+    <h1 style="margin:12px 0 0;font-size:22px;font-weight:700;color:#fff;">${firstName ? `Thank you for signing, ${esc(firstName)}!` : "Thank you for signing!"}</h1>
     <p style="margin:6px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">AI Bill of Rights v${esc(opts.version)}</p>
   </div>
-
-  <!-- Signer number + milestone -->
-  <div style="padding:24px 28px;text-align:center;border-bottom:1px solid #e5e7eb;">
-    <p style="margin:0 0 2px;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">You are</p>
-    <p style="margin:0;font-size:36px;font-weight:800;color:#111827;">Signer #${sigNum.toLocaleString()}</p>
-    <p style="margin:8px 0 0;font-size:14px;color:#6b7280;">${total.toLocaleString()} signatures so far &mdash; help us reach <strong style="color:#111827;">${milestone.toLocaleString()}</strong>!</p>
-  </div>
-
+${numberBlock}
   <!-- Bring Two Friends -->
   <div style="padding:24px 28px;background:#fffbeb;border-bottom:1px solid #fde68a;">
-    <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;color:#92400e;">Bring Two Friends</h2>
-    <p style="margin:0 0 16px;font-size:14px;color:#78350f;">Every signature strengthens the movement. Share yours now:</p>
+    <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;color:#92400e;">Bring Two Friends.</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#78350f;">Who else should be on this list?</p>
     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px 16px;margin:0 0 20px;">
       <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#0a66c2;text-transform:uppercase;letter-spacing:.04em;">Suggested message (copy &amp; paste for LinkedIn):</p>
       <p style="margin:0;font-size:14px;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;line-height:1.5;">${esc(suggestedMessage)}</p>

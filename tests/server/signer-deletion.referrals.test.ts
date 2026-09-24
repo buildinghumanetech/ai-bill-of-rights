@@ -152,12 +152,12 @@ describe("deleting a signer who referred someone", () => {
     await expectInviteeSurvivedUnattributed(inviteeId);
   });
 
-  it("succeeds via the self-service path (removeMySignature)", async () => {
+  it("succeeds via the self-service path (deleteMyAccount)", async () => {
     const { inviterId, inviteeId } = await seedReferralPair();
     state.clerkUserId = "user_inviter";
-    const { removeMySignature } = await import("@/server/actions/me");
+    const { deleteMyAccount } = await import("@/server/actions/me");
 
-    await expect(removeMySignature()).resolves.toEqual({ success: true });
+    await expect(deleteMyAccount()).resolves.toEqual({ success: true });
 
     await expectSignerGone(inviterId);
     await expectInviteeSurvivedUnattributed(inviteeId);
@@ -167,7 +167,7 @@ describe("deleting a signer who referred someone", () => {
   // so the inviter row survives with a scrubbed identity. That means the
   // referral edge is NOT nulled here — it still points at a row, just one that
   // no longer names anybody. The ON DELETE SET NULL behaviour this suite exists
-  // to protect is still covered by the deleteSigner and removeMySignature cases.
+  // to protect is still covered by the deleteSigner and deleteMyAccount cases.
   it("anonymizes the inviter via the admin path, leaving the edge pointing at a scrubbed row", async () => {
     const { inviterId, inviteeId } = await seedReferralPair();
     state.clerkUserId = "user_admin";

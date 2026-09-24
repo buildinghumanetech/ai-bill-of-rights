@@ -78,7 +78,7 @@ function doomedCommentIds(signerId: string) {
 /**
  * Fully removes a signer and every dependent row. This is the single cascade
  * behind all three deletion paths: the user-facing revoke flow, the
- * self-service `removeMySignature`, and the admin Delete button.
+ * self-service `deleteMyAccount`, and the admin Delete button.
  *
  * CALLER MUST AUTHORISE. There is no auth check in here on purpose — see the
  * module docstring. Every caller reachable from a browser has to establish

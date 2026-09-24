@@ -131,16 +131,24 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-**Pending — apply these first, in this order:**
+**Pending:** none.
+
+0013 and 0014 were applied to production on 2026-09-24 (09:45 PT), before `feat/post-sign-share` merged, after a fresh `pg_dump` backup, in one `psql` transaction:
 
 ```bash
-pnpm tsx scripts/apply-migration.ts drizzle/0007_why_i_signed_and_referrals.sql
-pnpm tsx scripts/apply-migration.ts drizzle/0008_referral_fk_on_delete_set_null.sql
+docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
+  sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 \
+    -f /m/0013_invitations.sql -f /m/0014_share_links.sql'
 ```
 
-Checked read-only against production on 2026-09-24: `signers.why_i_signed` and `signers.referred_by_signer_id` do not exist (`42703 column "why_i_signed" does not exist`). `upsertSignerProfile` runs `select()` over every `signers` column, so while they are missing, **every new signature and every new account fails**. The newest signer row and the newest signature are both dated 2026-07-09. Both files are idempotent.
+`PGURL` is the production `DATABASE_URL` with `-pooler` removed from the host. Use the same shape for future migrations: back up first, pull the URL to a file outside the repo and delete it afterwards.
 
-0009, 0010, 0011 and 0012 have all been applied to production. When a new migration ships, add its `apply-migration.ts` command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
+- **0013** created `invitations`: one row per address ever invited, holding only a sha256 of the address (never the address itself) and who invited it. The invite form claims each address against its UNIQUE hash before sending, so no address is ever emailed twice. Without it every invitation fails (signing is unaffected).
+- **0014** created `share_links`: one random slug per signer, behind `theaibill.org/s/<slug>`. A separate table, not a column on `signers`, so a missed migration cannot break signing: if it is missing, share links fall back to the long `/signatories/<id>?ref=<id>` form.
+
+0007 and 0008 were applied to production on 2026-09-24 with `psql --single-transaction -v ON_ERROR_STOP=1 -f … -f …`, not with `apply-migration.ts`: they contain `DO $$ … $$` blocks and no `--> statement-breakpoint` markers, and the script's fallback splits on every end-of-line `;`, including the ones inside those blocks (tracked in beads `ai-bill-of-rights-bpq`). Until that is fixed, apply any migration containing a `DO $$` block with `psql`, or add breakpoints around the block.
+
+0007 through 0014 have all been applied to production. When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
 
 0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`.
 

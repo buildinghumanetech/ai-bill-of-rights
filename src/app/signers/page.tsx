@@ -8,6 +8,7 @@ import { getActiveSelfiesForSigners } from "@/lib/selfie/queries";
 import { SelfieAvatar } from "@/components/SelfieAvatar";
 import SignedAt from "@/components/SignedAt";
 import SignTrigger from "../SignTrigger";
+import { getViewerSignature } from "@/lib/viewer/signature";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,8 @@ export default async function SignersPage({
   let signers: SignerListItem[] = [];
   let totalSignerCount = 0;
   let loadFailed = false;
+  // Marks the viewer's own row. Never throws; a miss just leaves it unmarked.
+  const viewer = await getViewerSignature();
   try {
     [signers, totalSignerCount] = await Promise.all([
       listSignatures(undefined, {
@@ -165,7 +168,14 @@ export default async function SignersPage({
               {signers.map((signer) => (
                 <tr
                   key={signer.signerId}
-                  className="transition-colors hover:bg-zinc-50"
+                  aria-current={
+                    viewer?.signerId === signer.signerId ? "true" : undefined
+                  }
+                  className={
+                    viewer?.signerId === signer.signerId
+                      ? "bg-blue-50 transition-colors hover:bg-blue-100"
+                      : "transition-colors hover:bg-zinc-50"
+                  }
                 >
                   <td className="px-6 py-4">
                     <Link
@@ -181,6 +191,11 @@ export default async function SignersPage({
                       <div className="min-w-0">
                         <div className="font-bold text-zinc-950 group-hover:text-blue-600 group-hover:underline">
                           {signer.displayName}
+                          {viewer?.signerId === signer.signerId ? (
+                            <span className="ml-2 rounded-full bg-blue-600 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wider text-white no-underline">
+                              You
+                            </span>
+                          ) : null}
                         </div>
                         {signer.affiliation ? (
                           <div className="mt-0.5 text-xs text-zinc-500">

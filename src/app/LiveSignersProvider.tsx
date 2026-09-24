@@ -7,12 +7,14 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import {
   initialLiveSignersState,
   liveSignersReducer,
   type LiveSignerEvent,
 } from "./live-signers-reducer";
+import type { ViewerSignature } from "@/lib/viewer/signature";
 
 const POLL_INTERVAL_MS = 60 * 1000;
 
@@ -20,6 +22,14 @@ type ContextValue = {
   count: number;
   currentEvent: LiveSignerEvent | null;
   onEventFinished: () => void;
+  /**
+   * The person looking at the page, when they have signed the current
+   * version; null otherwise. Seeded by the server (root layout) on every
+   * render, and set directly by SignModal the moment a signature succeeds, so
+   * the page recognizes them before the refresh lands.
+   */
+  viewer: ViewerSignature | null;
+  setViewer: (viewer: ViewerSignature | null) => void;
 };
 
 const LiveSignersContext = createContext<ContextValue | null>(null);
@@ -30,6 +40,15 @@ export function useLiveSigners(): ContextValue {
     throw new Error("useLiveSigners must be used inside <LiveSignersProvider>");
   }
   return ctx;
+}
+
+/**
+ * The same context, or null outside a provider. For components that can work
+ * without it — SignModal only uses it to recognize the signer immediately, and
+ * is rendered standalone in tests.
+ */
+export function useOptionalLiveSigners(): ContextValue | null {
+  return useContext(LiveSignersContext);
 }
 
 type PollResponse = {
@@ -50,9 +69,11 @@ function isValidPollResponse(json: unknown): json is PollResponse {
 
 export function LiveSignersProvider({
   initialCount,
+  initialViewer = null,
   children,
 }: {
   initialCount: number;
+  initialViewer?: ViewerSignature | null;
   children: React.ReactNode;
 }) {
   const [state, dispatch] = useReducer(
@@ -60,6 +81,23 @@ export function LiveSignersProvider({
     initialCount,
     initialLiveSignersState,
   );
+
+  // The server's answer wins whenever it changes (a router.refresh() after
+  // signing, removing a signature or deleting the account re-renders the
+  // layout with a fresh one). Compared by value: the prop is a new object on
+  // every render, and an identity check would undo setViewer() each time.
+  const [viewer, setViewer] = useState<ViewerSignature | null>(initialViewer);
+  const initialViewerKey = initialViewer
+    ? `${initialViewer.signerId}:${initialViewer.signerNumber}`
+    : "";
+  const [seenViewerKey, setSeenViewerKey] = useState(initialViewerKey);
+  if (initialViewerKey !== seenViewerKey) {
+    // Adjusting state during render when a prop changes, per
+    // https://react.dev/learn/you-might-not-need-an-effect — an effect here
+    // would paint one frame of the stale viewer first.
+    setSeenViewerKey(initialViewerKey);
+    setViewer(initialViewer);
+  }
 
   // The reducer's `latestSignedAt` is the cursor we send on the next poll.
   // Hold it in a ref too so the polling closure always sees the latest value
@@ -149,6 +187,8 @@ export function LiveSignersProvider({
         count: state.count,
         currentEvent: state.currentEvent,
         onEventFinished,
+        viewer,
+        setViewer,
       }}
     >
       {children}
