@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   check:
-    name: typecheck + tests
+    name: lint + typecheck + tests
     # Pinned rather than ubuntu-latest, which migrates to Ubuntu 26 on
     # 2026-10-19: a runner image that changes under us turns an unrelated push
     # into the thing that broke CI. Bump deliberately, with its own run to prove it.
@@ -49,7 +49,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # --max-warnings 0 on purpose. The repo reached zero errors AND zero
+      # warnings, and a warning nobody fails on is how the count climbed to 149
+      # errors unnoticed in the first place. If a rule turns out to be wrong for
+      # this codebase, change the rule in eslint.config.mjs deliberately rather
+      # than letting its warnings pile up here.
+      - name: Lint
+        run: pnpm exec eslint --max-warnings 0
+
       - name: Typecheck
+        if: '!cancelled()'
         run: pnpm exec tsc --noEmit
 
       # `!cancelled()` so the suite still runs when the typecheck fails: one red

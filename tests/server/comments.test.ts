@@ -270,7 +270,7 @@ describe("deleteComment (data layer)", () => {
   });
 
   it("admin deleting own comment uses user_delete reason", async () => {
-    const { db, versionId } = await seed();
+    const { db } = await seed();
     const [admin] = await db
       .insert(signers)
       .values({

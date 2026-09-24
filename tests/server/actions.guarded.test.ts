@@ -1,4 +1,3 @@
-import type { Db } from "@/lib/db/types";
 /**
  * Every export of a `"use server"` module is a public POST endpoint.
  *

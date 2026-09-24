@@ -1,4 +1,4 @@
-import { eq, count, countDistinct, desc, gt, lt, or, and, isNull, isNotNull, asc, sum, sql, notExists, inArray, aliasedTable } from "drizzle-orm";
+import { eq, count, countDistinct, desc, gt, lt, or, and, isNull, isNotNull, asc, sql, notExists, inArray, aliasedTable } from "drizzle-orm";
 import { versions, signatures, signers, comments, attestations, commentVotes, commentReports, commentMentions } from "./schema";
 import type { Db } from "./types";
 
