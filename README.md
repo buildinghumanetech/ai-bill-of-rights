@@ -131,36 +131,24 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-**Pending — apply these BEFORE merging `feat/post-sign-share` (merging to `main` auto-deploys):**
+**Pending:** none.
+
+0013 and 0014 were applied to production on 2026-09-24 (09:45 PT), before `feat/post-sign-share` merged, after a fresh `pg_dump` backup, in one `psql` transaction:
 
 ```bash
-# 1. Back up production first, to a file outside the repo, and check it isn't empty.
-docker run --rm -e PGURL -v ~/db-backups:/out postgres:17 \
-  sh -c 'pg_dump --format=custom --no-owner --no-privileges -d "$PGURL" -f /out/prod-$(date +%Y%m%d-%H%M%S).dump'
-ls -lh ~/db-backups/
-
-# 2. Apply both files in ONE transaction: all or nothing.
 docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
   sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 \
     -f /m/0013_invitations.sql -f /m/0014_share_links.sql'
 ```
 
-`PGURL` is the production `DATABASE_URL` with `-pooler` removed from the host (a direct connection). Pull it with `vercel env pull --environment=production <file outside the repo>` and delete the file afterwards. `psql` rather than `apply-migration.ts` because it is transactional and handles `DO $$` blocks; the script's fallback splitter does not (see below). Neither 0013 nor 0014 contains one, so the script would also work — the transaction is the reason to prefer `psql`.
+`PGURL` is the production `DATABASE_URL` with `-pooler` removed from the host. Use the same shape for future migrations: back up first, pull the URL to a file outside the repo and delete it afterwards.
 
-- **0013** creates `invitations`: one row per address ever invited, holding only a sha256 of the address (never the address itself) and who invited it. The invite form claims each address against its UNIQUE hash before sending, so no address is ever emailed twice. Without the table **every invitation fails** (signing is unaffected).
-- **0014** creates `share_links`: one random slug per signer, behind `theaibill.org/s/<slug>`. It is a separate table, not a column on `signers`, precisely so a missed migration cannot break signing: if it is missing, share links fall back to the long `/signatories/<id>?ref=<id>` form.
-
-To verify after applying (read-only):
-
-```sql
-SELECT to_regclass('public.invitations') AS invitations, to_regclass('public.share_links') AS share_links;
-SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
- WHERE conrelid IN ('public.invitations'::regclass, 'public.share_links'::regclass);
-```
+- **0013** created `invitations`: one row per address ever invited, holding only a sha256 of the address (never the address itself) and who invited it. The invite form claims each address against its UNIQUE hash before sending, so no address is ever emailed twice. Without it every invitation fails (signing is unaffected).
+- **0014** created `share_links`: one random slug per signer, behind `theaibill.org/s/<slug>`. A separate table, not a column on `signers`, so a missed migration cannot break signing: if it is missing, share links fall back to the long `/signatories/<id>?ref=<id>` form.
 
 0007 and 0008 were applied to production on 2026-09-24 with `psql --single-transaction -v ON_ERROR_STOP=1 -f … -f …`, not with `apply-migration.ts`: they contain `DO $$ … $$` blocks and no `--> statement-breakpoint` markers, and the script's fallback splits on every end-of-line `;`, including the ones inside those blocks (tracked in beads `ai-bill-of-rights-bpq`). Until that is fixed, apply any migration containing a `DO $$` block with `psql`, or add breakpoints around the block.
 
-0007 through 0012 have all been applied to production. When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
+0007 through 0014 have all been applied to production. When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
 
 0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`.
 

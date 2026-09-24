@@ -1,5 +1,22 @@
 # Branch Progress: feat/post-sign-share
 
+## Progress Update as of 2026-09-24 09:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Migrations 0013 (`invitations`) and 0014 (`share_links`) are applied to production and verified, so the merge blocker is cleared. README's pending list is now empty and records how they were applied.
+
+### Detail of changes made:
+- Fresh production backup before applying: `~/db-backups/ai-bill-of-rights-prod-20260924-093933-pre-0013-0014.dump` (86 KB, 18 tables with data).
+- Read-only pre-check: both tables absent; 0007 columns present; 92 signers with a signature (the 9:36 PT signer `a57e8839…` is the owner testing with a second account — confirmed by her).
+- Applied with `psql --single-transaction -v ON_ERROR_STOP=1 -f 0013 -f 0014` on the direct (non-pooler) host; verified tables, all six constraints (FKs SET NULL / CASCADE, both UNIQUEs, PKs), `invitations_inviter_signer_id_idx`, zero rows in each, 92 signers. Production env file deleted afterwards.
+- `README.md`: "Pending: none."; records the method and what 0013/0014 do; "0007 through 0014 have all been applied".
+
+### Potential concerns to address:
+- None blocking merge. Post-merge: confirm the production deploy (homepage, Sign form, /signers shows 92).
+
+---
+
 ## Progress Update as of 2026-09-24 09:30 Pacific
 *(Most recent updates at top)*
 
