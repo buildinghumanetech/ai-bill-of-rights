@@ -25,6 +25,9 @@ import {
  *
  * Number is not a field. It is assigned at publish time.
  */
+const SIGN_IN_FIRST =
+  "Sign in or create an account first — proposals are tied to a verified person. Your text stays on this page.";
+
 export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -34,8 +37,14 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
   const [formError, setFormError] = useState<string | null>(null);
   const [posted, setPosted] = useState(false);
   const [pending, startTransition] = useTransition();
-  const { isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
+
+  // Once the sign-in modal has done its job, the "sign in first" notice is
+  // stale — hide it so the next thing they see is their own text and the
+  // button, not an instruction they have already followed.
+  const shownFormError =
+    isSignedIn && formError === SIGN_IN_FIRST ? null : formError;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,14 +57,21 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
     }
     setErrors({});
 
+    // `isSignedIn` is undefined until Clerk loads. Reading that as "signed
+    // out" opened the create-account modal on people who were already signed
+    // in, and pushed them into a sign-up Clerk refuses ("Session already
+    // exists").
+    if (!isLoaded) {
+      setFormError("Still loading — try again in a moment.");
+      return;
+    }
+
     if (!isSignedIn) {
       // No draft-and-return here, unlike NewCommentForm: a 1200-character
       // proposal in localStorage is a different size of object from a comment
       // draft, and the sign flow is short. Say so rather than silently
       // discarding it on the way through.
-      setFormError(
-        "Sign the Bill of Rights first — endorsements are counted per verified signer. Your text stays on this page.",
-      );
+      setFormError(SIGN_IN_FIRST);
       window.dispatchEvent(
         new CustomEvent("open-sign-modal", { detail: { mode: "comment-only" } }),
       );
@@ -169,9 +185,9 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
         />
       </Field>
 
-      {formError && (
+      {shownFormError && (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {formError}
+          {shownFormError}
         </p>
       )}
 

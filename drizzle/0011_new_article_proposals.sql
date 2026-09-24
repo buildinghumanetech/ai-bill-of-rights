@@ -13,8 +13,9 @@
 -- know it. It means "after the last article", which is where an accepted
 -- proposal is spliced in at publish time.
 --
--- Idempotent by construction (IF NOT EXISTS everywhere, guarded UPDATE) — see
--- AGENTS.md: migrations here are applied by hand and re-running one is normal.
+-- Idempotent by construction (IF NOT EXISTS on every statement; there is no
+-- UPDATE) — see AGENTS.md: migrations here are applied by hand and re-running
+-- one is normal.
 
 ALTER TABLE "proposed_edits" ADD COLUMN IF NOT EXISTS "title" text;
 --> statement-breakpoint
