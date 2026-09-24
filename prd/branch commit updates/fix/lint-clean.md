@@ -1,5 +1,41 @@
 # Branch Progress: fix/lint-clean
 
+## Progress Update as of [2026-09-24 13:50 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Second rebase (6 more commits on `main`), one real conflict, and **2 more new lint
+errors** in the incoming code. All fixed. Lint clean, tsc clean, suite
+**1134/1134 across 109 files**.
+
+### Detail of changes made:
+- **Conflict in `src/server/actions/invite.ts`** — `main` replaced `signerShareUrl`
+  with `signerShareLink` and added short-link + hash imports; this branch added the
+  `Db` type import. Both sides belong, so both were kept.
+- **`account.remove-signature-for-version.test.ts` — a real fix, not a disable.**
+  It carried `capturedFields: { ip: … } as any`, which is exactly what
+  `tests/_helpers/captured-fields.ts` was added for. Now uses the builder.
+  Encouraging: the helper is already earning its keep on code written after it.
+- **`homepage-recognition.test.tsx` — justified disable** (`react-hooks/globals`).
+  A probe component assigns a context setter to an outer variable so the test can
+  drive a state change from outside React. That is the entire purpose of the
+  double, so the rule is correctly describing it and wrongly forbidding it here.
+
+### Potential concerns to address:
+- **Third consecutive rebase, third batch of new lint errors.** 2 last time, 2 this
+  time, from ordinary feature work each time. This is not incidental: until this
+  branch lands, every PR merges without a lint gate, so the backlog this branch
+  clears keeps being topped up. **The longer it sits, the more it accumulates** —
+  which is an argument for landing it sooner rather than polishing it further.
+- **A new rule appeared in the mix: `react-hooks/globals`.** Same shape as
+  `set-state-in-effect` — right about the pattern, wrong about the intent in a test
+  double. Reinforces that the ruleset needs a deliberate project-level decision
+  rather than each author meeting it one error at a time.
+- The suite has grown 1005 -> 1134 tests during this branch's life, all passing on
+  the rebased tree, so nothing here is fighting the incoming work.
+
+---
+
 ## Progress Update as of [2026-09-24 05:00 Pacific]
 *(Most recent updates at top)*
 
