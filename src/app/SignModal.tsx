@@ -179,7 +179,35 @@ export function buildPostSignShareLinks(opts: {
   };
 }
 
+/** The machine-readable code on a Clerk API error, if `err` is one. */
+export function clerkErrorCode(err: unknown): string | undefined {
+  if (err && typeof err === "object" && "errors" in err) {
+    const errors = (err as { errors?: Array<{ code?: string }> }).errors;
+    if (Array.isArray(errors)) return errors[0]?.code;
+  }
+  return undefined;
+}
+
+const IDENTIFIER_EXISTS_CODES: ReadonlySet<string> = new Set([
+  "form_identifier_exists",
+  "form_identifier_exists__phone_number",
+  "form_identifier_exists__email_address",
+]);
+
+/**
+ * Clerk refuses to start or finish a sign-up/sign-in while this browser
+ * already holds a session ("Session already exists"). That is not a failure
+ * from the person's point of view — they are already in — so every Clerk call
+ * in this modal treats it as "adopt the session and carry on".
+ */
+export function isSessionExistsError(err: unknown): boolean {
+  return clerkErrorCode(err) === "session_exists";
+}
+
 function clerkErrorMessage(err: unknown): string {
+  if (clerkErrorCode(err) === "form_identifier_not_found") {
+    return "We couldn't find an account with that. Check it, or create a new account.";
+  }
   if (err && typeof err === "object" && "errors" in err) {
     const errors = (err as { errors?: Array<{ message?: string }> }).errors;
     if (errors && errors.length > 0 && errors[0].message) {
@@ -196,7 +224,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   const { signIn, isLoaded: signInLoaded, setActive: setSignInActive } =
     useSignIn();
   const { user, isSignedIn } = useUser();
-  const { signOut } = useClerk();
+  const clerk = useClerk();
+  const { signOut } = clerk;
   const router = useRouter();
 
   const [step, setStep] = useState<Step>("form");
@@ -225,6 +254,9 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [flow, setFlow] = useState<Flow>("signUp");
+  // Returning visitor who only needs to sign in: we ask for the phone/email
+  // and nothing else. Their name and preferences are already on file.
+  const [signInOnly, setSignInOnly] = useState(false);
   const [signerId, setSignerId] = useState<string | null>(null);
   const [signerName, setSignerName] = useState<string>("");
   const [copied, setCopied] = useState(false);
@@ -290,6 +322,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       setRemoving(false);
       setReaffirming(false);
       setConfirmingRemove(false);
+      setSignInOnly(false);
+      setFlow("signUp");
     }
   }, [open, modeProp]);
 
@@ -393,54 +427,161 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
     });
   }
 
+  /**
+   * True when this browser already holds a Clerk session. `isSignedIn` from
+   * useUser is `undefined` until Clerk loads and lags a `setActive` by a
+   * render, so it is not enough on its own to decide whether to start a
+   * sign-up: starting one against a live session is exactly what produces
+   * Clerk's "Session already exists".
+   */
+  function hasSession(): boolean {
+    return Boolean(isSignedIn || clerk.session);
+  }
+
+  /**
+   * Called when Clerk reports `session_exists`. Makes the session this browser
+   * already holds the active one, so the server actions below can see it.
+   * Returns false only when Clerk says a session exists but none is visible to
+   * us — which a page refresh resolves.
+   */
+  async function adoptExistingSession(): Promise<boolean> {
+    if (clerk.session) return true;
+    const client = clerk.client as
+      | { activeSessions?: Array<{ id: string }>; sessions?: Array<{ id: string }> }
+      | undefined;
+    const existing = client?.activeSessions?.[0] ?? client?.sessions?.[0];
+    if (!existing) return false;
+    await clerk.setActive({ session: existing.id });
+    return true;
+  }
+
+  /**
+   * Everything after authentication: create the signer (comment-only) or
+   * record the signature (sign). Shared by the already-signed-in shortcut, the
+   * post-OTP path, and the session_exists recovery, so the three cannot drift.
+   */
+  async function finishAsSignedIn() {
+    // Sign-in-only came in without a name. Comment-only can still finish —
+    // the server returns the existing signer without needing one — but a
+    // signature needs the name fields, so hand them back the (now signed-in)
+    // form, prefilled from their account.
+    if (signInOnly && mode === "sign") {
+      // Prefill from the account so finishing isn't a retyping exercise.
+      setFirstName((v) => v || clerk.user?.firstName || "");
+      setLastName((v) => v || clerk.user?.lastName || "");
+      setSignInOnly(false);
+      setStep("form");
+      router.refresh();
+      return;
+    }
+
+    let res: {
+      success: boolean;
+      error?: string;
+      signerId?: string;
+      displayName?: string;
+      referred?: boolean;
+      channel?: string | null;
+    };
+    if (mode === "comment-only") {
+      res = await createSignerFromModal({
+        firstName,
+        lastName,
+        method,
+        shareLocation,
+        nameDisplayFormat,
+        notificationPreference,
+      });
+    } else {
+      res = await recordSignatureFromModal({
+        firstName,
+        lastName,
+        method,
+        shareLocation,
+        versionString: VERSION,
+        nameDisplayFormat,
+        notificationPreference,
+      });
+    }
+
+    if (!res.success) {
+      if (signInOnly) {
+        // Signed in, but this account never finished setting up (no signer
+        // row). Show the name fields rather than a dead end.
+        setFirstName((v) => v || clerk.user?.firstName || "");
+        setLastName((v) => v || clerk.user?.lastName || "");
+        setSignInOnly(false);
+        setStep("form");
+        setError("You're signed in. Add your name to finish setting up your account.");
+        return;
+      }
+      setError(
+        res.error ??
+          (mode === "comment-only"
+            ? "We couldn't create your account."
+            : "We couldn't record your signature."),
+      );
+      return;
+    }
+    if (mode === "sign") reportSignatureCompleted(res);
+    if (res.signerId) setSignerId(res.signerId);
+    if (res.displayName) setSignerName(res.displayName);
+    setStep("done");
+    router.refresh();
+  }
+
+  /** Recover from `session_exists` by carrying on as the signed-in user. */
+  async function recoverFromSessionExists() {
+    if (await adoptExistingSession()) {
+      await finishAsSignedIn();
+    } else {
+      setError("You're already signed in on this browser. Refresh the page to continue.");
+    }
+  }
+
+  async function startSignIn() {
+    if (!signInLoaded || !signIn) {
+      setError("Authentication is still loading. Please wait.");
+      return;
+    }
+    await signIn.create({
+      identifier,
+      strategy: method === "email" ? "email_code" : "phone_code",
+    });
+    setFlow("signIn");
+    setStep("otp");
+  }
+
   async function handleFormSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    if (mode === "sign") trackSignFormSubmitted({ method });
+    if (mode === "sign" && !signInOnly) trackSignFormSubmitted({ method });
 
     try {
-      // If the user is already authenticated (returning visitor or a stale
-      // session from a prior attempt), skip OTP entirely and record the
-      // signature against their existing Clerk identity.
-      if (isSignedIn) {
-        if (mode === "comment-only") {
-          const res = await createSignerFromModal({
-            firstName,
-            lastName,
-            method,
-            shareLocation,
-            nameDisplayFormat,
-            notificationPreference,
-          });
-          if (!res.success) {
-            setError(res.error ?? "We couldn't create your account.");
+      // Already authenticated (returning visitor, or a session left over from
+      // a prior attempt): skip OTP entirely and act as that identity.
+      if (hasSession()) {
+        await finishAsSignedIn();
+        return;
+      }
+
+      if (signInOnly) {
+        try {
+          await startSignIn();
+        } catch (err) {
+          if (isSessionExistsError(err)) return await recoverFromSessionExists();
+          if (clerkErrorCode(err) === "form_identifier_not_found") {
+            // No account yet — show them the create-account fields instead of
+            // making them find the toggle.
+            setSignInOnly(false);
+            setError(
+              `No account uses that ${method === "email" ? "email" : "number"} yet. Add your name to create one.`,
+            );
             return;
           }
-          if (res.signerId) setSignerId(res.signerId);
-          if (res.displayName) setSignerName(res.displayName);
-          setStep("done");
-          router.refresh();
-          return;
+          throw err;
         }
-        const res = await recordSignatureFromModal({
-          firstName,
-          lastName,
-          method,
-          shareLocation,
-          versionString: VERSION,
-          nameDisplayFormat,
-          notificationPreference,
-        });
-        if (!res.success) {
-          setError(res.error ?? "We couldn't record your signature.");
-          return;
-        }
-        reportSignatureCompleted(res);
-        if (res.signerId) setSignerId(res.signerId);
-        if (res.displayName) setSignerName(res.displayName);
-        setStep("done");
-        router.refresh();
         return;
       }
 
@@ -471,30 +612,18 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
         setFlow("signUp");
         setStep("otp");
       } catch (signUpErr: unknown) {
-        const code =
-          signUpErr &&
-          typeof signUpErr === "object" &&
-          "errors" in signUpErr &&
-          Array.isArray(
-            (signUpErr as { errors: Array<{ code?: string }> }).errors,
-          )
-            ? (signUpErr as { errors: Array<{ code?: string }> }).errors[0]
-                ?.code
-            : undefined;
-
-        const alreadyExists =
-          code === "form_identifier_exists" ||
-          code === "form_identifier_exists__phone_number" ||
-          code === "form_identifier_exists__email_address";
-
-        if (alreadyExists && signInLoaded && signIn) {
+        if (isSessionExistsError(signUpErr)) {
+          return await recoverFromSessionExists();
+        }
+        const code = clerkErrorCode(signUpErr);
+        if (code && IDENTIFIER_EXISTS_CODES.has(code)) {
           // Returning signer — switch to sign-in OTP.
-          await signIn.create({
-            identifier,
-            strategy: method === "email" ? "email_code" : "phone_code",
-          });
-          setFlow("signIn");
-          setStep("otp");
+          try {
+            await startSignIn();
+          } catch (err) {
+            if (isSessionExistsError(err)) return await recoverFromSessionExists();
+            throw err;
+          }
         } else {
           throw signUpErr;
         }
@@ -512,104 +641,81 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
     setLoading(true);
 
     try {
+      // A previous press of this button may already have verified the code and
+      // activated the session, then failed in the server action. Verifying the
+      // same code again is what Clerk answers with "Session already exists";
+      // there is nothing left to verify, so just finish.
+      if (hasSession()) {
+        await finishAsSignedIn();
+        return;
+      }
+
       let sessionId: string | undefined | null = null;
 
-      if (flow === "signUp") {
-        if (!signUpLoaded || !signUp) {
-          setError("Authentication is still loading. Please wait.");
-          return;
-        }
-        const result =
-          method === "email"
-            ? await signUp.attemptEmailAddressVerification({ code })
-            : await signUp.attemptPhoneNumberVerification({ code });
-        // Surface Clerk's actual state so blockers are debuggable.
-        console.log("[SignModal] sign-up after verify:", {
-          status: result.status,
-          missingFields: (result as { missingFields?: string[] }).missingFields,
-          unverifiedFields: (result as { unverifiedFields?: string[] })
-            .unverifiedFields,
-        });
-        if (result.status !== "complete") {
-          const missingFields = (result as { missingFields?: string[] })
-            .missingFields;
-          const unverifiedFields = (result as { unverifiedFields?: string[] })
-            .unverifiedFields;
-          const parts: string[] = [`status: ${result.status}`];
-          if (missingFields && missingFields.length > 0) {
-            parts.push(`missing: ${missingFields.join(", ")}`);
+      try {
+        if (flow === "signUp") {
+          if (!signUpLoaded || !signUp) {
+            setError("Authentication is still loading. Please wait.");
+            return;
           }
-          if (unverifiedFields && unverifiedFields.length > 0) {
-            parts.push(`unverified: ${unverifiedFields.join(", ")}`);
+          const result =
+            method === "email"
+              ? await signUp.attemptEmailAddressVerification({ code })
+              : await signUp.attemptPhoneNumberVerification({ code });
+          // Surface Clerk's actual state so blockers are debuggable.
+          console.log("[SignModal] sign-up after verify:", {
+            status: result.status,
+            missingFields: (result as { missingFields?: string[] }).missingFields,
+            unverifiedFields: (result as { unverifiedFields?: string[] })
+              .unverifiedFields,
+          });
+          if (result.status !== "complete") {
+            const missingFields = (result as { missingFields?: string[] })
+              .missingFields;
+            const unverifiedFields = (result as { unverifiedFields?: string[] })
+              .unverifiedFields;
+            const parts: string[] = [`status: ${result.status}`];
+            if (missingFields && missingFields.length > 0) {
+              parts.push(`missing: ${missingFields.join(", ")}`);
+            }
+            if (unverifiedFields && unverifiedFields.length > 0) {
+              parts.push(`unverified: ${unverifiedFields.join(", ")}`);
+            }
+            setError(`Sign-up incomplete (${parts.join("; ")}).`);
+            return;
           }
-          setError(`Sign-up incomplete (${parts.join("; ")}).`);
-          return;
+          sessionId = result.createdSessionId;
+          if (sessionId) {
+            await setSignUpActive({ session: sessionId });
+          }
+        } else {
+          if (!signInLoaded || !signIn) {
+            setError("Authentication is still loading. Please wait.");
+            return;
+          }
+          const result = await signIn.attemptFirstFactor({
+            strategy: method === "email" ? "email_code" : "phone_code",
+            code,
+          });
+          console.log("[SignModal] sign-in after verify:", {
+            status: result.status,
+          });
+          if (result.status !== "complete") {
+            setError(`Sign-in incomplete (status: ${result.status}).`);
+            return;
+          }
+          sessionId = result.createdSessionId;
+          if (sessionId) {
+            await setSignInActive({ session: sessionId });
+          }
         }
-        sessionId = result.createdSessionId;
-        if (sessionId) {
-          await setSignUpActive({ session: sessionId });
-        }
-      } else {
-        if (!signInLoaded || !signIn) {
-          setError("Authentication is still loading. Please wait.");
-          return;
-        }
-        const result = await signIn.attemptFirstFactor({
-          strategy: method === "email" ? "email_code" : "phone_code",
-          code,
-        });
-        console.log("[SignModal] sign-in after verify:", {
-          status: result.status,
-        });
-        if (result.status !== "complete") {
-          setError(`Sign-in incomplete (status: ${result.status}).`);
-          return;
-        }
-        sessionId = result.createdSessionId;
-        if (sessionId) {
-          await setSignInActive({ session: sessionId });
-        }
+      } catch (err) {
+        if (isSessionExistsError(err)) return await recoverFromSessionExists();
+        throw err;
       }
 
       // Hand off to the server action to record the signature / create the account.
-      let res: {
-        success: boolean;
-        error?: string;
-        signerId?: string;
-        displayName?: string;
-        referred?: boolean;
-        channel?: string | null;
-      };
-      if (mode === "comment-only") {
-        res = await createSignerFromModal({
-          firstName,
-          lastName,
-          method,
-          shareLocation,
-          nameDisplayFormat,
-          notificationPreference,
-        });
-      } else {
-        res = await recordSignatureFromModal({
-          firstName,
-          lastName,
-          method,
-          shareLocation,
-          versionString: VERSION,
-          nameDisplayFormat,
-          notificationPreference,
-        });
-      }
-
-      if (!res.success) {
-        setError(res.error ?? (mode === "comment-only" ? "We couldn't create your account." : "We couldn't record your signature."));
-        return;
-      }
-      if (mode === "sign") reportSignatureCompleted(res);
-      if (res.signerId) setSignerId(res.signerId);
-      if (res.displayName) setSignerName(res.displayName);
-      setStep("done");
-      router.refresh();
+      await finishAsSignedIn();
     } catch (err) {
       setError(clerkErrorMessage(err));
     } finally {
@@ -628,12 +734,15 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
       ? email.trim()
       : `${selectedCountry.flag} ${selectedCountry.code} ${phoneDigits}`;
 
-  const isFormValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    (method === "email"
+  const identifierValid =
+    method === "email"
       ? email.trim().length > 0
-      : phoneDigits.replace(/\D/g, "").length >= 7);
+      : phoneDigits.replace(/\D/g, "").length >= 7;
+  const isFormValid = signInOnly
+    ? identifierValid
+    : firstName.trim().length > 0 &&
+      lastName.trim().length > 0 &&
+      identifierValid;
 
   // Every outbound link goes through the canonical builder so the ?ref=/?via=
   // attribution can never silently fall off one of these buttons. Leads with
@@ -1118,15 +1227,35 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
               id="sign-modal-title"
               className="text-2xl font-semibold tracking-tight text-zinc-950"
             >
-              {mode === "comment-only"
-                ? "Create an account to comment"
-                : "Sign the AI Bill of Rights"}
+              {signInOnly
+                ? "Sign in"
+                : mode === "comment-only"
+                  ? "Create an account to comment"
+                  : "Sign the AI Bill of Rights"}
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
-              {mode === "comment-only"
-                ? "Create a free account so your comments on the working draft are attributed to you. You can sign the bill itself any time from your account page."
-                : `Add your name to v${VERSION} of the document.`}
+              {signInOnly
+                ? "Enter the phone number or email you used before. We'll send you a code."
+                : mode === "comment-only"
+                  ? "Create a free account so your comments on the working draft are attributed to you. You can sign the bill itself any time from your account page."
+                  : `Add your name to v${VERSION} of the document.`}
             </p>
+
+            {!isSignedIn ? (
+              <p className="mt-2 text-sm text-zinc-600">
+                {signInOnly ? "New here? " : "Already have an account? "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignInOnly((v) => !v);
+                    setError(null);
+                  }}
+                  className="font-semibold text-blue-600 underline underline-offset-2 hover:no-underline"
+                >
+                  {signInOnly ? "Create an account" : "Sign in"}
+                </button>
+              </p>
+            ) : null}
 
             {isSignedIn ? (
               <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-900">
@@ -1147,6 +1276,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
               </div>
             ) : null}
 
+            {!signInOnly ? (
             <div className="mt-6 grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="sr-only">First name</span>
@@ -1173,6 +1303,7 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 />
               </label>
             </div>
+            ) : null}
 
             <div
               className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
@@ -1280,6 +1411,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
               )}
             </div>
 
+            {!signInOnly ? (
+            <>
             <label className="mt-5 flex items-start gap-2.5 text-sm text-zinc-700">
               <input
                 type="checkbox"
@@ -1374,6 +1507,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 ))}
               </div>
             </fieldset>
+            </>
+            ) : null}
 
             {/* Clerk CAPTCHA (required for sign-up in v6) */}
             <div id="clerk-captcha" className="mt-4" />
@@ -1390,16 +1525,29 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
               className="mt-6 w-full rounded-full bg-emerald-600 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading
-                ? "Sending code…"
-                : mode === "comment-only"
-                  ? "Create account & post comment"
-                  : "Sign"}
+                ? isSignedIn
+                  ? "Saving…"
+                  : "Sending code…"
+                : signInOnly
+                  ? "Send me a code"
+                  : mode === "comment-only"
+                    ? isSignedIn
+                      ? "Continue"
+                      : "Create account"
+                    : "Sign"}
             </button>
 
-            <p className="mt-3 text-center text-xs text-zinc-500">
-              We&apos;ll {method === "email" ? "email" : "text"} you a 6-digit
-              code to {mode === "comment-only" ? "verify your account." : "confirm your signature."}
-            </p>
+            {!isSignedIn ? (
+              <p className="mt-3 text-center text-xs text-zinc-500">
+                We&apos;ll {method === "email" ? "email" : "text"} you a 6-digit
+                code to{" "}
+                {signInOnly
+                  ? "sign you in."
+                  : mode === "comment-only"
+                    ? "verify your account."
+                    : "confirm your signature."}
+              </p>
+            ) : null}
           </form>
         )}
 
@@ -1409,9 +1557,11 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
               id="sign-modal-title"
               className="text-2xl font-semibold tracking-tight text-zinc-950"
             >
-              {mode === "comment-only"
-                ? "Enter the code to verify your account"
-                : "Enter the code you received to confirm your signature"}
+              {flow === "signIn"
+                ? "Enter the code to sign in"
+                : mode === "comment-only"
+                  ? "Enter the code to verify your account"
+                  : "Enter the code you received to confirm your signature"}
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
               We sent a 6-digit code to{" "}
@@ -1449,9 +1599,13 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
             >
               {loading
                 ? "Confirming…"
-                : mode === "comment-only"
-                  ? "Confirm & create account"
-                  : "Confirm signature"}
+                : flow === "signIn"
+                  ? mode === "sign" && !signInOnly
+                    ? "Sign in & confirm signature"
+                    : "Sign in"
+                  : mode === "comment-only"
+                    ? "Confirm & create account"
+                    : "Confirm signature"}
             </button>
 
             <button
@@ -1491,7 +1645,9 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
                 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950"
               >
                 {mode === "comment-only"
-                  ? `Account created${signerName ? `, ${signerName.split(/\s+/)[0]}` : ""}. You can now comment.`
+                  ? signInOnly || flow === "signIn"
+                    ? `You're signed in${signerName ? `, ${signerName.split(/\s+/)[0]}` : ""}.`
+                    : `Account created${signerName ? `, ${signerName.split(/\s+/)[0]}` : ""}. You can now comment.`
                   : `Thank you for signing${signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}`}
               </h2>
             </div>
@@ -1499,7 +1655,8 @@ export default function SignModal({ open, onClose, mode: modeProp = "sign" }: Pr
             {signerId && mode === "comment-only" ? (
               <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
                 <p>
-                  Your account is set up. Close this window to continue posting your comment.
+                  You&apos;re all set. Close this window and pick up where you
+                  left off — anything you wrote is still on the page.
                 </p>
                 <p className="mt-2 text-xs text-blue-700">
                   You can sign the AI Bill of Rights itself any time from your account page.

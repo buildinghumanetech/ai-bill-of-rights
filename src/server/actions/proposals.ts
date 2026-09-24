@@ -91,11 +91,17 @@ export async function submitNewRightAction(
   // Optional GitHub mirror. Detached and swallowed: the proposal is already
   // stored, and a GitHub outage must not surface as a failed submission to
   // someone who just wrote 1200 characters. See the module header.
+  //
+  // Mirrors `result.stored`, NOT `formData`. Reading the form a second time here
+  // sent GitHub the raw submission while the database held the sanitised,
+  // truncated version — so a public issue could carry control characters and
+  // text past the length limits that appear nowhere on the site. Mirror what was
+  // stored, so the two cannot disagree.
   void mirrorProposalToGitHub({
     proposalId: result.id,
-    title: String(formData.get("title") ?? ""),
-    body: String(formData.get("body") ?? ""),
-    rationale: String(formData.get("rationale") ?? ""),
+    title: result.stored.title,
+    body: result.stored.body,
+    rationale: result.stored.rationale,
   }).catch((err) => console.error("[proposal] GitHub mirror failed:", err));
 
   revalidatePath("/propose");

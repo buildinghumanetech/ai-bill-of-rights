@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
 import { comments, proposalUpvotes, proposedEdits, signers, versions } from "@/lib/db/schema";
 import { syncVersions } from "@/lib/db/sync";
@@ -12,7 +13,7 @@ import {
   ARTICLE_NUMBER_PLACEHOLDER,
 } from "@/server/proposals/core";
 import { listProposedRights } from "@/lib/db/proposal-queries";
-import { validateNewArticle } from "@/lib/proposals/validate";
+import { validateNewArticle, BODY_MAX } from "@/lib/proposals/validate";
 import { PROPOSAL_LICENSE } from "@/lib/proposals/license";
 
 const sampleMarkdown = `---
@@ -119,6 +120,77 @@ describe("new-article proposals", () => {
       body: "Too short." + "\x07".repeat(200),
     });
     expect(res).toMatchObject({ ok: false, field: "body" });
+  });
+
+  /**
+   * The GitHub mirror used to re-read `formData` instead of using what was
+   * written, so a mirrored public issue could carry control characters and
+   * over-length text that appear nowhere on the site. `stored` is the single
+   * source the mirror now reads; these assert it really is what landed in the
+   * row, which is the whole guarantee the mirror depends on.
+   */
+  it("returns the stored text, stripped and truncated, not the raw input", async () => {
+    const { db, versionId, alice } = await seed();
+    const res = await createNewArticleProposal(db, {
+      baseVersionId: versionId,
+      proposerSignerId: alice,
+      ...GOOD,
+      title: "A Title\x07 with a bell",
+      rationale: GOOD.rationale + "\x00".repeat(10),
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    expect(res.stored.title).toBe("A Title with a bell");
+    expect(res.stored.title).not.toContain("\x07");
+    expect(res.stored.rationale).not.toContain("\x00");
+    expect(res.stored.body.length).toBeLessThanOrEqual(BODY_MAX);
+  });
+
+  it("truncates an over-length body in the stored text the mirror reads", async () => {
+    const { db, versionId, alice } = await seed();
+    const long = GOOD.body + " padding.".repeat(400);
+    expect(long.length).toBeGreaterThan(BODY_MAX);
+
+    const res = await createNewArticleProposal(db, {
+      baseVersionId: versionId,
+      proposerSignerId: alice,
+      ...GOOD,
+      body: long,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    expect(res.stored.body.length).toBe(BODY_MAX);
+    expect(res.stored.body).not.toBe(long);
+  });
+
+  it("stored text matches the persisted row exactly", async () => {
+    const { db, versionId, alice } = await seed();
+    const res = await createNewArticleProposal(db, {
+      baseVersionId: versionId,
+      proposerSignerId: alice,
+      ...GOOD,
+      title: "Bell\x07 Title",
+      body: GOOD.body + "\x0B\x0B",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    const [row] = await db
+      .select({
+        title: proposedEdits.title,
+        newText: proposedEdits.newText,
+        rationale: proposedEdits.rationale,
+        pullQuote: proposedEdits.pullQuote,
+      })
+      .from(proposedEdits)
+      .where(eq(proposedEdits.id, res.id));
+
+    expect(res.stored.title).toBe(row.title);
+    expect(res.stored.body).toBe(row.newText);
+    expect(res.stored.rationale).toBe(row.rationale);
+    expect(res.stored.pullQuote).toBe(row.pullQuote);
   });
 
   it("counts one endorsement per signer and toggles cleanly", async () => {

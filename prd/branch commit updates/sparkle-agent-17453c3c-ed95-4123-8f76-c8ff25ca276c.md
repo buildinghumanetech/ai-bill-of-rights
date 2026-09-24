@@ -1,5 +1,20 @@
 # Branch Progress: sparkle/agent-17453c3c-ed95-4123-8f76-c8ff25ca276c
 
+## Progress Update as of 2026-09-24 01:15 Pacific (second merge)
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged `origin/main` again (PRs #85 sign-in fix and #86 GitHub mirror) to clear PR #83's second conflict. The only conflict was the 0011 header comment, which main had also corrected; this branch's wording was kept. Neither PR adds a migration.
+
+### Detail of changes made:
+- `drizzle/0011_new_article_proposals.sql`: comment-only conflict, resolved to this branch's text ("there is no UPDATE and no existing row is touched"). SQL unchanged.
+- `pnpm vitest run`: 1004 passed, 1 failed. The failure is `tests/components/propose-right-form.license.test.tsx` > "sends the licence id with the submission", and it fails identically on pristine origin/main (515596d), so it comes from main, not from this branch.
+
+### Potential concerns to address:
+- main is red on that licence test, which looks like an interaction between #84 (licence) and #85/#86 (propose sign-in/submission changes). `ProposeRightForm` belongs to the propose-flow owner, so this branch does not touch it.
+
+---
+
 ## Progress Update as of 2026-09-24 01:15 Pacific
 *(Most recent updates at top)*
 
