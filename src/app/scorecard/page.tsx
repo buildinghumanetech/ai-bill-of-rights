@@ -7,14 +7,22 @@ import {
   loadAllScorecardEntries,
   STATUS_SHORT_LABELS,
 } from "@/lib/scorecard";
-import { SITE_NAME, buildPageMetadata, getSiteUrl } from "@/lib/site-metadata";
+import {
+  SITE_NAME,
+  SITE_TITLE,
+  buildPageMetadata,
+  getSiteUrl,
+} from "@/lib/site-metadata";
 import { Methodology } from "./Methodology";
 import { STATUS_CLASSES } from "./status-style";
 
 // Already names the site in prose, so `buildPageMetadata` must not append it.
 const TITLE = `${SITE_NAME} Scorecard`;
+// The link preview uses the new site title; the visible heading keeps
+// SITE_NAME until the headings are renamed.
+const META_TITLE = `${SITE_TITLE} Scorecard`;
 const DESCRIPTION =
-  "Where AI companies stand against the eleven commitments in the AI Bill of Rights — every assessment traced to a public source, with the date it was checked.";
+  "Where AI companies stand against the eleven commitments in the AI Bill of Rights. Every assessment is traced to a public source, with the date it was checked.";
 
 // Via getSiteUrl(), not a local `?? "https://ai-for-people.org"`: that copy of
 // the fallback ignored VERCEL_URL, so preview deploys advertised production.
@@ -22,11 +30,10 @@ const SITE_URL = getSiteUrl();
 
 export const metadata: Metadata = {
   ...buildPageMetadata({
-    title: TITLE,
+    title: META_TITLE,
     description: DESCRIPTION,
     appendSiteName: false,
     url: `${SITE_URL}/scorecard`,
-    imageUrl: `${SITE_URL}/api/og/scorecard`,
   }),
   alternates: { canonical: `${SITE_URL}/scorecard` },
   // Unlisted until the project owner decides to publish. Remove this block

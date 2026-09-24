@@ -80,7 +80,7 @@ describe("/scorecard index page", () => {
     expect(indexMetadata.robots).toMatchObject({ index: false });
     expect(indexMetadata.openGraph?.title).toContain("Scorecard");
     const images = indexMetadata.openGraph?.images as Array<{ url: string }>;
-    expect(images[0].url).toContain("/api/og/scorecard");
+    expect(images[0].url).toBe("/og-v2.png");
   });
 });
 
@@ -160,6 +160,6 @@ describe("/scorecard/[slug] company page", () => {
     expect(meta.robots).toMatchObject({ index: false });
     expect(meta.title).toContain("Example AI Labs");
     const images = meta.openGraph?.images as Array<{ url: string }>;
-    expect(images[0].url).toContain("/api/og/scorecard/example-ai-labs");
+    expect(images[0].url).toBe("/og-v2.png");
   });
 });

@@ -10,7 +10,7 @@ import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { getDb } from "@/lib/db/lazy";
 import { getOrCreateShareSlug } from "@/lib/share/short-links";
 import { normalizeWhyISigned } from "@/lib/why-i-signed";
-import { SITE_NAME, buildPageMetadata } from "@/lib/site-metadata";
+import { SITE_TITLE, buildPageMetadata } from "@/lib/site-metadata";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ShareSignature } from "@/components/ShareSignature";
 import { CommitmentsSummary } from "@/components/CommitmentsSummary";
@@ -36,7 +36,7 @@ export async function generateMetadata({
   return buildPageMetadata({
     // Already names the site in prose, so no suffix — "… signed The AI Bill of
     // Rights — The AI Bill of Rights" would read as a bug.
-    title: `${signer.displayName} signed ${SITE_NAME}`,
+    title: `${signer.displayName} signed ${SITE_TITLE}`,
     description: `${signer.displayName} is one of a growing number of people demanding human-centered AI. Read the document and add your name.`,
     appendSiteName: false,
     ogType: "profile",

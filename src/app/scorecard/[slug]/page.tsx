@@ -11,7 +11,7 @@ import {
   type ScorecardAssessment,
 } from "@/lib/scorecard";
 import { withShareParams } from "@/lib/share/urls";
-import { SITE_NAME, buildPageMetadata, getSiteUrl } from "@/lib/site-metadata";
+import { SITE_TITLE, buildPageMetadata, getSiteUrl } from "@/lib/site-metadata";
 import { FictionalBanner, Methodology } from "../Methodology";
 import { StatusPill } from "../StatusPill";
 
@@ -37,7 +37,7 @@ export async function generateMetadata({
     return {
       ...buildPageMetadata({
         title: "Scorecard entry not found",
-        description: `This company has no entry in the ${SITE_NAME} Scorecard.`,
+        description: `This company has no entry in the ${SITE_TITLE} Scorecard.`,
       }),
       robots: { index: false, follow: false },
     };
@@ -45,10 +45,10 @@ export async function generateMetadata({
 
   const n = assessedCount(entry);
   const total = entry.assessments.length;
-  // Names the site in prose via SITE_NAME, so nothing is appended. This used to
+  // Names the site in prose via SITE_TITLE, so nothing is appended. This used to
   // hardcode "AI Bill of Rights" — one word off the canonical name, and exactly
   // the drift buildPageMetadata exists to stop.
-  const title = `${entry.company} — ${SITE_NAME} Scorecard`;
+  const title = `${entry.company} | ${SITE_TITLE} Scorecard`;
   const description = entry.fictional
     ? `${entry.company} is a fictional example used to demonstrate the scorecard format.`
     : `${n} of ${total} commitments assessed, each traced to a public source. Last reviewed ${entry.lastReviewed}.`;
@@ -61,7 +61,6 @@ export async function generateMetadata({
       appendSiteName: false,
       ogType: "article",
       url,
-      imageUrl: `${SITE_URL}/api/og/scorecard/${entry.slug}`,
     }),
     alternates: { canonical: url },
     // Unlisted until the project owner decides to publish.

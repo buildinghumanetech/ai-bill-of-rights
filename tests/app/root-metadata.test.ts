@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import {
   OG_IMAGE_URL,
   SITE_DESCRIPTION,
-  SITE_NAME,
   SITE_TITLE,
   getSiteUrl,
 } from "@/lib/site-metadata";
@@ -48,12 +47,12 @@ describe("root metadata", () => {
   it("comes from the shared helper rather than a hand-rolled literal", () => {
     expect(metadata.title).toBe(SITE_TITLE);
     expect(metadata.description).toBe(SITE_DESCRIPTION);
-    expect(metadata.openGraph!.siteName).toBe(SITE_NAME);
+    expect(metadata.openGraph!.siteName).toBe(SITE_TITLE);
     expect(metadata.openGraph!.title).toBe(SITE_TITLE);
     expect(metadata.openGraph!.description).toBe(SITE_DESCRIPTION);
   });
 
-  it("exports an openGraph image at the size /api/og actually renders", () => {
+  it("exports og-v2.png as the openGraph image at 1200x630", () => {
     const images = metadata.openGraph!.images as Array<{
       url: string;
       width: number;
@@ -72,17 +71,16 @@ describe("root metadata", () => {
       card?: string;
       title?: string;
       description?: string;
-      images?: string[];
+      images?: unknown[];
     };
     expect(tw.card).toBe("summary_large_image");
     expect(tw.title).toBe(SITE_TITLE);
     expect(tw.description).toBe(SITE_DESCRIPTION);
-    expect(tw.images).toEqual([OG_IMAGE_URL]);
+    expect(tw.images).toEqual([expect.objectContaining({ url: OG_IMAGE_URL, width: 1200, height: 630 })]);
   });
 
-  it("keeps the People's Demand framing on the card that stands alone", () => {
-    // The tagline rides on the TITLE, not the description — a card showing
-    // only the name reads as rights belonging to AI. See site-metadata.ts.
-    expect(metadata.openGraph!.title).toContain("Human-Centered AI");
+  it("names The People's AI Bill of Rights on the card that stands alone", () => {
+    // "People's" is what keeps the name from reading as rights belonging to AI.
+    expect(metadata.openGraph!.title).toBe("The People's AI Bill of Rights");
   });
 });

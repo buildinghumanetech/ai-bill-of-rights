@@ -3,11 +3,11 @@ import {
   OG_IMAGE_URL,
   PRODUCTION_ORIGIN,
   SITE_DESCRIPTION,
-  SITE_NAME,
   SITE_TAGLINE,
   SITE_TITLE,
   buildPageMetadata,
   buildRootMetadata,
+  withoutEmDashes,
   getSiteUrl,
 } from "@/lib/site-metadata";
 
@@ -18,14 +18,23 @@ afterEach(() => {
   else process.env.NEXT_PUBLIC_SITE_URL = ORIGINAL_SITE_URL;
 });
 
-describe("SITE_TITLE", () => {
-  it("carries both the name and the disambiguating tagline", () => {
-    expect(SITE_TITLE).toContain(SITE_NAME);
-    expect(SITE_TITLE).toContain(SITE_TAGLINE);
+describe("SITE_TITLE and SITE_DESCRIPTION", () => {
+  it("are the new name and line, with no em dashes", () => {
+    expect(SITE_TITLE).toBe("The People's AI Bill of Rights");
+    expect(SITE_DESCRIPTION).toBe(
+      "The future is ours to name. Make your voice heard. Sign at theaibill.org",
+    );
+    expect(SITE_TITLE + SITE_DESCRIPTION).not.toContain("\u2014");
   });
+});
 
-  it("leads with the name so it stays recognizable when truncated", () => {
-    expect(SITE_TITLE.startsWith(SITE_NAME)).toBe(true);
+describe("withoutEmDashes", () => {
+  it("turns an em dash, spaced or not, into a comma", () => {
+    expect(withoutEmDashes("GDPR Article 22 \u2014 Automated Decisions")).toBe(
+      "GDPR Article 22, Automated Decisions",
+    );
+    expect(withoutEmDashes("a\u2014b")).toBe("a, b");
+    expect(withoutEmDashes("no dashes")).toBe("no dashes");
   });
 });
 
@@ -34,17 +43,15 @@ describe("buildRootMetadata", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://example.test";
   });
 
-  it("never lets the bare name travel alone on a title surface", () => {
+  it("titles every surface The People's AI Bill of Rights", () => {
     const meta = buildRootMetadata();
     const titles = [
       meta.title,
       (meta.openGraph as { title?: string } | undefined)?.title,
       (meta.twitter as { title?: string } | undefined)?.title,
     ];
-
     for (const title of titles) {
-      expect(typeof title).toBe("string");
-      expect(title).toContain(SITE_TAGLINE);
+      expect(title).toBe("The People's AI Bill of Rights");
     }
   });
 
@@ -73,31 +80,26 @@ describe("buildRootMetadata", () => {
     expect(og.url).toBeUndefined();
   });
 
-  // This asserted `summary` when the root card had no picture to show. It has
-  // one now (`/api/og`), and a large card with an image is the whole point of
-  // shipping that route — `summary` would render the image in a thumbnail.
   it("sets a large-image card on Twitter and a website OG type", () => {
     const meta = buildRootMetadata();
     expect((meta.twitter as { card?: string }).card).toBe(
       "summary_large_image",
     );
     expect((meta.openGraph as { type?: string }).type).toBe("website");
-    expect((meta.openGraph as { siteName?: string }).siteName).toBe(SITE_NAME);
+    expect((meta.openGraph as { siteName?: string }).siteName).toBe(SITE_TITLE);
   });
 
-  it("carries the site OG image at the size the route actually renders", () => {
+  it("carries og-v2.png at 1200x630 on both OG and Twitter", () => {
     const meta = buildRootMetadata();
-    expect((meta.openGraph as { images?: unknown }).images).toEqual([
-      {
-        url: OG_IMAGE_URL,
-        width: 1200,
-        height: 630,
-        alt: expect.stringContaining("AI Bill of Rights"),
-      },
-    ]);
-    expect((meta.twitter as { images?: unknown }).images).toEqual([
-      OG_IMAGE_URL,
-    ]);
+    const card = {
+      url: "/og-v2.png",
+      width: 1200,
+      height: 630,
+      alt: expect.stringContaining("The future is ours to name."),
+    };
+    expect(OG_IMAGE_URL).toBe("/og-v2.png");
+    expect((meta.openGraph as { images?: unknown }).images).toEqual([card]);
+    expect((meta.twitter as { images?: unknown }).images).toEqual([card]);
   });
 
   it("derives metadataBase from NEXT_PUBLIC_SITE_URL", () => {
@@ -198,7 +200,7 @@ describe("buildPageMetadata", () => {
     // wholesale — these fields are not inherited.
     const og = buildPageMetadata({ title: "T", description: "D" })
       .openGraph as { siteName?: string; type?: string };
-    expect(og.siteName).toBe(SITE_NAME);
+    expect(og.siteName).toBe(SITE_TITLE);
     expect(og.type).toBe("website");
   });
 
@@ -207,7 +209,7 @@ describe("buildPageMetadata", () => {
     const og = meta.openGraph as { title?: string; description?: string };
     const tw = meta.twitter as { title?: string; description?: string };
     for (const value of [meta.title, og.title, tw.title]) {
-      expect(value).toBe(`About — ${SITE_NAME}`);
+      expect(value).toBe(`About | ${SITE_TITLE}`);
       // The page title leads; the site name trails it as context, and the
       // homepage's tagline stays off subpages entirely.
       expect(String(value).startsWith("About")).toBe(true);
@@ -217,26 +219,34 @@ describe("buildPageMetadata", () => {
     expect(tw.description).toBe("Who we are");
   });
 
-  it("appends the site name from SITE_NAME so a rename carries through", () => {
-    // Call sites used to hand-write "— AI Bill of Rights", which already
-    // disagreed with SITE_NAME ("The AI Bill of Rights") and would have been
-    // missed by a rename.
+  it("appends the site title from SITE_TITLE so a rename carries through", () => {
     const meta = buildPageMetadata({ title: "Page", description: "D" });
-    expect(meta.title).toBe(`Page — ${SITE_NAME}`);
+    expect(meta.title).toBe(`Page | ${SITE_TITLE}`);
+  });
+
+  it("strips em dashes from titles and descriptions that come from content", () => {
+    const meta = buildPageMetadata({
+      title: "GDPR Article 22 \u2014 Automated Decisions",
+      description: "Rights \u2014 and remedies",
+    });
+    const og = meta.openGraph as { title?: string; description?: string };
+    for (const value of [meta.title, meta.description, og.title, og.description]) {
+      expect(String(value)).not.toContain("\u2014");
+    }
   });
 
   it("leaves the title alone when it already names the site in prose", () => {
     const meta = buildPageMetadata({
-      title: `Ada signed ${SITE_NAME}`,
+      title: `Ada signed ${SITE_TITLE}`,
       description: "D",
       appendSiteName: false,
     });
-    expect(meta.title).toBe(`Ada signed ${SITE_NAME}`);
+    expect(meta.title).toBe(`Ada signed ${SITE_TITLE}`);
     // No doubled site name. Counted by splitting rather than with a RegExp
-    // built from SITE_NAME: this is the rename-safety test, and a future name
+    // built from SITE_TITLE: this is the rename-safety test, and a future name
     // containing "(", ".", or "?" would make an unescaped pattern throw or
     // match the wrong thing exactly when a rename happens.
-    expect(String(meta.title).split(SITE_NAME).length - 1).toBe(1);
+    expect(String(meta.title).split(SITE_TITLE).length - 1).toBe(1);
   });
 
   it("warns when the opt-out is used on a title that does not name the site", () => {
@@ -254,7 +264,7 @@ describe("buildPageMetadata", () => {
 
       warn.mockClear();
       buildPageMetadata({
-        title: `Ada signed ${SITE_NAME}`,
+        title: `Ada signed ${SITE_TITLE}`,
         description: "D",
         appendSiteName: false,
       });
@@ -274,15 +284,17 @@ describe("buildPageMetadata", () => {
   // into the helper can never cost a route its picture.
   it("falls back to the site card so no route ships an imageless preview", () => {
     const plain = buildPageMetadata({ title: "T", description: "D" });
-    expect((plain.openGraph as { images?: unknown }).images).toEqual([
-      { url: OG_IMAGE_URL, width: 1200, height: 630 },
-    ]);
+    const card = {
+      url: OG_IMAGE_URL,
+      width: 1200,
+      height: 630,
+      alt: expect.stringContaining("The future is ours to name."),
+    };
+    expect((plain.openGraph as { images?: unknown }).images).toEqual([card]);
     expect((plain.twitter as { card?: string }).card).toBe(
       "summary_large_image",
     );
-    expect((plain.twitter as { images?: unknown }).images).toEqual([
-      OG_IMAGE_URL,
-    ]);
+    expect((plain.twitter as { images?: unknown }).images).toEqual([card]);
   });
 
   it("prefers the page's own image over the site card", () => {
