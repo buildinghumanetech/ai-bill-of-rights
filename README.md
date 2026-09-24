@@ -131,7 +131,21 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-**Pending:** none.
+**Pending:**
+
+- **0015 `email_sends`**, before the first real version email (not needed for the deploy itself: only the send script and `/api/unsubscribe` read it). Back up, then:
+
+  ```bash
+  docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
+    sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 -f /m/0015_email_sends.sql'
+  docker run --rm -e PGURL postgres:17 psql "$PGURL" -X -c "SELECT to_regclass('public.email_sends');"
+  ```
+
+  One row per (campaign, signer) ever emailed, claimed before sending, so no signer gets a campaign twice; `unsubscribe_token` backs the one-click unsubscribe link. No addresses are stored. Idempotent, no `DO $$` block.
+
+### Sending a version email
+
+`scripts/send-version-email.ts` sends the one-time relaunch email (`relaunch`) or a version update (`version <x.y.z>`), using each entry's `level` in `content/bill-of-rights/versions.json` ("major": an article added, removed or substantively rewritten; "minor": wording fixes). "major" subscribers get major versions, "minor" subscribers get both, "none" gets nothing. It defaults to a dry run; a real send needs `--send --confirm <recipient count>`. It needs the real production `CLERK_SECRET_KEY` for addresses, which `vercel env pull` redacts, so pass it in a second file: `--env ~/prod.env,~/clerk.env`. Nothing sends on deploy.
 
 0013 and 0014 were applied to production on 2026-09-24 (09:45 PT), before `feat/post-sign-share` merged, after a fresh `pg_dump` backup, in one `psql` transaction:
 
@@ -148,7 +162,7 @@ docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
 
 0007 and 0008 were applied to production on 2026-09-24 with `psql --single-transaction -v ON_ERROR_STOP=1 -f … -f …`, not with `apply-migration.ts`: they contain `DO $$ … $$` blocks and no `--> statement-breakpoint` markers, and the script's fallback splits on every end-of-line `;`, including the ones inside those blocks (tracked in beads `ai-bill-of-rights-bpq`). Until that is fixed, apply any migration containing a `DO $$` block with `psql`, or add breakpoints around the block.
 
-0007 through 0014 have all been applied to production. When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
+0007 through 0014 have all been applied to production; 0015 is pending (above). When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
 
 0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`.
 

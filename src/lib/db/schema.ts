@@ -499,3 +499,34 @@ export const shareLinks = pgTable("share_links", {
     .notNull()
     .defaultNow(),
 });
+
+// One row per (campaign, signer) ever emailed about a version: the relaunch,
+// or a version update. The UNIQUE on (campaign, signer_id) is what makes
+// "each signer gets it at most once" enforceable: the send script claims the
+// row BEFORE sending, so a rerun or a crash mid-run can never email anyone
+// twice. `unsubscribe_token` is the random secret behind that email's
+// one-click unsubscribe link. No address is stored here; addresses come from
+// Clerk (or an admin-added signer's consent record) at send time.
+//
+// A separate table (drizzle/0015) that only the send script and the
+// unsubscribe route touch, so a missing migration cannot break signing.
+export const emailSends = pgTable(
+  "email_sends",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    campaign: text("campaign").notNull(),
+    signerId: uuid("signer_id")
+      .notNull()
+      .references(() => signers.id, { onDelete: "cascade" }),
+    unsubscribeToken: text("unsubscribe_token").notNull().unique(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // Null between the claim and a confirmed send. A row left null by a crash
+    // still blocks a resend: at most once beats at least once for email.
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("email_sends_campaign_signer_unique").on(t.campaign, t.signerId),
+  ],
+);
