@@ -272,6 +272,10 @@ describe("returning visitor can just sign in", () => {
     });
     expect(createSignerFromModal).toHaveBeenCalledTimes(1);
     expect(text()).toContain("You're signed in, Ada.");
+    // A returning visitor may well have signed already; nothing we can read
+    // reliably here says which, so the closing line must be true either way.
+    expect(text()).not.toMatch(/you can sign the ai bill of rights/i);
+    expect(text()).toContain("Your account page shows your signature status and settings.");
   });
 
   it("an unknown number is sent to create-account, not an error wall", async () => {

@@ -1,5 +1,22 @@
 # Branch Progress: sparkle/agent-6f18d167-eb95-46fe-b588-b8998ad82e8e
 
+## Progress Update as of [2026-09-24 03:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+PR #90 merged. Erika tested it: sign-in and draft preservation work, but the modal's closing line, "You can sign the AI Bill of Rights itself any time from your account page.", told her, an existing signer, that she hadn't signed. Replaced it with neutral copy that is true for signers and non-signers alike, as she allowed.
+
+### Detail of changes made:
+- `src/app/SignModal.tsx` (comment-only done box): now "Your account page shows your signature status and settings.", with "account page" linking to `/account`.
+- Why neutral, not "say nothing to signers": the only status source, `getMySignatureStatus` (`src/server/actions/me.ts`), does `select()` over every `signers` column and so throws in production until 0007 is applied. It is also fetched on modal open, before sign-in completes, so it is stale at this step.
+- `tests/app/sign-modal.returning-user.test.tsx`: the sign-in-only test now asserts the new line and the absence of "you can sign the AI Bill of Rights". It failed before the change.
+
+### Potential concerns to address:
+- The create-account intro (`SignModal.tsx`, comment-only description) and the welcome email (`src/lib/email/templates.ts`) still say you can sign "from your account page". The account page only links to `/`. Those are aimed at new accounts, so they were left alone here.
+- `tests/server/comments.mention-rows.test.ts` "mails the mentioned signer but not the author" failed once under a full run and passed 3/3 alone. It is flaky, and unrelated to this change.
+
+---
+
 ## Progress Update as of [2026-09-24 02:15 Pacific]
 *(Most recent updates at top)*
 

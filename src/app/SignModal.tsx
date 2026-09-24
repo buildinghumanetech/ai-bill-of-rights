@@ -1675,8 +1675,16 @@ export default function SignModal({
                   You&apos;re all set. Close this window and pick up where you
                   left off — anything you wrote is still on the page.
                 </p>
+                {/* Neutral on purpose: a returning signer lands here too, and
+                    "you can sign any time" told people who had signed that
+                    their signature didn't exist. getMySignatureStatus can't
+                    be trusted to tell them apart at this step. */}
                 <p className="mt-2 text-xs text-blue-700">
-                  You can sign the AI Bill of Rights itself any time from your account page.
+                  Your{" "}
+                  <a href="/account" className="underline underline-offset-4">
+                    account page
+                  </a>{" "}
+                  shows your signature status and settings.
                 </p>
               </div>
             ) : null}
