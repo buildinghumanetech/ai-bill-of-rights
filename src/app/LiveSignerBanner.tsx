@@ -9,7 +9,7 @@ const HOLD_MS = 5000;
 type Phase = "enter" | "hold" | "exit";
 
 export default function LiveSignerBanner() {
-  const { currentEvent, onEventFinished } = useLiveSigners();
+  const { currentEvent, onEventFinished, viewer } = useLiveSigners();
   // Locking the rendered event prevents a mid-animation event swap from
   // visually glitching the banner. We only pick up the next event after
   // the current one fully exits.
@@ -47,6 +47,10 @@ export default function LiveSignerBanner() {
 
   if (rendered === null) return null;
 
+  // The viewer's own signature coming round in the feed: say so, rather than
+  // announce them to themselves as a stranger.
+  const isViewer = viewer !== null && rendered.id === viewer.signerId;
+
   // Translation/opacity per phase.
   const transform =
     phase === "enter" || phase === "exit"
@@ -64,7 +68,11 @@ export default function LiveSignerBanner() {
         href={`/signatories/${rendered.id}`}
         // Trigger exit early; the timeline effect cancels the in-flight enter/hold timer on re-run.
         onClick={() => setPhase("exit")}
-        className="glass-banner pointer-events-auto inline-flex max-w-[90vw] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-zinc-900/5 bg-white/70 px-4 py-2 text-sm text-zinc-800 shadow-lg shadow-zinc-900/10 backdrop-blur-md backdrop-saturate-150 hover:scale-[1.02]"
+        className={
+          isViewer
+            ? "glass-banner pointer-events-auto inline-flex max-w-[90vw] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-blue-300 bg-blue-50/90 px-4 py-2 text-sm text-blue-900 shadow-lg shadow-blue-900/10 ring-2 ring-blue-200 backdrop-blur-md backdrop-saturate-150 hover:scale-[1.02]"
+            : "glass-banner pointer-events-auto inline-flex max-w-[90vw] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-zinc-900/5 bg-white/70 px-4 py-2 text-sm text-zinc-800 shadow-lg shadow-zinc-900/10 backdrop-blur-md backdrop-saturate-150 hover:scale-[1.02]"
+        }
         style={{
           transform,
           opacity,
@@ -72,15 +80,28 @@ export default function LiveSignerBanner() {
             "opacity 240ms ease, transform 240ms ease, scale 200ms ease",
         }}
       >
-        <strong className="font-semibold text-blue-600">
-          {rendered.displayName}
-        </strong>
-        {rendered.locationText ? (
-          <span className="text-zinc-600">
-            from {rendered.locationText} just signed
-          </span>
+        {isViewer ? (
+          <>
+            <strong className="font-semibold text-blue-700">
+              That&apos;s you.
+            </strong>
+            <span>
+              Welcome, signer #{viewer.signerNumber.toLocaleString()}.
+            </span>
+          </>
         ) : (
-          <span className="text-zinc-600">just signed</span>
+          <>
+            <strong className="font-semibold text-blue-600">
+              {rendered.displayName}
+            </strong>
+            {rendered.locationText ? (
+              <span className="text-zinc-600">
+                from {rendered.locationText} just signed
+              </span>
+            ) : (
+              <span className="text-zinc-600">just signed</span>
+            )}
+          </>
         )}
         <span className="ml-1 text-zinc-400" aria-hidden="true">→</span>
       </Link>

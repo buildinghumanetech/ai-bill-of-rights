@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { buildShareText } from "@/lib/share/share-text";
-import { shareHrefs, signerShareUrl } from "@/lib/share/urls";
+import { shareHrefs, signerShareLink } from "@/lib/share/urls";
 
 interface Props {
   /** The signer this box belongs to. Owner-only UI — never render it to a visitor. */
@@ -22,17 +22,29 @@ interface Props {
    * and the caller has to say `null` on purpose.
    */
   whyISigned: string | null;
+  /**
+   * The signer's short-link slug, when the page could get one. Present →
+   * every link is the short /s/<slug>?via=<channel> form (it redirects with
+   * ?ref=, so attribution is unchanged). Absent/null → the long
+   * /signatories/<id>?ref=<id> link.
+   */
+  shareSlug?: string | null;
 }
 
 /**
  * "Share your signature" — shown only to the signer who owns the page. Every
- * link is built with `signerShareUrl` so `?ref=`/`?via=` attribution rides
+ * link is built with `signerShareLink` so `?ref=`/`?via=` attribution rides
  * along and we can tell which channel actually converts.
  */
-export function ShareSignature({ signerId, siteUrl, whyISigned }: Props) {
+export function ShareSignature({
+  signerId,
+  siteUrl,
+  whyISigned,
+  shareSlug = null,
+}: Props) {
   const [copied, setCopied] = useState(false);
 
-  const copyUrl = signerShareUrl(siteUrl, signerId, "copy");
+  const copyUrl = signerShareLink(siteUrl, signerId, shareSlug, "copy");
   // The three hrefs come from `shareHrefs` and the copy from `buildShareText` —
   // the one place each is assembled. This used to hand-roll both and both had
   // already drifted: the X href stuffed the URL inside `text=` with no `&url=`
@@ -46,7 +58,7 @@ export function ShareSignature({ signerId, siteUrl, whyISigned }: Props) {
     linkedinHref: linkedInUrl,
     emailHref: emailUrl,
   } = shareHrefs({
-    url: (channel) => signerShareUrl(siteUrl, signerId, channel),
+    url: (channel) => signerShareLink(siteUrl, signerId, shareSlug, channel),
     text: (channel) => buildShareText({ channel, whyISigned }),
   });
 

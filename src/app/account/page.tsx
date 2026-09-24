@@ -122,7 +122,7 @@ export default async function AccountPage({
 
       {revoked ? (
         <p className="mt-4 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          Your signatures and profile have been deleted.
+          Your signature has been anonymized and your personal data removed.
         </p>
       ) : null}
 

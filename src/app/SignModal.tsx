@@ -7,18 +7,22 @@ import {
   recordSignatureFromModal,
   createSignerFromModal,
 } from "@/server/actions/sign-from-modal";
-import { sendInvitationsAction } from "@/server/actions/invite";
+import {
+  sendInvitationsAction,
+  type InvitationResult,
+} from "@/server/actions/invite";
 import {
   getMySignatureStatus,
   reaffirmMySignature,
-  removeMySignature,
   type SignatureStatus,
 } from "@/server/actions/me";
 import { saveWhyISigned } from "@/server/actions/why-i-signed";
+import { useOptionalLiveSigners } from "./LiveSignersProvider";
 import { SelfieCapture } from "@/components/SelfieCapture";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
 import { buildShareText } from "@/lib/share/share-text";
-import { shareHrefs, signerShareUrl, type ShareChannel } from "@/lib/share/urls";
+import { shareHrefs, signerShareLink, type ShareChannel } from "@/lib/share/urls";
+import { milestoneLine } from "@/lib/milestones";
 import {
   trackShareClicked,
   trackSignatureCompleted,
@@ -44,6 +48,37 @@ type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
 
 const VERSION = "0.1.0";
+
+/**
+ * The selfie step is out of the post-sign flow for now: sharing is the
+ * priority, and a camera prompt between the signer and their share buttons
+ * costs shares. The component and its storage are untouched — flip this back
+ * to bring it back.
+ */
+const SHOW_SELFIE_IN_SIGN_FLOW = false;
+
+/** "Sent to 3 people" — the count of invitations that actually went out. */
+export function inviteSummary(sent: number): string {
+  if (sent === 0) return "No new invitations sent.";
+  return `Sent to ${sent} ${sent === 1 ? "person" : "people"}.`;
+}
+
+/**
+ * The thank-you heading. Uses the signer's REAL first name — the one they
+ * typed, or their account's — never the masked public display name: masking
+ * is for strangers, and this is said to the signer themselves.
+ */
+export function signerGreeting(
+  firstName: string,
+  signerNumber: number | null,
+): string {
+  const name = firstName.trim().split(/\s+/)[0] ?? "";
+  if (signerNumber === null) {
+    return name ? `Thank you for signing, ${name}.` : "Thank you for signing.";
+  }
+  const who = name ? `${name}, you're` : "You're";
+  return `${who} signer #${signerNumber.toLocaleString("en-US")}.`;
+}
 
 interface Country {
   id: string;
@@ -149,7 +184,10 @@ export interface PostSignShareLinks {
  * Pure and exported so it can be pinned by tests: this is the highest-intent
  * share surface on the site, and a `?ref=`/`?via=` that quietly falls off one
  * of these buttons is invisible until the referral numbers are already wrong.
- * Everything goes through `signerShareUrl` — nothing here hand-builds a URL.
+ * Everything goes through `signerShareLink` — nothing here hand-builds a URL.
+ * With a slug the links are the short theaibill.org/s/<slug> form (no raw id
+ * anywhere in the message); without one — no slug yet, or migration 0014 not
+ * applied — they fall back to the long /signatories/<id>?ref=<id> form.
  *
  * Returns inert values (`""` / `"#"`) until both the signer id and the origin
  * exist, so a half-built link is never rendered as a real one. `origin` is
@@ -159,10 +197,13 @@ export function buildPostSignShareLinks(opts: {
   origin: string;
   signerId: string | null;
   whyISigned: string | null;
+  shareSlug?: string | null;
 }): PostSignShareLinks {
   const ready = Boolean(opts.signerId && opts.origin);
   const urlFor = (channel: ShareChannel) =>
-    ready ? signerShareUrl(opts.origin, opts.signerId!, channel) : "";
+    ready
+      ? signerShareLink(opts.origin, opts.signerId!, opts.shareSlug, channel)
+      : "";
   const textFor = (channel: ShareChannel) =>
     buildShareText({ whyISigned: opts.whyISigned, channel });
 
@@ -251,9 +292,7 @@ export default function SignModal({
   const [signatureStatus, setSignatureStatus] = useState<
     SignatureStatus | { state: "loading" } | null
   >(null);
-  const [removing, setRemoving] = useState(false);
   const [reaffirming, setReaffirming] = useState(false);
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [shareLocation, setShareLocation] = useState(true);
   const [nameDisplayFormat, setNameDisplayFormat] = useState<
     "initials" | "first-initial" | "full"
@@ -269,6 +308,13 @@ export default function SignModal({
   // and nothing else. Their name and preferences are already on file.
   const [signInOnly, setSignInOnly] = useState(false);
   const [signerId, setSignerId] = useState<string | null>(null);
+  // Their place in line, for the greeting and the homepage. Filled from
+  // getMySignatureStatus after the signature lands (or on open, for someone
+  // who already signed); null until then, and the greeting copes.
+  const [signerNumber, setSignerNumber] = useState<number | null>(null);
+  // Their short-link slug; null means the long link (see short-links.ts).
+  const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const liveSigners = useOptionalLiveSigners();
   const [signerName, setSignerName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   // "Why I signed" lives on the post-signature step only — the pre-signature
@@ -284,7 +330,12 @@ export default function SignModal({
   const [inviteInput, setInviteInput] = useState("");
   const [invitePending, setInvitePending] = useState(false);
   const [inviteResult, setInviteResult] = useState<
-    | { kind: "success"; sent: number; failed: number }
+    | {
+        kind: "success";
+        sent: string[];
+        skipped: InvitationResult["skipped"];
+        failed: string[];
+      }
     | { kind: "error"; message: string }
     | null
   >(null);
@@ -319,6 +370,8 @@ export default function SignModal({
       setError(null);
       setLoading(false);
       setSignerId(null);
+      setSignerNumber(null);
+      setShareSlug(null);
       setSignerName("");
       setCopied(false);
       setWhyInput("");
@@ -330,9 +383,7 @@ export default function SignModal({
       setInvitePending(false);
       setInviteResult(null);
       setSignatureStatus(null);
-      setRemoving(false);
       setReaffirming(false);
-      setConfirmingRemove(false);
       setSignInOnly(false);
       setFlow("signUp");
     }
@@ -359,6 +410,7 @@ export default function SignModal({
       .then((status) => {
         if (cancelled) return;
         setSignatureStatus(status);
+        landOnShareIfSigned(status);
       })
       // Unknown, not "loading" forever: an unanswered status must not hide
       // the sign link from someone who has not signed.
@@ -369,6 +421,34 @@ export default function SignModal({
       cancelled = true;
     };
   }, [open, isSignedIn]);
+
+  /**
+   * Someone who has already signed this version lands on their share view —
+   * their card, their why and the share buttons — never on a screen of
+   * account controls. (Removing a signature or deleting the account lives on
+   * /account.) Called wherever a status arrives: on open, after a sign-in by
+   * a returning signer, and after a re-affirm.
+   */
+  function landOnShareIfSigned(status: SignatureStatus) {
+    if (status.state !== "signed" || !status.signerId) return;
+    setMode("sign");
+    setSignerId(status.signerId);
+    setSignerNumber(status.signerNumber ?? null);
+    setShareSlug(status.shareSlug ?? null);
+    const why = status.whyISigned ?? null;
+    setWhySaved(why);
+    setWhyInput(why ?? "");
+    setStep("done");
+  }
+
+  // Tell the page who they are as soon as we know, so the homepage has
+  // already switched to "You're signer #N" by the time they close this.
+  const setViewer = liveSigners?.setViewer;
+  useEffect(() => {
+    if (step !== "done" || mode !== "sign") return;
+    if (!signerId || signerNumber === null) return;
+    setViewer?.({ signerId, signerNumber });
+  }, [step, mode, signerId, signerNumber, setViewer]);
 
   /**
    * One-click re-affirm for someone who signed an earlier version. Reuses the
@@ -388,6 +468,7 @@ export default function SignModal({
       }
       const status = await getMySignatureStatus(VERSION);
       setSignatureStatus(status);
+      landOnShareIfSigned(status);
       router.refresh();
     } catch (err) {
       setError(
@@ -395,25 +476,6 @@ export default function SignModal({
       );
     } finally {
       setReaffirming(false);
-    }
-  }
-
-  async function handleRemoveSignature() {
-    setRemoving(true);
-    setError(null);
-    try {
-      const res = await removeMySignature();
-      if (!res.success) {
-        setError(res.error ?? "Couldn't remove your signature.");
-        return;
-      }
-      // Refresh status so the form re-renders for a fresh sign attempt.
-      setSignatureStatus({ state: "not-signed" });
-      setConfirmingRemove(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't remove.");
-    } finally {
-      setRemoving(false);
     }
   }
 
@@ -551,6 +613,24 @@ export default function SignModal({
     if (res.displayName) setSignerName(res.displayName);
     setStep("done");
     router.refresh();
+    if (mode === "sign") void loadSignerNumber();
+  }
+
+  /**
+   * Their signer number, for the greeting. Read back from the server rather
+   * than guessed from the live count, which can be a poll behind. Best effort:
+   * without it the greeting falls back to plain thanks.
+   */
+  async function loadSignerNumber() {
+    try {
+      const status = await getMySignatureStatus(VERSION);
+      if (status.state === "signed") {
+        if (status.signerNumber !== undefined) setSignerNumber(status.signerNumber);
+        setShareSlug(status.shareSlug ?? null);
+      }
+    } catch {
+      // Keep the plain greeting.
+    }
   }
 
   /** Recover from `session_exists` by carrying on as the signed-in user. */
@@ -771,8 +851,19 @@ export default function SignModal({
   // attribution can never silently fall off one of these buttons. Leads with
   // the signer's own sentence once they've written one.
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  // The site's one goal story (@/lib/milestones). The live count can trail
+  // their own signature by a poll, so never count below their own number.
+  const milestone =
+    signerNumber !== null
+      ? milestoneLine(Math.max(liveSigners?.count ?? 0, signerNumber))
+      : null;
   const { shareUrl, twitterHref, linkedinHref, emailHref, suggestedMessage } =
-    buildPostSignShareLinks({ origin, signerId, whyISigned: whySaved });
+    buildPostSignShareLinks({
+      origin,
+      signerId,
+      whyISigned: whySaved,
+      shareSlug,
+    });
 
   async function handleSaveWhy() {
     setWhyPending(true);
@@ -872,11 +963,12 @@ export default function SignModal({
         setInviteResult({ kind: "error", message: res.error });
       } else {
         // Only a send that actually left the building counts as a share.
-        if (res.sent > 0) reportShareClicked("invite");
+        if (res.sent.length > 0) reportShareClicked("invite");
         setInviteResult({
           kind: "success",
           sent: res.sent,
-          failed: res.failed.length,
+          skipped: res.skipped,
+          failed: res.failed,
         });
         setInviteEmails([]);
         setInviteInput("");
@@ -924,131 +1016,11 @@ export default function SignModal({
           </svg>
         </button>
 
-        {step === "form" && signatureStatus?.state === "loading" && (
+        {step === "form" &&
+          (signatureStatus?.state === "loading" ||
+            signatureStatus?.state === "signed") && (
           <div className="py-16 text-center text-sm text-zinc-500">
             Checking your signature…
-          </div>
-        )}
-
-        {step === "form" && signatureStatus?.state === "signed" && (
-          <div>
-            <h2
-              id="sign-modal-title"
-              className="text-2xl font-semibold tracking-tight text-zinc-950"
-            >
-              You&apos;ve already signed this AI Bill of Rights as:
-            </h2>
-            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-              <div className="text-xl font-semibold">
-                {signatureStatus.displayName}
-              </div>
-              <div className="mt-1 text-sm">
-                Verified by{" "}
-                {signatureStatus.verificationMethod === "sms"
-                  ? "Phone"
-                  : "Email"}{" "}
-                — {formatSignedDate(signatureStatus.signedAt)} (v
-                {signatureStatus.version})
-              </div>
-            </div>
-
-            {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </p>
-            ) : null}
-
-            {confirmingRemove ? (
-              <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5">
-                {/*
-                  This button does NOT just remove a signature — it runs the
-                  full account cascade in src/server/signers/delete.ts. The
-                  copy has to name everything that cascade destroys, or people
-                  are consenting to something the dialog never described.
-                  If you widen the cascade, widen this list in the same commit.
-                */}
-                <p className="text-sm font-semibold text-red-900">
-                  Delete your account and everything in it?
-                </p>
-                {/*
-                  Says "every version" explicitly. removeMySignature deletes the
-                  signer row and EVERY signature it owns, and this view can be
-                  reached while looking at a specific version — someone reading
-                  "your signature" next to a version number reasonably takes it
-                  to mean that one. This is the same hazard that earned
-                  signed-other its own branch without a remove button; the
-                  wording is what fixes it for the branches that keep one.
-                */}
-                <p className="mt-1 text-sm text-red-800">
-                  This is irreversible. It permanently deletes:
-                </p>
-                <ul className="mt-2 list-disc pl-5 text-sm text-red-800">
-                  <li>
-                    Your signature on{" "}
-                    <strong className="font-semibold">every version</strong> you
-                    have signed — not just the one you are viewing — and your
-                    name, location and affiliation from the public signers list
-                  </li>
-                  <li>Your profile photo, including all backup copies</li>
-                  <li>
-                    Every comment you&apos;ve written, and every proposed edit
-                    you&apos;ve made
-                  </li>
-                  <li>
-                    Your votes, upvotes and endorsements, and your
-                    &ldquo;why I signed&rdquo; statement
-                  </li>
-                  <li>
-                    <strong className="font-semibold">
-                      Other people&apos;s comments on your proposals
-                    </strong>{" "}
-                    — their replies to your proposed edits go with the proposal
-                  </li>
-                </ul>
-                <p className="mt-2 text-sm text-red-800">
-                  Replies other people wrote to your comments are kept. Your
-                  email or phone is freed up, so you can sign again later.
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleRemoveSignature}
-                    disabled={removing}
-                    className="flex-1 rounded-full bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {removing ? "Deleting…" : "Yes, delete everything"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingRemove(false)}
-                    disabled={removing}
-                    className="flex-1 rounded-full bg-white px-6 py-2.5 text-sm font-medium text-zinc-900 ring-1 ring-inset ring-zinc-300 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    setConfirmingRemove(true);
-                  }}
-                  className="w-full rounded-full bg-red-50 px-6 py-3 text-sm font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition-colors hover:bg-red-100"
-                >
-                  Delete my account
-                </button>
-                <button
-                  type="button"
-                  onClick={() => signOut()}
-                  className="w-full rounded-full bg-zinc-100 px-6 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
           </div>
         )}
 
@@ -1056,10 +1028,9 @@ export default function SignModal({
           They signed a different version and THIS one is not open for signing —
           superseded, or simply archived. Its own branch rather than folded into
           "signed", because that copy says "you've already signed *this*" and
-          shows the version they signed rather than the one being viewed, and
-          because it offers "Remove my signature" — which calls removeMySignature
-          and hard-deletes the signer row and EVERY signature. Someone on an
-          archive page would reasonably read that as removing just this one.
+          shows the version they signed rather than the one being viewed.
+          Nothing here is destructive: removing a signature and deleting the
+          account both live on /account, never in this modal.
         */}
         {step === "form" && signatureStatus?.state === "signed-other" && (
           <div>
@@ -1671,8 +1642,26 @@ export default function SignModal({
                   ? signInOnly || flow === "signIn"
                     ? `You're signed in${signerName ? `, ${signerName.split(/\s+/)[0]}` : ""}.`
                     : `Account created${signerName ? `, ${signerName.split(/\s+/)[0]}` : ""}. You can now comment.`
-                  : `Thank you for signing${signerName ? `, ${signerName.split(/\s+/)[0]}.` : "."}`}
+                  : signerGreeting(
+                      firstName || user?.firstName || "",
+                      signerNumber,
+                    )}
               </h2>
+              {mode === "sign" && milestone ? (
+                <p className="mt-1 text-sm font-medium text-zinc-500">
+                  {milestone}
+                </p>
+              ) : null}
+              {mode === "sign" ? (
+                <div className="mt-5">
+                  <p className="text-xl font-semibold tracking-tight text-blue-700">
+                    Bring Two Friends.
+                  </p>
+                  <p className="mt-1 text-base text-zinc-600">
+                    Who else should be on this list?
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             {signerId && mode === "comment-only" ? (
@@ -1721,7 +1710,10 @@ export default function SignModal({
                     htmlFor="why-i-signed-input"
                     className="block text-xs font-medium uppercase tracking-[0.18em] text-emerald-700"
                   >
-                    Why did you sign?
+                    Why did you sign?{" "}
+                    <span className="normal-case tracking-normal text-emerald-700/70">
+                      (optional)
+                    </span>
                   </label>
                   <p className="mt-1 text-xs text-emerald-800">
                     One sentence, in your own words. We&apos;ll put it on your
@@ -1771,15 +1763,18 @@ export default function SignModal({
                   ) : null}
                 </div>
 
-                {/* Add a selfie photo to your signature */}
-                <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-                    Add a Selfie Photo to your Signature
-                  </p>
-                  <div className="mt-3">
-                    <SelfieCapture context="modal" />
+                {/* Add a selfie photo to your signature — hidden for now,
+                    see SHOW_SELFIE_IN_SIGN_FLOW. */}
+                {SHOW_SELFIE_IN_SIGN_FLOW ? (
+                  <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                      Add a Selfie Photo to your Signature
+                    </p>
+                    <div className="mt-3">
+                      <SelfieCapture context="modal" />
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
                 {/* Share link section */}
                 <div className="mt-7 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
@@ -1787,9 +1782,21 @@ export default function SignModal({
                     htmlFor="share-url-input"
                     className="block text-xs font-medium uppercase tracking-[0.18em] text-zinc-500"
                   >
-                    Share your signature with others
+                    Share your signature
                   </label>
-                  <div className="mt-2 flex items-center gap-2">
+                  {/* The real card — the same image X and LinkedIn unfurl —
+                      not a mock-up of it. Number, name as they chose to show
+                      it, and their why. `v` re-fetches it after they save a
+                      why, which the route reads fresh from the database. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/og/signer/${signerId}?v=${encodeURIComponent(whySaved ?? "")}`}
+                    alt="Your signature card, as it appears when you share it"
+                    width={1200}
+                    height={630}
+                    className="mt-3 aspect-[1200/630] w-full rounded-lg border border-zinc-200 bg-white object-cover"
+                  />
+                  <div className="mt-3 flex items-center gap-2">
                     <input
                       id="share-url-input"
                       type="text"
@@ -1843,14 +1850,19 @@ export default function SignModal({
                   </div>
                 </div>
 
-                {/* Invite by email section */}
-                <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-                    Or invite specific people
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Add emails (Enter or comma to separate). We&apos;ll send a
-                    short note inviting each one to sign.
+                {/* Invite by email — collapsed under share. Each address
+                    gets at most one invitation, ever: the server skips anyone
+                    already invited or already signed, and sends no reminders. */}
+                <details className="group mt-4 rounded-xl border border-zinc-200 bg-white p-4">
+                  <summary className="cursor-pointer list-none text-xs font-medium uppercase tracking-[0.18em] text-zinc-500 marker:hidden">
+                    <span className="mr-1 inline-block transition-transform group-open:rotate-90">
+                      ▸
+                    </span>
+                    Invite people by email
+                  </summary>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Add emails (Enter or comma to separate). Each person gets
+                    one short note inviting them to sign — never a reminder.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5 rounded-lg border border-zinc-300 bg-white p-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
                     {inviteEmails.map((email) => (
@@ -1889,13 +1901,29 @@ export default function SignModal({
                     />
                   </div>
                   {inviteResult?.kind === "success" ? (
-                    <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                      Sent {inviteResult.sent}
-                      {inviteResult.failed > 0
-                        ? `, ${inviteResult.failed} failed`
-                        : ""}
-                      .
-                    </p>
+                    <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                      <p className="font-medium">
+                        {inviteSummary(inviteResult.sent.length)}
+                      </p>
+                      {inviteResult.skipped.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 text-emerald-900/80">
+                          {inviteResult.skipped.map((s) => (
+                            <li key={s.email}>
+                              Skipped {s.email} —{" "}
+                              {s.reason === "already-signed"
+                                ? "already signed"
+                                : "already invited"}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {inviteResult.failed.length > 0 ? (
+                        <p className="mt-1 text-red-700">
+                          Couldn&apos;t send to {inviteResult.failed.join(", ")}.
+                          Try again later.
+                        </p>
+                      ) : null}
+                    </div>
                   ) : null}
                   {inviteResult?.kind === "error" ? (
                     <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -1912,11 +1940,9 @@ export default function SignModal({
                     }
                     className="mt-3 w-full rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {invitePending
-                      ? "Sending…"
-                      : "Share my signature and invite others to sign"}
+                    {invitePending ? "Sending…" : "Send invitations"}
                   </button>
-                </div>
+                </details>
               </>
             ) : null}
 

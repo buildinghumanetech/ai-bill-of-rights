@@ -102,7 +102,7 @@ vi.mock("@/server/actions/sign-from-modal", () => ({
 vi.mock("@/server/actions/invite", () => ({ sendInvitationsAction: vi.fn() }));
 vi.mock("@/server/actions/me", () => ({
   getMySignatureStatus: vi.fn(async () => statusState.value),
-  removeMySignature: vi.fn(),
+  deleteMyAccount: vi.fn(),
   reaffirmMySignature: vi.fn(),
 }));
 vi.mock("@/server/actions/why-i-signed", () => ({ saveWhyISigned: vi.fn() }));

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   withShareParams,
+  shareOrigin,
   signerShareUrl,
   homeShareUrl,
   parseRef,
@@ -169,13 +170,13 @@ describe("withShareParams", () => {
 describe("signerShareUrl", () => {
   it("points at the signer page and self-attributes", () => {
     expect(signerShareUrl("https://ai-for-people.org", ID, "linkedin")).toBe(
-      `https://ai-for-people.org/signatories/${ID}?ref=${ID}&via=linkedin`,
+      `https://theaibill.org/signatories/${ID}?ref=${ID}&via=linkedin`,
     );
   });
 
   it("tolerates a trailing slash on the site url", () => {
     expect(signerShareUrl("https://ai-for-people.org/", ID)).toBe(
-      `https://ai-for-people.org/signatories/${ID}?ref=${ID}`,
+      `https://theaibill.org/signatories/${ID}?ref=${ID}`,
     );
   });
 });
@@ -183,13 +184,13 @@ describe("signerShareUrl", () => {
 describe("homeShareUrl", () => {
   it("attributes the homepage to the sharer", () => {
     expect(homeShareUrl("https://ai-for-people.org", OTHER_ID, "email")).toBe(
-      `https://ai-for-people.org/?ref=${OTHER_ID}&via=email`,
+      `https://theaibill.org/?ref=${OTHER_ID}&via=email`,
     );
   });
 
   it("is a plain homepage link with no referrer", () => {
     expect(homeShareUrl("https://ai-for-people.org")).toBe(
-      "https://ai-for-people.org/",
+      "https://theaibill.org/",
     );
   });
 });
@@ -264,5 +265,32 @@ describe("shareHrefs", () => {
     const raw = /&body=(.+)$/.exec(hrefs.emailHref)![1];
     expect(raw).not.toContain("+");
     expect(raw).toContain("%20");
+  });
+});
+
+describe("shareOrigin", () => {
+  it("writes production links on the short domain", () => {
+    for (const host of [
+      "https://ai-for-people.org",
+      "https://www.ai-for-people.org/",
+      "https://theaibill.org",
+      "https://www.theaibill.org",
+    ]) {
+      expect(shareOrigin(host)).toBe("https://theaibill.org");
+    }
+  });
+
+  it("keeps any other origin, so a link copied while testing points at that build", () => {
+    expect(shareOrigin("http://localhost:3100")).toBe("http://localhost:3100");
+    expect(
+      shareOrigin("https://ai-bill-of-rights-lmh920vdz-erika-andersons-projects.vercel.app/"),
+    ).toBe("https://ai-bill-of-rights-lmh920vdz-erika-andersons-projects.vercel.app");
+  });
+
+  it("carries ref and via unchanged onto the short domain", () => {
+    const url = new URL(signerShareUrl("https://ai-for-people.org", ID, "x"));
+    expect(url.origin).toBe("https://theaibill.org");
+    expect(url.searchParams.get("ref")).toBe(ID);
+    expect(url.searchParams.get("via")).toBe("x");
   });
 });

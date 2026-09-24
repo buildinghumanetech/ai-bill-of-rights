@@ -49,7 +49,10 @@ export async function updateMyProfileAction(
 
 /**
  * Removes a single signature row of the viewer for a specific version.
- * Does NOT delete the signer profile or other versions they signed.
+ * Does NOT delete the signer row, profile, comments, "why I signed"
+ * statement, consent records or signatures on other versions — the /account
+ * confirm copy promises all of that stays. The full hard delete is
+ * deleteMyAccount in ./me.ts.
  */
 export async function removeMySignatureForVersionAction(
   versionString: string,
@@ -75,7 +78,10 @@ export async function removeMySignatureForVersionAction(
     );
   revalidatePath("/account");
   revalidatePath("/signers");
+  revalidatePath("/signatories");
   revalidatePath(`/signatories/${me.id}`);
   revalidatePath(`/v/${versionString}`);
+  // The homepage shows the running signature count.
+  revalidatePath("/");
   return { success: true };
 }

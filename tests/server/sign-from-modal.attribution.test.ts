@@ -42,16 +42,30 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
 }));
 
+/** What the mocked Clerk account says the signer's first name is. */
+const clerkUser = vi.hoisted(() => ({ firstName: null as string | null }));
+
 vi.mock("@clerk/nextjs/server", () => ({
   auth: async () => ({ userId: "user_test" }),
   clerkClient: async () => ({
     users: {
       getUser: async () => ({
+        firstName: clerkUser.firstName,
         primaryEmailAddress: { emailAddress: "ada@example.com" },
       }),
     },
   }),
 }));
+
+/**
+ * The short-link lookup. Null by default — the state of a database where
+ * migration 0014 hasn't been applied — so the older tests here keep asserting
+ * on the long ?ref= link.
+ */
+const getOrCreateShareSlug = vi.hoisted(() =>
+  vi.fn(async (_db: unknown, _signerId: string): Promise<string | null> => null),
+);
+vi.mock("@/lib/share/short-links", () => ({ getOrCreateShareSlug }));
 
 /**
  * Signer ids that still have a row. The real `upsertSignerProfile` runs the
@@ -137,6 +151,9 @@ beforeEach(() => {
   liveReferrers.add(REFERRER_ID);
   attributionAlreadyOnRow = null;
   upsertSignerProfile.mockClear();
+  clerkUser.firstName = null;
+  getOrCreateShareSlug.mockReset();
+  getOrCreateShareSlug.mockResolvedValue(null);
 });
 
 describe("recordSignatureFromModal — confirmation email attribution", () => {
@@ -151,6 +168,77 @@ describe("recordSignatureFromModal — confirmation email attribution", () => {
     expect(mail!.text).toContain(`ref%3D${SIGNER_ID}`);
     expect(mail!.text).toContain(`ref=${SIGNER_ID}`);
     expect(mail!.html).toContain(`ref=${SIGNER_ID}`);
+  });
+});
+
+describe("recordSignatureFromModal — confirmation email copy and short links", () => {
+  it("greets by the typed first name even when the display name is masked", async () => {
+    // The typed name wins over the account's; the account's is only a
+    // fallback for when nothing was typed.
+    clerkUser.firstName = "Clerkname";
+    const res = await recordSignatureFromModal({
+      ...INPUT,
+      firstName: "Erika",
+      lastName: "Anderson",
+      nameDisplayFormat: "initials",
+    });
+    expect(res.success).toBe(true);
+    // The public name really is masked…
+    expect(res.displayName).toBe("E**** A*******");
+    const mail = confirmationEmail()!;
+    // …but the email greets the person, not the mask.
+    expect(mail.text.startsWith("Hi Erika,")).toBe(true);
+    expect(mail.html).toContain("Thank you for signing, Erika!");
+    expect(mail.text).not.toContain("E****");
+    expect(mail.html).not.toContain("E****");
+    expect(mail.text).not.toContain("Clerkname");
+  });
+
+  it("tells the milestone story from the signer's number and the live count", async () => {
+    // Mocked: signer #42 of 137 → measured from 137 → 113 more to reach 250.
+    await recordSignatureFromModal(INPUT);
+    const mail = confirmationEmail()!;
+    expect(mail.text).toContain("You're signer #42. 113 more to reach 250.");
+    expect(mail.text).toContain("Bring Two Friends.");
+    expect(mail.html).toContain("Bring Two Friends.");
+  });
+
+  it("uses the short link, carrying via but no raw id, when a slug exists", async () => {
+    getOrCreateShareSlug.mockResolvedValue("abc2345");
+    const res = await recordSignatureFromModal(INPUT);
+    expect(res.success).toBe(true);
+    expect(getOrCreateShareSlug).toHaveBeenCalledWith(FAKE_DB, SIGNER_ID);
+
+    const mail = confirmationEmail()!;
+    const suggested = /"(.+)"/.exec(mail.text)![1];
+    expect(suggested).toContain("/s/abc2345?via=linkedin");
+    expect(suggested).not.toContain(SIGNER_ID);
+    expect(decodeURIComponent(mail.text)).toContain("/s/abc2345?via=x");
+    expect(decodeURIComponent(mail.text)).toContain("/s/abc2345?via=email");
+    // No share link credits the id directly any more — the /s/ redirect does.
+    expect(mail.text).not.toContain(`ref=${SIGNER_ID}`);
+    expect(mail.text).not.toContain(`ref%3D${SIGNER_ID}`);
+  });
+
+  it("falls back to the long link and still records the signature when there is no slug", async () => {
+    // getOrCreateShareSlug returns null when share_links (0014) is missing.
+    getOrCreateShareSlug.mockResolvedValue(null);
+    const res = await recordSignatureFromModal(INPUT);
+    expect(res.success).toBe(true);
+    expect(res.signerId).toBe(SIGNER_ID);
+
+    const mail = confirmationEmail()!;
+    expect(mail.text).not.toContain("/s/");
+    expect(mail.text).toContain(`/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`);
+  });
+
+  it("still records the signature when the short-link lookup blows up anyway", async () => {
+    // Belt and braces: the helper promises never to throw, but if it ever did
+    // the email is best-effort and signing must not notice.
+    getOrCreateShareSlug.mockRejectedValue(new Error('relation "share_links" does not exist'));
+    const res = await recordSignatureFromModal(INPUT);
+    expect(res.success).toBe(true);
+    expect(res.signerId).toBe(SIGNER_ID);
   });
 });
 

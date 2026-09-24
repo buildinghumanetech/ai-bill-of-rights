@@ -24,7 +24,7 @@ const SIGNER_PAGE = `https://ai-for-people.org/signatories/${SIGNER_ID}`;
 
 function render(signerId: string | null = SIGNER_ID) {
   return signConfirmation({
-    displayName: "Ada Lovelace",
+    firstName: "Ada",
     version: "0.0.1",
     signerPageUrl: SIGNER_PAGE,
     revokeUrl: "https://ai-for-people.org/account/revoke",
@@ -138,6 +138,123 @@ describe("signConfirmation share attribution", () => {
 });
 
 /**
+ * Short links. With a slug every share link is /s/<slug>?via=<channel>: it
+ * carries the channel but no raw signer id (the /s/ route adds ?ref= on the
+ * redirect). The signer's own "view my signature" links are untouched.
+ */
+describe("signConfirmation short share links", () => {
+  const SLUG = "abc2345";
+  const tpl = signConfirmation({
+    firstName: "Ada",
+    version: "0.0.1",
+    signerPageUrl: SIGNER_PAGE,
+    revokeUrl: "https://ai-for-people.org/account/revoke",
+    signatureNumber: 42,
+    totalSignatures: 137,
+    signerId: SIGNER_ID,
+    shareSlug: SLUG,
+  });
+
+  it("uses the short link, with via, for every share button", () => {
+    for (const [pattern, channel] of [
+      [/twitter\.com\/intent\/tweet\?text=[^&\s]*&url=([^\s"]+)/, "x"],
+      [/linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/, "linkedin"],
+      [/mailto:\?subject=[^&\s]*&body=([^\s"]+)/, "email"],
+    ] as const) {
+      const target = decodeURIComponent(pattern.exec(tpl.text)![1]);
+      expect(target).toContain(`https://theaibill.org/s/${SLUG}?${CHANNEL_PARAM}=${channel}`);
+      expect(target).not.toContain(SIGNER_ID);
+    }
+  });
+
+  it("puts the short link, not a raw id, in the suggested message", () => {
+    const suggested = /"(.+)"/.exec(tpl.text)![1];
+    expect(suggested).toContain(`https://theaibill.org/s/${SLUG}?${CHANNEL_PARAM}=linkedin`);
+    expect(suggested).not.toContain(SIGNER_ID);
+    const htmlSuggested = /monospace;line-height:1\.5;">([^<]+)</.exec(tpl.html)![1];
+    expect(unesc(htmlSuggested)).not.toContain(SIGNER_ID);
+    expect(unesc(htmlSuggested)).toContain(`/s/${SLUG}`);
+  });
+
+  it("keeps the signer's own page link long, channelled and un-refed", () => {
+    const line = /View your public signature page: (\S+)/.exec(tpl.text)![1];
+    expect(line.startsWith(SIGNER_PAGE)).toBe(true);
+    expect(line).toContain(`${CHANNEL_PARAM}=confirmation-email`);
+    expect(line).not.toContain(`${REF_PARAM}=`);
+  });
+
+  it("falls back to the long ref-tagged link when there is no slug", () => {
+    const long = render();
+    const target = decodeURIComponent(
+      /linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/.exec(long.text)![1],
+    );
+    expect(target).toBe(signerShareUrl(SIGNER_PAGE, SIGNER_ID, "linkedin"));
+    expect(target).not.toContain("/s/");
+  });
+});
+
+describe("signConfirmation copy", () => {
+  function tplWith(overrides: Partial<Parameters<typeof signConfirmation>[0]>) {
+    return signConfirmation({
+      firstName: "Ada",
+      version: "0.0.1",
+      signerPageUrl: SIGNER_PAGE,
+      revokeUrl: "https://ai-for-people.org/account/revoke",
+      signatureNumber: 92,
+      totalSignatures: 91,
+      signerId: SIGNER_ID,
+      ...overrides,
+    });
+  }
+
+  it("greets by the real first name it is given", () => {
+    const tpl = tplWith({ firstName: "Erika" });
+    expect(tpl.text.startsWith("Hi Erika,")).toBe(true);
+    expect(tpl.html).toContain("Thank you for signing, Erika!");
+  });
+
+  it("greets without a name when there is no first name", () => {
+    const tpl = tplWith({ firstName: null });
+    expect(tpl.text.startsWith("Hi,")).toBe(true);
+    expect(tpl.html).toContain("Thank you for signing!");
+    expect(tpl.text).not.toContain("*");
+  });
+
+  it("tells the milestone story from the larger of number and count", () => {
+    // Signer #92 while the live count still reads 91: measured from 92.
+    const tpl = tplWith({});
+    expect(tpl.text).toContain("You're signer #92. 8 more to reach 100.");
+    expect(tpl.html).toContain("Signer #92");
+    expect(tpl.html).toContain("8 more to reach 100.");
+  });
+
+  it("uses the live count when it is ahead of the signer's number", () => {
+    const tpl = tplWith({ signatureNumber: 92, totalSignatures: 240 });
+    expect(tpl.text).toContain("You're signer #92. 10 more to reach 250.");
+  });
+
+  it("drops the milestone past the end of the ladder but keeps the number", () => {
+    const tpl = tplWith({ signatureNumber: 6001, totalSignatures: 6001 });
+    expect(tpl.text).toContain("You're signer #6,001.");
+    expect(tpl.text).not.toContain("more to reach");
+  });
+
+  it("says nothing about numbers when the counts are unknown", () => {
+    const tpl = tplWith({ signatureNumber: null, totalSignatures: null });
+    expect(tpl.text).not.toContain("signer #");
+    expect(tpl.html).not.toContain("Signer #");
+    expect(tpl.text).not.toContain("more to reach");
+  });
+
+  it("asks the signer to Bring Two Friends", () => {
+    const tpl = tplWith({});
+    expect(tpl.text).toContain("Bring Two Friends.\nWho else should be on this list?");
+    expect(tpl.html).toContain(">Bring Two Friends.</h2>");
+    expect(tpl.html).toContain("Who else should be on this list?");
+  });
+});
+
+/**
  * The invitation email — the highest-INTENT share surface on the site, and
  * until recently the only one carrying no attribution at all.
  *
@@ -162,7 +279,7 @@ describe("signInvitation share attribution", () => {
   });
 
   /** Every absolute site URL in the body, in order of appearance. */
-  const links = [...tpl.text.matchAll(/https:\/\/ai-for-people\.org\S*/g)].map(
+  const links = [...tpl.text.matchAll(/https:\/\/theaibill\.org\S*/g)].map(
     (m) => m[0],
   );
 
@@ -184,7 +301,7 @@ describe("signInvitation share attribution", () => {
   it("leaves no untagged bare signer-page URL in the body", () => {
     // Escape the URL first, THEN append the lookahead — escaping the whole
     // pattern would neuter `(?![?%])` and the assertion would pass on anything.
-    const page = `${ORIGIN}/signatories/${INVITER_ID}`.replace(
+    const page = `https://theaibill.org/signatories/${INVITER_ID}`.replace(
       /[.*+?^${}()|[\]\\]/g,
       "\\$&",
     );

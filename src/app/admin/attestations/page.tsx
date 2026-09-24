@@ -185,6 +185,12 @@ export default async function AdminAttestationsPage() {
         <Link href="/admin/attestations" className="font-medium text-zinc-900">
           Attestations
         </Link>
+        <Link
+          href="/admin/referrals"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Referrals
+        </Link>
       </nav>
       <h1 className="text-3xl font-semibold tracking-tight">Admin · Attestations</h1>
       <p className="mt-2 text-sm text-zinc-600">

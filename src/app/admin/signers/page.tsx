@@ -67,6 +67,12 @@ export default async function AdminSignersPage() {
         >
           Attestations
         </Link>
+        <Link
+          href="/admin/referrals"
+          className="text-zinc-600 hover:text-zinc-900 hover:underline"
+        >
+          Referrals
+        </Link>
       </nav>
       <header className="mb-8 flex items-end justify-between">
         <div>

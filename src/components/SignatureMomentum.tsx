@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MILESTONES, milestoneLine } from "@/lib/milestones";
 
 /**
  * ============================================================================
@@ -40,10 +41,12 @@ export const RAW_COUNT_THRESHOLD = resolveThreshold();
  * Cohort goals shown while we're in "early" mode. We show the first goal the
  * count hasn't passed yet, so the progress bar always has a visible gap left
  * to close. Capped at the threshold, past which "early" mode ends anyway.
+ * The ladder itself lives in @/lib/milestones so the thank-you step and the
+ * confirmation email name the same next goal.
  */
 const GOAL_LADDER: number[] = Array.from(
   new Set(
-    [1_000, 2_500, RAW_COUNT_THRESHOLD]
+    [...MILESTONES, RAW_COUNT_THRESHOLD]
       .filter((goal) => goal <= RAW_COUNT_THRESHOLD)
       .sort((a, b) => a - b),
   ),
@@ -106,6 +109,8 @@ export const RECENT_SIGNER_CHIPS = 3;
 
 /** A signer shown as proof-of-quality while the raw count is still small. */
 export type MomentumSigner = {
+  /** Lets the viewer's own chip be marked "You". Optional for callers that don't have it. */
+  signerId?: string;
   displayName: string;
   affiliation: string | null;
   locationText: string | null;
@@ -146,8 +151,41 @@ export function SignatureHeadline({ count }: { count: number }) {
       Be signer{" "}
       <Link href="/signers" className="font-bold text-blue-600 hover:underline">
         #{fmt(framing.nextOrdinal)}
-      </Link>{" "}
-      of the first {fmt(framing.goal)}.
+      </Link>
+      . {fmt(framing.remaining)} more to reach {fmt(framing.goal)}.
+    </>
+  );
+}
+
+/**
+ * The same line for someone who has signed the current version. Replaces
+ * "Be signer #N" — offering a position to someone who already holds one reads
+ * as though their signature didn't register.
+ */
+export function SignerHeadline({
+  signerId,
+  signerNumber,
+  count,
+}: {
+  signerId: string;
+  signerNumber: number;
+  /** The live count, for the milestone line. */
+  count: number;
+}) {
+  // The live count can trail their own signature by a poll; never let the
+  // milestone line imply they haven't been counted yet.
+  const line = milestoneLine(Math.max(count, signerNumber));
+  return (
+    <>
+      You&apos;re signer{" "}
+      <Link
+        href={`/signatories/${signerId}`}
+        className="font-bold text-blue-600 hover:underline"
+      >
+        #{fmt(signerNumber)}
+      </Link>
+      . Thank you.
+      {line ? <span className="block">{line}</span> : null}
     </>
   );
 }
@@ -196,9 +234,14 @@ function CohortProgressBar({
 export function SignatureMomentumPanel({
   count,
   sample = [],
+  viewerSignerId = null,
+  viewerSignerNumber = null,
 }: {
   count: number;
   sample?: MomentumSigner[];
+  /** The viewer, when they have signed the current version. */
+  viewerSignerId?: string | null;
+  viewerSignerNumber?: number | null;
 }) {
   const framing = getSignatureFraming(count);
 
@@ -239,7 +282,14 @@ export function SignatureMomentumPanel({
         <strong className="font-semibold text-zinc-900">
           {fmt(framing.remaining)} to go.
         </strong>{" "}
-        Sign now and you&apos;re number {fmt(framing.nextOrdinal)}.
+        {viewerSignerNumber !== null ? (
+          <>
+            You&apos;re number {fmt(viewerSignerNumber)}. Who else should be
+            on this list?
+          </>
+        ) : (
+          <>Sign now and you&apos;re number {fmt(framing.nextOrdinal)}.</>
+        )}
       </p>
 
       {named.length > 0 && (
@@ -250,11 +300,22 @@ export function SignatureMomentumPanel({
           <ul className="mt-3 flex flex-wrap justify-center gap-2">
             {named.map((signer, i) => {
               const subtitle = signerSubtitle(signer);
+              const isViewer =
+                viewerSignerId !== null && signer.signerId === viewerSignerId;
               return (
                 <li
                   key={`${signer.displayName}-${i}`}
-                  className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm text-zinc-700"
+                  className={
+                    isViewer
+                      ? "rounded-full border border-blue-300 bg-blue-50 px-3 py-1 text-sm text-blue-900 ring-2 ring-blue-200"
+                      : "rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm text-zinc-700"
+                  }
                 >
+                  {isViewer && (
+                    <span className="mr-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                      You
+                    </span>
+                  )}
                   <span className="font-medium text-zinc-900">
                     {signer.displayName}
                   </span>
@@ -283,6 +344,27 @@ export function SignatureMomentumPanel({
 /* -------------------------------------------------------------------------- */
 /* Floating CTA caption                                                       */
 /* -------------------------------------------------------------------------- */
+
+/** The caption under the floating button once the viewer has signed. */
+export function SignerMomentumChip({
+  signerId,
+  signerNumber,
+}: {
+  signerId: string;
+  signerNumber: number;
+}) {
+  return (
+    <>
+      You&apos;re signer{" "}
+      <Link
+        href={`/signatories/${signerId}`}
+        className="font-bold text-blue-600 hover:underline"
+      >
+        #{fmt(signerNumber)}
+      </Link>
+    </>
+  );
+}
 
 /** The one-line caption under the persistent floating sign button. */
 export function SignatureMomentumChip({ count }: { count: number }) {

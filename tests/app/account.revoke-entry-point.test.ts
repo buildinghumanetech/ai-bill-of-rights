@@ -1,17 +1,15 @@
 /**
- * The /account link into the deletion flow has to describe the flow it opens.
+ * The /account link to /account/revoke has to describe what that page does.
  *
- * `submitRevokeAction` runs the full cascade in `src/server/signers/delete.ts`:
- * signatures, profile row, consent records, every comment, every proposed
- * edit, OTHER PEOPLE'S comments on those edits, votes, upvotes, endorsements,
- * and every photo blob. `/account/revoke` and the SignModal confirm dialog both
- * enumerate that. This link is how most account-holders reach it, and it used
- * to read "Remove all my signatures and delete my profile" — which names two
- * of the nine things it destroys and reads like a narrower action than it is.
+ * `submitRevokeAction` does NOT delete: it calls `anonymizeSigner`, which keeps
+ * the signature (relabelled "Anonymized signer #N"), scrubs the private
+ * capture fields and deletes photos — the behaviour content/consent/v1.md
+ * promises for revoking. This link used to read "Delete my account —
+ * signatures, comments, proposals and photos", describing the hard-delete
+ * cascade, which lives behind "Delete my account" on the same page instead.
  *
- * A source-text assertion rather than a render: AccountClient is a client
- * component behind Clerk, and what is being protected here is the wording, not
- * the markup.
+ * A source-text assertion rather than a render: what is being protected here
+ * is the wording, not the markup.
  */
 
 import { describe, expect, it } from "vitest";
@@ -34,26 +32,18 @@ const linkText = (() => {
   return text;
 })();
 
-describe("the /account entry point into the deletion cascade", () => {
-  it("does not describe the cascade as only signatures and a profile", () => {
-    expect(
-      linkText.toLowerCase(),
-      `The link reads "${linkText}". That understates it: the destination ` +
-        `runs the full cascade, which also destroys every comment, every ` +
-        `proposed edit, other people's comments on those edits, and all ` +
-        `photo blobs.`,
-    ).not.toBe("remove all my signatures and delete my profile →");
+describe("the /account entry point into revoking consent", () => {
+  it("says it anonymizes and removes personal data", () => {
+    const lower = linkText.toLowerCase();
+    expect(lower).toContain("revoke");
+    expect(lower).toContain("anonymize");
+    expect(lower).toContain("personal data");
   });
 
-  it("names the parts of the cascade a signer would not expect", () => {
-    const lower = linkText.toLowerCase();
-    for (const word of ["comment", "photo"]) {
-      expect(
-        lower,
-        `The link reads "${linkText}" and never mentions "${word}", which ` +
-          `the cascade destroys. Keep this label in step with the list on ` +
-          `/account/revoke (src/app/account/revoke/page.tsx).`,
-      ).toContain(word);
-    }
+  it("does not claim to delete the account", () => {
+    // Revoking keeps the signature and the account row; calling it a delete
+    // sends people looking for the hard delete to the wrong page, and the
+    // other way round.
+    expect(linkText.toLowerCase()).not.toContain("delete");
   });
 });

@@ -448,3 +448,54 @@ export const attestations = pgTable(
       .where(sql`${t.published} = true`),
   ],
 );
+
+// One row per email address ever sent an invitation from the thank-you panel.
+// Its only job is to make "each address is invited at most once, ever, by
+// anyone" enforceable: the UNIQUE on email_hash is what the invite action
+// claims against (INSERT ... ON CONFLICT DO NOTHING RETURNING), so two inviters
+// racing on the same address cannot both send.
+//
+// The raw address is deliberately NOT stored. The invitee never consented to
+// us keeping it; a sha256 of the trimmed, lowercased address is enough to
+// answer "have we emailed this before?" and nothing more.
+//
+// inviter_signer_id is ON DELETE SET NULL: deleting the inviter must not
+// forget that the address was already invited (that would let it be emailed
+// again), and must not be blocked by this row either.
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    emailHash: text("email_hash").notNull().unique(),
+    inviterSignerId: uuid("inviter_signer_id").references(() => signers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("invitations_inviter_signer_id_idx").on(t.inviterSignerId)],
+);
+
+// A short, shareable slug per signer: theaibill.org/s/<slug> resolves to
+// /signatories/<id>?ref=<id>, so a shared link carries no raw ids and the
+// referral still lands. See src/lib/share/short-links.ts.
+//
+// Its own table rather than a column on `signers`, deliberately. Several paths
+// select every column of `signers`, so one unapplied column migration there
+// breaks signing outright (0007 did, for eleven weeks). A missing table here
+// breaks only the short link, and the code falls back to the long one.
+//
+// The slug is random, never derived from the name: a public display name may
+// be masked, and a slug built from the real one would unmask it.
+// ON DELETE CASCADE: a deleted signer's short link should stop resolving.
+export const shareLinks = pgTable("share_links", {
+  slug: text("slug").primaryKey(),
+  signerId: uuid("signer_id")
+    .notNull()
+    .unique()
+    .references(() => signers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

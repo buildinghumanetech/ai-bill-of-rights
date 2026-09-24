@@ -9,7 +9,7 @@ export default async function RevokePage() {
   return (
     <main className="mx-auto w-full max-w-xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight text-red-700 dark:text-red-400">
-        Remove your signature
+        Revoke consent and anonymize your signature
       </h1>
       <p className="mt-6 text-zinc-700 dark:text-zinc-300">
         This permanently anonymizes your signature. We will:
@@ -36,7 +36,7 @@ export default async function RevokePage() {
           type="submit"
           className="rounded-full bg-red-700 px-6 py-3 text-base font-medium text-white hover:bg-red-600"
         >
-          Yes, remove my signature
+          Yes, anonymize my signature
         </button>
         <a
           href="/account"

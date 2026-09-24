@@ -31,6 +31,7 @@ async function loadSignerSample(): Promise<MomentumSigner[]> {
       offset: 0,
     });
     return rows.map((row) => ({
+      signerId: row.signerId,
       displayName: row.displayName,
       affiliation: row.affiliation,
       locationText: row.locationText,

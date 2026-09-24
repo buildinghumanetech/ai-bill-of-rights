@@ -162,16 +162,78 @@ function trimSlash(siteUrl: string): string {
   return siteUrl.replace(/\/+$/, "");
 }
 
+/** The short domain people see in a shared link. */
+export const SHARE_ORIGIN = "https://theaibill.org";
+
+const PRODUCTION_HOSTS = new Set([
+  "ai-for-people.org",
+  "www.ai-for-people.org",
+  "theaibill.org",
+  "www.theaibill.org",
+]);
+
+/**
+ * The origin a share link should be written with.
+ *
+ * Production links go out on theaibill.org, which is shorter and says what the
+ * page is. It redirects to ai-for-people.org keeping both the path and the
+ * query string, so ?ref= and ?via= arrive intact and proxy.ts sets the
+ * attribution cookie on the far side of the hop (checked against the live
+ * redirect on 2026-09-24). Any other host — localhost, a preview deployment —
+ * keeps its own origin, so a link copied while testing still points at the
+ * build being tested.
+ */
+export function shareOrigin(siteUrl: string): string {
+  try {
+    const host = new URL(siteUrl).hostname;
+    if (PRODUCTION_HOSTS.has(host)) return SHARE_ORIGIN;
+  } catch {
+    // Not a parseable URL; fall through and use it as given.
+  }
+  return trimSlash(siteUrl);
+}
+
 /** A signer's public page, carrying their own id as the referrer. */
 export function signerShareUrl(
   siteUrl: string,
   signerId: string,
   channel?: ShareChannel,
 ): string {
-  return withShareParams(`${trimSlash(siteUrl)}/signatories/${signerId}`, {
+  return withShareParams(`${shareOrigin(siteUrl)}/signatories/${signerId}`, {
     ref: signerId,
     channel,
   });
+}
+
+/**
+ * A signer's short link: <share origin>/s/<slug>?via=<channel>.
+ *
+ * Carries no ref and no raw id — /s/[slug] resolves the slug to the signer and
+ * redirects to their page WITH ?ref=<id>, so attribution lands exactly as it
+ * does for the long link. `via` rides along so channel comparison still works.
+ */
+export function signerShortShareUrl(
+  siteUrl: string,
+  slug: string,
+  channel?: ShareChannel,
+): string {
+  return withShareParams(`${shareOrigin(siteUrl)}/s/${slug}`, { channel });
+}
+
+/**
+ * The link to put in a share: the short one when the signer has a slug, the
+ * long /signatories/<id>?ref=<id> one otherwise (no slug yet, or migration
+ * 0014 not applied — see src/lib/share/short-links.ts).
+ */
+export function signerShareLink(
+  siteUrl: string,
+  signerId: string,
+  slug: string | null | undefined,
+  channel?: ShareChannel,
+): string {
+  return slug
+    ? signerShortShareUrl(siteUrl, slug, channel)
+    : signerShareUrl(siteUrl, signerId, channel);
 }
 
 /** The homepage, attributed to whoever shared it. */
@@ -180,7 +242,7 @@ export function homeShareUrl(
   ref?: string | null,
   channel?: ShareChannel,
 ): string {
-  return withShareParams(`${trimSlash(siteUrl)}/`, { ref, channel });
+  return withShareParams(`${shareOrigin(siteUrl)}/`, { ref, channel });
 }
 
 /**

@@ -529,12 +529,12 @@ describe("deleting a signer with activity in every table", () => {
     await expectBystanderSurvived(otherComment, otherProposal);
   });
 
-  it("succeeds via the self-service path (removeMySignature)", async () => {
+  it("succeeds via the self-service path (deleteMyAccount)", async () => {
     const { otherComment, otherProposal } = await seedBusySigner();
     state.clerkUserId = "user_doomed";
-    const { removeMySignature } = await import("@/server/actions/me");
+    const { deleteMyAccount } = await import("@/server/actions/me");
 
-    await expect(removeMySignature()).resolves.toEqual({ success: true });
+    await expect(deleteMyAccount()).resolves.toEqual({ success: true });
 
     await expectBystanderSurvived(otherComment, otherProposal);
   });
@@ -544,7 +544,7 @@ describe("deleting a signer with activity in every table", () => {
   // so that the signature keeps counting and the consent record survives as
   // proof of what was agreed to. The signer row therefore REMAINS here; only
   // the identity on it is scrubbed. The hard-delete cascade is still exercised
-  // by the deleteSigner and removeMySignature cases above.
+  // by the deleteSigner and deleteMyAccount cases above.
   it("anonymizes rather than deletes via the admin path (deleteSignerAction)", async () => {
     const { otherComment, otherProposal } = await seedBusySigner();
     state.clerkUserId = "user_admin";

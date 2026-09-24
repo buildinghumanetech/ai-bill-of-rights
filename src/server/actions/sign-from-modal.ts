@@ -1,13 +1,8 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import {
-  REF_CHANNEL_COOKIE,
-  REF_COOKIE,
-  readChannelCookieValue,
-  readRefCookieValue,
-} from "@/lib/referral/cookie";
+import { readReferralAttribution } from "@/lib/referral/request";
 import { upsertSignerProfile } from "@/server/profile/upsert";
 import { recordSignature } from "@/server/signatures/record";
 import { getDb } from "@/lib/db/lazy";
@@ -27,6 +22,7 @@ import {
   getSignatureNumber,
 } from "@/lib/db/queries";
 import { sendEmail } from "@/lib/email/send";
+import { getOrCreateShareSlug } from "@/lib/share/short-links";
 
 const TEAM_NOTIFICATION_EMAIL = "hello@ai-for-people.org";
 
@@ -42,37 +38,6 @@ function decodePercentEncoding(s: string): string {
     return decodeURIComponent(s);
   } catch {
     return s;
-  }
-}
-
-/** What the proxy stamped on this visitor when they first arrived. */
-interface ReferralAttribution {
-  /** Signer id of whoever introduced them, if anyone. */
-  ref: string | null;
-  /** The `?via=` surface that introduction came from, if it carried one. */
-  channel: string | null;
-}
-
-const UNATTRIBUTED: ReferralAttribution = { ref: null, channel: null };
-
-// Read the attribution cookies the proxy stamped on arrival. Best effort by
-// design: if the cookie jar is unavailable or holds junk we return nulls and
-// the signature proceeds unattributed. A signature is never worth losing over
-// a referral credit.
-//
-// Both cookies are read from the same jar in one go, because the pair always
-// describes the same share event — reading them separately would let a retry
-// pick up a ref from one moment and a channel from another.
-async function readReferralAttribution(): Promise<ReferralAttribution> {
-  try {
-    const jar = await cookies();
-    return {
-      ref: readRefCookieValue(jar.get(REF_COOKIE)?.value),
-      channel: readChannelCookieValue(jar.get(REF_CHANNEL_COOKIE)?.value),
-    };
-  } catch (err) {
-    console.warn("[referral] could not read attribution cookies:", err);
-    return UNATTRIBUTED;
   }
 }
 
@@ -269,8 +234,10 @@ export async function recordSignatureFromModal(
       const user = await clerk.users.getUser(userId);
       const email = user.primaryEmailAddress?.emailAddress;
       if (email) {
-        let signatureNumber = 1;
-        let totalSignatures = 1;
+        // Null when the count queries fail: the email then leaves the numbers
+        // out rather than calling everyone "signer #1".
+        let signatureNumber: number | null = null;
+        let totalSignatures: number | null = null;
         try {
           [signatureNumber, totalSignatures] = await Promise.all([
             getSignatureNumber(profile.id),
@@ -279,8 +246,13 @@ export async function recordSignatureFromModal(
         } catch (err) {
           console.warn("[email] failed to fetch signature counts:", err);
         }
+        // Never throws: null (e.g. migration 0014 not applied) falls back to
+        // the long /signatories/<id>?ref=<id> link inside the template.
+        const shareSlug = await getOrCreateShareSlug(getDb(), profile.id);
         const tpl = signConfirmation({
-          displayName,
+          // The REAL first name — never the display name, which may be masked
+          // ("E**** A*******"). Typed name first, then the Clerk account's.
+          firstName: firstName || user.firstName?.trim() || null,
           version: input.versionString,
           signerPageUrl,
           revokeUrl: `${siteUrl}/account/revoke`,
@@ -289,6 +261,7 @@ export async function recordSignatureFromModal(
           // Without this every share link in the email — the highest-volume
           // share surface we have — goes out with no ?ref= at all.
           signerId: profile.id,
+          shareSlug,
         });
         await sendEmail({ to: email, ...tpl });
       }
