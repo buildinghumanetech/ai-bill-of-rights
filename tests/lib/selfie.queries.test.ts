@@ -27,7 +27,11 @@ async function makeSigner(db: Db, clerkId: string) {
   return row.id as string;
 }
 
-async function insertSelfie(db: Db, signerId: string, overrides: any = {}) {
+async function insertSelfie(
+  db: Db,
+  signerId: string,
+  overrides: Partial<typeof selfies.$inferInsert> = {},
+) {
   const [row] = await db
     .insert(selfies)
     .values({

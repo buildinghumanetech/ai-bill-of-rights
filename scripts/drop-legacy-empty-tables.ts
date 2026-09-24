@@ -21,12 +21,12 @@ async function main() {
   // Final safety: verify every table has 0 rows. Bail if any row count > 0.
   for (const t of LEGACY_EMPTY) {
     const reg = await sql(`SELECT to_regclass($1) AS r`, [`public.${t}`]);
-    if (!(reg as any[])[0]?.r) {
+    if (!(reg as Array<Record<string, unknown>>)[0]?.r) {
       console.log(`= skip ${t}: does not exist`);
       continue;
     }
     const c = await sql(`SELECT count(*)::int AS n FROM "${t}"`);
-    const n = (c as any[])[0]?.n ?? 0;
+    const n = (c as Array<Record<string, unknown>>)[0]?.n ?? 0;
     if (n !== 0) {
       console.error(
         `ABORT: ${t} has ${n} rows. This script only drops EMPTY tables.`,

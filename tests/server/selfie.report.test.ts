@@ -141,8 +141,8 @@ describe("resolveSelfieReports", () => {
     const [row] = await db.select().from(selfies).where(eq(selfies.id, id));
     expect(row.autoHiddenAt).toBeNull();
     const reports = await db.select().from(selfieReports);
-    expect(reports.every((r: any) => r.resolution === "allowed")).toBe(true);
-    expect(reports.every((r: any) => r.resolvedAt !== null)).toBe(true);
+    expect(reports.every((r) => r.resolution === "allowed")).toBe(true);
+    expect(reports.every((r) => r.resolvedAt !== null)).toBe(true);
   });
 
   it("with resolution=hidden converts the selfie to rejected", async () => {

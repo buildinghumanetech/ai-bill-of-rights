@@ -10,6 +10,7 @@ import {
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
 import type { Db } from "@/lib/db/types";
+import type { RejectionReason } from "@/lib/selfie/policy";
 
 async function makeSigner(db: Db, clerkId: string, isAdmin = false) {
   const [row] = await db
@@ -59,8 +60,8 @@ describe("approveSelfie", () => {
     const second = await submitOne(db, signer);
     await approveSelfie(db, { selfieId: second, adminSignerId: admin });
     const rows = await db.select().from(selfies);
-    const firstRow = rows.find((r: any) => r.id === first)!;
-    const secondRow = rows.find((r: any) => r.id === second)!;
+    const firstRow = rows.find((r) => r.id === first)!;
+    const secondRow = rows.find((r) => r.id === second)!;
     expect(firstRow.replacedBySelfieId).toBe(second);
     expect(secondRow.status).toBe("approved");
     expect(secondRow.replacedBySelfieId).toBeNull();
@@ -142,7 +143,8 @@ describe("rejectSelfie", () => {
       rejectSelfie(db, {
         selfieId: id,
         adminSignerId: admin,
-        reason: "garbage" as any,
+        // Deliberately not a RejectionReason — this asserts the runtime guard.
+        reason: "garbage" as unknown as RejectionReason,
       }),
     ).rejects.toThrow(/Invalid rejection reason/);
   });

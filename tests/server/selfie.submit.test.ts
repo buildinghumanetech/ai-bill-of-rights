@@ -161,6 +161,6 @@ describe("submitSelfie", () => {
       .from(selfies)
       .where(eq(selfies.signerId, signerId));
     expect(rows).toHaveLength(2);
-    expect(rows.every((r: any) => r.status === "pending")).toBe(true);
+    expect(rows.every((r) => r.status === "pending")).toBe(true);
   });
 });
