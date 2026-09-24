@@ -1,5 +1,38 @@
 # Branch Progress: fix/lint-clean
 
+## Progress Update as of [2026-09-24 05:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Rebased onto current `main` (13 commits had landed since the branch point) and found
+**2 new lint errors in that new code** — which this branch's `--max-warnings 0` gate
+would have failed on. Fixed; lint clean again, suite **1019/1019** (98 files).
+
+### Detail of changes made:
+- **The rebase was the point, not housekeeping.** The PR's earlier green run proved
+  nothing about code that landed afterwards, and because this branch is what makes
+  lint fail the build, any lint error merged in the meantime becomes this branch's
+  problem. Two had: `ProposeRightForm.tsx` (restoring a localStorage draft after
+  mount) and a new `SignModal` effect (`startInSignIn`, from the /propose signer-gate
+  work). Both `react-hooks/set-state-in-effect`.
+- **Both got the same justified disable as their siblings.** Neither is derivable
+  during render: localStorage does not exist on the server (the existing comment in
+  `ProposeRightForm` already says so), and the `startInSignIn` effect is modal
+  lifecycle sitting right below the reset effect that clears it.
+
+### Potential concerns to address:
+- **This is now a demonstrated recurring tax, not a hypothetical.** Two fresh hits
+  appeared within hours of the branch being written, both from ordinary feature work.
+  `react-hooks/set-state-in-effect` fires on legitimate post-mount patterns, so with
+  `--max-warnings 0` every new component that restores browser-only state will fail
+  CI until someone adds a disable. That deserves a project decision — keep it as an
+  error and accept per-site disables, or set it to `warn` and rely on review — rather
+  than each author discovering it. Flagged on the PR.
+- **This branch will keep needing rebases while `main` moves this fast.** Nothing to
+  fix; just do not trust an old green run on a branch that gates the build.
+
+---
+
 ## Progress Update as of [2026-09-24 02:05 Pacific]
 *(Most recent updates at top)*
 
