@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getCurrentVersion } from "@/lib/db/queries";
 import { listProposedRights, type ProposedRight } from "@/lib/db/proposal-queries";
 import { getDb } from "@/lib/db/lazy";
 import { classifyDbError, type DbErrorKind } from "@/lib/db/error-kind";
-import { signers } from "@/lib/db/schema";
+import { signatures, signers } from "@/lib/db/schema";
 import { ProposeRightForm } from "@/components/ProposeRightForm";
 import { ProposedRightCard } from "@/components/ProposedRightCard";
 import SignModalClient from "./SignModalClient";
@@ -38,9 +38,10 @@ export default async function ProposePage() {
   const current = await getCurrentVersion().catch(() => null);
 
   let viewerSignerId: string | null = null;
-  // Signed in to Clerk but with no signer row: the one viewer the server will
-  // refuse at submit time. Known here, so the form can say so up front.
-  let signedInWithoutSignerRow = false;
+  // Signed in to Clerk but has not signed — no signer row, or an account row
+  // with no signature (a comment-only signup). The server refuses both at
+  // submit time; known here, so the form can say so up front.
+  let signedInWithoutSignature = false;
   let queue: QueueState = { kind: "ok", proposals: [] };
 
   if (current) {
@@ -48,12 +49,15 @@ export default async function ProposePage() {
       const { userId } = await auth();
       if (userId) {
         const me = await getDb()
-          .select({ id: signers.id })
+          .select({
+            id: signers.id,
+            hasSigned: sql<boolean>`exists (select 1 from ${signatures} where ${signatures.signerId} = ${signers.id})`,
+          })
           .from(signers)
           .where(eq(signers.clerkUserId, userId))
           .limit(1);
         if (me.length > 0) viewerSignerId = me[0].id;
-        else signedInWithoutSignerRow = true;
+        signedInWithoutSignature = me.length === 0 || !me[0].hasSigned;
       }
     } catch {
       // auth() can throw at the edges; an anonymous read is the correct fallback.
@@ -127,7 +131,7 @@ export default async function ProposePage() {
           to say plainly why yours is not.
         </p>
         <div className="mt-8">
-          <ProposeRightForm needsSignature={signedInWithoutSignerRow} />
+          <ProposeRightForm needsSignature={signedInWithoutSignature} />
         </div>
       </section>
 

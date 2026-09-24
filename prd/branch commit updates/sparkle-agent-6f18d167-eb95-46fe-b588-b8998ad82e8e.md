@@ -1,5 +1,27 @@
 # Branch Progress: sparkle/agent-6f18d167-eb95-46fe-b588-b8998ad82e8e
 
+## Progress Update as of [2026-09-24 03:45 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Erika filed a proposal from an account that has never signed. The server DID check, but it checked the wrong thing: `requireSigner()` only required a `signers` row, and "create an account to comment" makes one without signing. Filing and endorsing now require a signature row. Separately, the post-sign-in modal line is replaced with a direct "Sign the AI Bill of Rights" link, shown only to people who haven't signed.
+
+### Detail of changes made:
+- `src/server/actions/proposals.ts`: split into `requireAccount()` (session + row + not banned) and `requireSigner()` (account + at least one `signatures` row, any version). File (`submitNewRightAction`) and endorse (`toggleProposalUpvoteAction`) use `requireSigner`. Withdraw, unhide and decide use `requireAccount`; core checks ownership / `isAdmin`. Identity always comes from `auth()`. Refusal is `{ ok:false, code:"not_signer" }`, never a throw.
+- `src/app/propose/page.tsx`: the up-front notice now keys on "has a signature" (`exists` subquery), not "has a row".
+- `src/components/ProposedRightCard.tsx`: an endorse `not_signer` refusal shows a "Sign the AI Bill of Rights" button. Signed-out endorse opens sign-in, not create-account.
+- `src/server/actions/me.ts`: `getMySignatureStatus` selects only the 3 columns it needs. Its bare `select()` threw in production (0007 unapplied), so the modal could never tell a signer from a non-signer.
+- `src/app/SignModal.tsx`: the done box shows only a "Sign the AI Bill of Rights" button. It is hidden when the status is signed, signed earlier, or still loading. The button switches the modal to sign mode, which is the signing form, and clears `signInOnly`, which otherwise hid the name fields. A failed status fetch now resolves to null instead of loading forever.
+- Card body of the test proposals: the stored `new_text` and `rationale` ARE the licence sentence. That is her test input, not a rendering bug. The two test rows are hidden and untouched.
+- Tests: 2 server tests (account without signature can't file or endorse; both failed before), 2 modal tests, 1 card test. Full suite 1019/1019, tsc clean.
+
+### Potential concerns to address:
+- Proposals already filed or endorsed by accounts without signatures are not retroactively removed. Existing endorsement counts may include them.
+- Signing from the modal (and any first signup) still fails in production until 0007/0008 are applied, because `upsertSignerProfile` does `select()`.
+- "Signed" means any signature row, any version. Consent revocation is not consulted.
+
+---
+
 ## Progress Update as of [2026-09-24 03:00 Pacific]
 *(Most recent updates at top)*
 

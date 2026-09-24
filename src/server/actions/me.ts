@@ -40,8 +40,15 @@ export async function getMySignatureStatus(
   if (!userId) return { state: "anonymous" };
 
   const db = getDb();
+  // Only the columns resolveSignatureStatus reads. A bare select() names every
+  // column in schema.ts, so one unapplied migration (0007 in production) made
+  // this throw — and SignModal could no longer tell a signer from anyone else.
   const signerRows = await db
-    .select()
+    .select({
+      id: signers.id,
+      displayName: signers.displayName,
+      verificationMethod: signers.verificationMethod,
+    })
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);

@@ -44,10 +44,20 @@ const attemptFirstFactor = vi.fn(async () => ({
 }));
 const setSignInActive = vi.fn(async () => {
   clerkState.session = { id: "sess_in" };
+  if (userState.reportSignedInAfterSignIn) userState.isSignedIn = true;
 });
 const clerkSetActive = vi.fn(async ({ session }: { session: string }) => {
   clerkState.session = { id: session };
 });
+
+/**
+ * What useUser reports. Off by default so the existing tests keep their
+ * signed-out view; the signature-status tests opt in, so that finishing sign-in
+ * flips isSignedIn and SignModal re-fetches the status the way it does live.
+ */
+const userState = { isSignedIn: false, reportSignedInAfterSignIn: false };
+/** What getMySignatureStatus answers. */
+const statusState: { value: unknown } = { value: { state: "not-signed" } };
 
 /** Mutable stand-in for the Clerk singleton; reset in beforeEach. */
 const clerkState: {
@@ -66,7 +76,7 @@ vi.mock("@clerk/nextjs", () => ({
     },
     setActive: clerkSetActive,
   }),
-  useUser: () => ({ isSignedIn: false, user: null }),
+  useUser: () => ({ isSignedIn: userState.isSignedIn, user: null }),
   useSignUp: () => ({
     isLoaded: true,
     setActive: setSignUpActive,
@@ -91,7 +101,7 @@ vi.mock("@/server/actions/sign-from-modal", () => ({
 }));
 vi.mock("@/server/actions/invite", () => ({ sendInvitationsAction: vi.fn() }));
 vi.mock("@/server/actions/me", () => ({
-  getMySignatureStatus: vi.fn(async () => ({ state: "not-signed" })),
+  getMySignatureStatus: vi.fn(async () => statusState.value),
   removeMySignature: vi.fn(),
   reaffirmMySignature: vi.fn(),
 }));
@@ -107,6 +117,9 @@ let root: Root;
   true;
 
 beforeEach(() => {
+  userState.isSignedIn = false;
+  userState.reportSignedInAfterSignIn = false;
+  statusState.value = { state: "not-signed" };
   clerkState.session = null;
   clerkState.client = { activeSessions: [] };
   createSignerFromModal.mockResolvedValue({
@@ -272,10 +285,6 @@ describe("returning visitor can just sign in", () => {
     });
     expect(createSignerFromModal).toHaveBeenCalledTimes(1);
     expect(text()).toContain("You're signed in, Ada.");
-    // A returning visitor may well have signed already; nothing we can read
-    // reliably here says which, so the closing line must be true either way.
-    expect(text()).not.toMatch(/you can sign the ai bill of rights/i);
-    expect(text()).toContain("Your account page shows your signature status and settings.");
   });
 
   it("an unknown number is sent to create-account, not an error wall", async () => {
@@ -303,5 +312,45 @@ describe("returning visitor can just sign in", () => {
     expect(signInCreate).toHaveBeenCalledTimes(1);
     expect(text()).toContain("Enter the code to sign in");
     expect(button("Sign in")).toBeTruthy();
+  });
+});
+
+/**
+ * The line under "You're all set". It used to read "You can sign the AI Bill of
+ * Rights itself any time from your account page" to everyone, including people
+ * who had signed. Now: a direct way to sign for someone who hasn't, nothing for
+ * someone who has.
+ */
+describe("the closing line after signing in", () => {
+  async function signInAsReturningVisitor() {
+    userState.reportSignedInAfterSignIn = true;
+    await openCommentOnly();
+    await click(button("Sign in"));
+    await act(async () => type(input("555 123 4567"), "5551234567"));
+    await submitFormOf(input("555 123 4567"));
+    await enterCode();
+    expect(text()).toContain("You're signed in, Ada.");
+  }
+
+  it("says nothing about signing to someone who has signed", async () => {
+    statusState.value = {
+      state: "signed",
+      displayName: "Ada Lovelace",
+      verificationMethod: "sms",
+      signedAt: "2026-05-18T00:00:00.000Z",
+      version: "0.1.0",
+    };
+    await signInAsReturningVisitor();
+    expect(text()).not.toMatch(/sign the ai bill of rights/i);
+    expect(text()).not.toMatch(/itself any time/i);
+  });
+
+  it("gives someone who hasn't signed a direct way to, in this modal", async () => {
+    await signInAsReturningVisitor();
+    expect(text()).not.toMatch(/itself any time|from your account page/i);
+
+    await click(button("Sign the AI Bill of Rights"));
+    // Straight onto the signing form, no second page.
+    expect(input("First name")).toBeTruthy();
   });
 });
