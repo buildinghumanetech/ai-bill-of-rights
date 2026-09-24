@@ -184,6 +184,12 @@ export const proposedEdits = pgTable(
     // `comments.proposal_id` is a FK that a DELETE would have to break.
     hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     hiddenReason: text("hidden_reason"),
+    // The licence the author granted on submitting (PROPOSAL_LICENSE.id), and
+    // when. NULL means NO grant was recorded — the row predates the notice on
+    // /propose, and its text cannot be republished without asking. No DB
+    // default on purpose: see drizzle/0012.
+    license: text("license"),
+    licenseGrantedAt: timestamp("license_granted_at", { withTimezone: true }),
   },
   // Declared HERE, not only in drizzle/0011: the deploy path is
   // `drizzle-kit push`, which reconciles against this file and drops indexes

@@ -1,5 +1,22 @@
 # Branch Progress: sparkle/agent-17453c3c-ed95-4123-8f76-c8ff25ca276c
 
+## Progress Update as of 2026-09-24 01:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged `origin/main` (PR #84, which adds CC BY licensing to /propose and migration 0012) to clear a README conflict on PR #83. PR #84 had been deployed to production without 0012 applied, so /propose was showing the amber "could not be loaded" panel again. 0012 has now been applied to production and the page renders the empty queue. README says nothing is pending (0009–0012).
+
+### Detail of changes made:
+- Found the regression while resolving the conflict: the production deploy from about 10 minutes earlier selected `proposed_edits.license`, which did not exist yet.
+- Applied `drizzle/0012_proposal_license.sql` (as shown on origin/main) with `pnpm tsx --env-file=<vercel-pulled prod env> scripts/apply-migration.ts`: 2 of 2 statements applied. Verified that `license` (text) and `license_granted_at` (timestamptz) exist, both nullable and without defaults, as the migration intends. Live /propose then showed "Nothing proposed yet. Yours would be the first."
+- README conflict resolution: main's pending block (0009–0012 plus prose) was replaced with "Nothing is pending", a 0012 record paragraph (keeping the `count-unlicensed-proposals.ts` pointer), and a note to apply schema-dependent migrations BEFORE the deploy.
+- `pnpm vitest run`: 991/991 (94 files).
+
+### Potential concerns to address:
+- The same failure mode will recur: nothing stops a PR whose code depends on an unapplied migration from deploying. A CI/postbuild schema check (fail the Vercel build if an expected column is missing) would catch it.
+
+---
+
 ## Progress Update as of 2026-09-24 00:30 Pacific
 *(Most recent updates at top)*
 

@@ -22,6 +22,7 @@ import {
   RATIONALE_MAX,
   PULL_QUOTE_MAX,
 } from "@/lib/proposals/validate";
+import { PROPOSAL_LICENSE } from "@/lib/proposals/license";
 
 export interface CreateNewArticleInput {
   baseVersionId: string;
@@ -30,6 +31,12 @@ export interface CreateNewArticleInput {
   body: string;
   rationale: string;
   pullQuote?: string | null;
+  /**
+   * The licence id the submitting form displayed. Must equal
+   * PROPOSAL_LICENSE.id — see that constant for why a mismatch is refused
+   * rather than stamped.
+   */
+  license: string;
 }
 
 /**
@@ -42,6 +49,14 @@ export async function createNewArticleProposal(
   db: any,
   input: CreateNewArticleInput,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string; field?: string }> {
+  if (input.license !== PROPOSAL_LICENSE.id) {
+    return {
+      ok: false,
+      error:
+        "This page is out of date — reload it to see the licence your proposal is filed under, then submit again.",
+    };
+  }
+
   const title = sanitizeProposalText(input.title, TITLE_MAX);
   const body = sanitizeProposalText(input.body, BODY_MAX);
   const rationale = sanitizeProposalText(input.rationale, RATIONALE_MAX);
@@ -64,6 +79,8 @@ export async function createNewArticleProposal(
       newText: body,
       rationale,
       pullQuote,
+      license: PROPOSAL_LICENSE.id,
+      licenseGrantedAt: new Date(),
     })
     .returning({ id: proposedEdits.id });
 

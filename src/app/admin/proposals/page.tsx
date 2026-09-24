@@ -101,6 +101,7 @@ function Row({ p }: { p: Awaited<ReturnType<typeof listProposedRights>>[number] 
           {p.rationale}
         </p>
       )}
+      <LicenseLine license={p.license} grantedAt={p.licenseGrantedAt} />
       <AdminProposalActions
         proposalId={p.id}
         status={p.status}
@@ -108,6 +109,36 @@ function Row({ p }: { p: Awaited<ReturnType<typeof listProposedRights>>[number] 
         markdown={renderPreview(p)}
       />
     </div>
+  );
+}
+
+/**
+ * Whether this text may be put into a published version. Shown on every row
+ * because accepting a proposal is the step before it is copied into the next
+ * `content/bill-of-rights/<version>.md`, and that is the moment it matters.
+ * A null licence is a row filed before /propose displayed the grant: its
+ * author kept all rights, so it needs their permission first.
+ */
+function LicenseLine({
+  license,
+  grantedAt,
+}: {
+  license: string | null;
+  grantedAt: Date | null;
+}) {
+  if (!license) {
+    return (
+      <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        No licence grant recorded — filed before the CC BY 4.0 notice. Get the
+        author&apos;s permission before publishing this text.
+      </p>
+    );
+  }
+  return (
+    <p className="mt-3 font-mono text-xs text-zinc-500">
+      Licensed {license}
+      {grantedAt ? ` · granted ${grantedAt.toISOString().slice(0, 10)}` : ""}
+    </p>
   );
 }
 
