@@ -13,6 +13,7 @@
 import { eq } from "drizzle-orm";
 import { consentRecords, signatures, versions } from "@/lib/db/schema";
 import type { CapturedFields } from "@/lib/fingerprint/extract";
+import type { Db } from "@/lib/db/types";
 
 export interface RecordSignatureInput {
   signerId: string;
@@ -34,7 +35,7 @@ export interface RecordSignatureInput {
 }
 
 export async function recordSignature(
-  db: any,
+  db: Db,
   input: RecordSignatureInput,
 ): Promise<{ signatureId: string }> {
   const versionRows = await db

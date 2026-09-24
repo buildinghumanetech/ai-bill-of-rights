@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { proposedEdits, proposalUpvotes, comments, signers } from "./schema";
 import { getDb } from "./lazy";
+import type { Db } from "./types";
 
 export interface ProposedRight {
   id: string;
@@ -37,7 +38,7 @@ export interface ProposedRight {
  * it: hidden covers both author withdrawals and moderation removals.
  */
 export async function listProposedRights(
-  db: any = getDb(),
+  db: Db = getDb(),
   opts: {
     baseVersionId: string;
     viewerSignerId?: string | null;
@@ -110,7 +111,7 @@ export async function listProposedRights(
     // gets its turn at the top of the list.
     .orderBy(desc(upvoteCount), desc(proposedEdits.createdAt));
 
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     ...r,
     title: r.title ?? "(untitled)",
     body: r.body ?? "",
@@ -121,7 +122,7 @@ export async function listProposedRights(
 }
 
 export async function getProposedRight(
-  db: any = getDb(),
+  db: Db = getDb(),
   proposalId: string,
 ): Promise<ProposedRight | null> {
   const rows = await db

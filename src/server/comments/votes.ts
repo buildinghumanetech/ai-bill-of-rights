@@ -10,10 +10,11 @@
 
 import { and, eq } from "drizzle-orm";
 import { commentVotes } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
 /** Pure data-layer toggle, exposed for the action wrapper and tests. */
 export async function voteOnComment(
-  db: any,
+  db: Db,
   input: { signerId: string; commentId: string; direction: 1 | -1 },
 ): Promise<{ state: "added" | "switched" | "removed" }> {
   const existing = await db

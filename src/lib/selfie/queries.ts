@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql, desc, type SQL } from "drizzle-orm";
 import { selfies, selfieReports, signers } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
-function getDefaultDb() {
+function getDefaultDb(): Db {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("@/lib/db").db;
+  return (require("@/lib/db") as { db: Db }).db;
 }
 
 // Reusable predicate for "this row is the signer's currently-active approved
@@ -33,7 +34,7 @@ export interface SelfieRow {
 
 export async function getActiveSelfieForSigner(
   signerId: string,
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<SelfieRow | null> {
   const db = dbArg ?? getDefaultDb();
   const rows = await db
@@ -46,7 +47,7 @@ export async function getActiveSelfieForSigner(
 
 export async function getActiveSelfiesForSigners(
   signerIds: string[],
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<
   Map<string, { displayBlobUrl: string; thumbnailBlobUrl: string }>
 > {
@@ -75,7 +76,7 @@ export async function getActiveSelfiesForSigners(
 
 export async function countUnresolvedReports(
   selfieId: string,
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<number> {
   const db = dbArg ?? getDefaultDb();
   const rows = await db
@@ -99,7 +100,7 @@ export type LatestSelfieForSigner = SelfieRow;
  */
 export async function getLatestSelfieForSigner(
   signerId: string,
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<LatestSelfieForSigner | null> {
   const db = dbArg ?? getDefaultDb();
   const rows = await db
@@ -130,8 +131,8 @@ export interface AdminSelfieRow {
 }
 
 async function adminSelfieRows(
-  db: any,
-  filter: any,
+  db: Db,
+  filter: SQL | undefined,
 ): Promise<AdminSelfieRow[]> {
   const rows = await db
     .select({
@@ -153,7 +154,7 @@ async function adminSelfieRows(
     .innerJoin(signers, eq(signers.id, selfies.signerId))
     .where(filter)
     .orderBy(desc(selfies.submittedAt));
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     signerId: r.signerId,
     displayBlobUrl: r.displayBlobUrl,
@@ -173,14 +174,14 @@ async function adminSelfieRows(
 }
 
 export async function getPendingSelfies(
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<AdminSelfieRow[]> {
   const db = dbArg ?? getDefaultDb();
   return adminSelfieRows(db, eq(selfies.status, "pending"));
 }
 
 export async function getAutoHiddenSelfies(
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<AdminSelfieRow[]> {
   const db = dbArg ?? getDefaultDb();
   // Auto-hidden = approved but autoHiddenAt is set.
@@ -190,14 +191,14 @@ export async function getAutoHiddenSelfies(
 }
 
 export async function getRejectedSelfies(
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<AdminSelfieRow[]> {
   const db = dbArg ?? getDefaultDb();
   return adminSelfieRows(db, eq(selfies.status, "rejected"));
 }
 
 export async function getApprovedSelfiesForAdmin(
-  dbArg: any = null,
+  dbArg: Db | null = null,
 ): Promise<AdminSelfieRow[]> {
   const db = dbArg ?? getDefaultDb();
   // Approved AND not auto-hidden AND not replaced AND not removed.

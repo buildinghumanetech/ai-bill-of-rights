@@ -10,8 +10,9 @@ import {
 } from "@/server/selfies/core";
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
+import type { Db } from "@/lib/db/types";
 
-async function makeSigner(db: any, clerkId: string, isAdmin = false) {
+async function makeSigner(db: Db, clerkId: string, isAdmin = false) {
   const [row] = await db
     .insert(signers)
     .values({
@@ -25,7 +26,7 @@ async function makeSigner(db: any, clerkId: string, isAdmin = false) {
   return row.id as string;
 }
 
-async function approveOne(db: any, signerId: string, adminId: string) {
+async function approveOne(db: Db, signerId: string, adminId: string) {
   const backend = createInMemoryBackend();
   const { selfieId } = await submitSelfie(db, {
     signerId,

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../_helpers/pglite-db";
 import { selfies, selfieReports, signers } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
-async function makeSigner(db: any, clerkId: string) {
+async function makeSigner(db: Db, clerkId: string) {
   const [row] = await db
     .insert(signers)
     .values({

@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { signers } from "@/lib/db/schema";
 import { enforceEphemeralRateLimit } from "@/lib/ratelimit/enforce";
 import { normalizeWhyISigned } from "@/lib/why-i-signed";
+import type { Db } from "@/lib/db/types";
 
 /**
  * How often one signer may SET their statement — see `saveWhyISignedForClerkUser`
@@ -35,7 +36,7 @@ const WHY_I_SIGNED_WINDOW_SEC = 3600;
  * when the session has no signer record yet.
  */
 export async function updateWhyISignedForClerkUser(
-  db: any,
+  db: Db,
   clerkUserId: string,
   raw: unknown,
 ): Promise<{ signerId: string; whyISigned: string | null } | null> {
@@ -90,7 +91,7 @@ export type SaveWhyISignedOutcome =
  * account page promises, still always lands.
  */
 export async function saveWhyISignedForClerkUser(
-  db: any,
+  db: Db,
   clerkUserId: string,
   raw: unknown,
 ): Promise<SaveWhyISignedOutcome> {
