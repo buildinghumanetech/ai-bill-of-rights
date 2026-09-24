@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { consentRecords, signers } from "@/lib/db/schema";
 import { sha256Hex } from "@/lib/consent/hash";
+import type { Db } from "@/lib/db/types";
 
 export interface AdminAddNonSignerResult {
   success: boolean;
@@ -25,7 +26,7 @@ export interface AdminAddNonSignerResult {
  * tests can call it directly without mocking Clerk auth.
  */
 export async function insertNonSigner(
-  db: any,
+  db: Db,
   input: {
     displayName: string;
     affiliation: string;

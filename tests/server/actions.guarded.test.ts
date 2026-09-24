@@ -1,3 +1,4 @@
+import type { Db } from "@/lib/db/types";
 /**
  * Every export of a `"use server"` module is a public POST endpoint.
  *
@@ -753,7 +754,7 @@ describe("plain data-layer modules stay plain", () => {
     "%s takes db as a required argument, never an optional one",
     (path) => {
       const file = byPath.get(path)!;
-      // `deleteSigner(dbClient: any = null, signerId)` resolved the PRODUCTION
+      // `deleteSigner(dbClient: Db | null = null, signerId)` resolved the PRODUCTION
       // client when the caller passed null — which is exactly what made
       // `deleteSigner(null, "<public-signer-id>")` a working POST while these
       // functions were still exported from "use server" files. They are out of

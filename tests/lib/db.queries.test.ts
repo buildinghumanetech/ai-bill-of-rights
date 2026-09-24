@@ -3,6 +3,7 @@ import { createTestDb, type TestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
 import { signers, consentRecords, signatures, versions } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
 const sample = (version: string, isCurrent: boolean) => ({
   version,
@@ -109,7 +110,7 @@ describe("db queries", () => {
 describe("listRecentSignersSince", () => {
   /** Seed a signer who has signed the one seeded version, at `signedAt`. */
   async function seedSignerWithSignature(
-    db: any,
+    db: Db,
     {
       name,
       signedAt,
@@ -267,7 +268,7 @@ describe("listRecentSignersSince", () => {
 });
 
 describe("getSignatureNumber", () => {
-  async function addSigner(db: any, i: number, signedAt: Date) {
+  async function addSigner(db: Db, i: number, signedAt: Date) {
     const [signer] = await db
       .insert(signers)
       .values({

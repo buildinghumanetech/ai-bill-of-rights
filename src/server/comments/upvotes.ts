@@ -10,9 +10,10 @@
 
 import { and, eq } from "drizzle-orm";
 import { commentUpvotes } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
 export async function toggleCommentUpvote(
-  db: any,
+  db: Db,
   input: { commentId: string; signerId: string },
 ): Promise<{ state: "upvoted" | "removed" }> {
   const existing = await db

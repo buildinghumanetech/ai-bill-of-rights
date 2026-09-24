@@ -1,5 +1,7 @@
 // src/lib/ratelimit/enforce.ts
 import { sql } from "drizzle-orm";
+import type { Db } from "@/lib/db/types";
+import { rowsOf } from "@/lib/db/rows";
 
 interface EnforceOpts {
   bucket: string;
@@ -39,13 +41,13 @@ export class RateLimitError extends Error {
 }
 
 export async function enforceRateLimit(
-  db: any,
+  db: Db,
   opts: EnforceOpts,
 ): Promise<void> {
-  const result = await db.execute(
+  const result: unknown = await db.execute(
     sql.raw(opts.countSql.replace("$1", `'${opts.signerId.replace(/'/g, "''")}'`)),
   );
-  const rows = (result.rows ?? result) as Array<{ n: number }>;
+  const rows = rowsOf<{ n: number }>(result);
   const n = Number(rows[0]?.n ?? 0);
   if (n >= opts.max) {
     // Message text unchanged — existing callers surface it to the user
