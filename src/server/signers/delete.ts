@@ -22,7 +22,7 @@
  * irreversible cascade lands in. Callers say. See `src/lib/db/lazy.ts`.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import {
   signers,
   signatures,
@@ -32,17 +32,19 @@ import {
 } from "@/lib/db/schema";
 import { deleteSelfieBlobsByUrls } from "@/lib/storage/blob";
 import type { SelfieBlobBackend } from "@/lib/storage/blob";
+import type { Db } from "@/lib/db/types";
+import { errorText } from "@/lib/errors";
 
 /**
  * Run a delete against a table that MAY not exist (Phase 3 leftovers). If the
  * table is absent, the underlying driver throws "relation does not exist" —
  * we swallow that and only that. Other errors propagate.
  */
-async function tryDeleteLegacy(db: any, tableName: string, stmt: any): Promise<void> {
+async function tryDeleteLegacy(db: Db, tableName: string, stmt: SQL): Promise<void> {
   try {
     await db.execute(stmt);
-  } catch (err: any) {
-    const msg = String(err?.message ?? err?.cause?.message ?? "");
+  } catch (err: unknown) {
+    const msg = errorText(err);
     if (
       msg.includes(`relation "${tableName}" does not exist`) ||
       msg.includes(`"public.${tableName}" does not exist`)
@@ -114,7 +116,7 @@ function doomedCommentIds(signerId: string) {
  * Vercel Blob backend is used.
  */
 export async function deleteSigner(
-  db: any,
+  db: Db,
   signerId: string,
   blobBackend?: SelfieBlobBackend,
 ): Promise<void> {

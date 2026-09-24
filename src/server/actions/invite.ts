@@ -6,12 +6,13 @@ import { signers } from "@/lib/db/schema";
 import { signInvitation } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { homeShareUrl, signerShareUrl } from "@/lib/share/urls";
+import type { Db } from "@/lib/db/types";
 
-let _db: any | null = null;
-function getDb() {
+let _db: Db | null = null;
+function getDb(): Db {
   if (!_db) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = require("@/lib/db").db;
+    _db = (require("@/lib/db") as { db: Db }).db;
   }
   return _db;
 }

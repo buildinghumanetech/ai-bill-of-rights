@@ -21,6 +21,7 @@
 import { eq } from "drizzle-orm";
 import { signers } from "@/lib/db/schema";
 import { isValidRef } from "@/lib/share/urls";
+import type { Db } from "@/lib/db/types";
 
 export interface ResolveReferrerOptions {
   /** Raw ref value from the cookie — unvalidated by contract. */
@@ -42,7 +43,7 @@ export interface ResolveReferrerOptions {
  * from the only caller today; see the module docstring.
  */
 export async function resolveReferrerId(
-  db: any,
+  db: Db,
   opts: ResolveReferrerOptions,
 ): Promise<string | null> {
   const { ref, clerkUserId } = opts;

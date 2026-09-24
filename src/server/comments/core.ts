@@ -14,6 +14,7 @@
 
 import { eq } from "drizzle-orm";
 import { comments } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
 /**
  * Strip control characters and trim, then cap length.
@@ -40,7 +41,7 @@ export interface CreateCommentInput {
  * The action wrapper does auth + rate-limit + soft-ban checks.
  */
 export async function createComment(
-  db: any,
+  db: Db,
   input: CreateCommentInput,
 ): Promise<{ id: string }> {
   const body = input.body.trim();
@@ -71,7 +72,7 @@ export async function createComment(
  * they are really an admin.
  */
 export async function deleteComment(
-  db: any,
+  db: Db,
   commentId: string,
   callerSignerId: string,
   callerIsAdmin: boolean,
@@ -101,7 +102,7 @@ export async function deleteComment(
  * they are really an admin.
  */
 export async function editComment(
-  db: any,
+  db: Db,
   commentId: string,
   newBody: string,
   callerSignerId: string,
