@@ -15,6 +15,7 @@ import {
   unhideProposal,
 } from "@/server/proposals/core";
 import { mirrorProposalToGitHub } from "@/lib/github/mirror-proposal";
+import { LICENSE_FIELD } from "@/lib/proposals/license";
 
 /**
  * Auth wrappers for the "propose a new right" flow. The writes themselves live
@@ -83,6 +84,7 @@ export async function submitNewRightAction(
     body: String(formData.get("body") ?? ""),
     rationale: String(formData.get("rationale") ?? ""),
     pullQuote: formData.get("pullQuote")?.toString() ?? null,
+    license: String(formData.get(LICENSE_FIELD) ?? ""),
   });
   if (!result.ok) return result;
 

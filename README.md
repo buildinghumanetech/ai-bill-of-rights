@@ -135,7 +135,10 @@ Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.t
 pnpm tsx scripts/apply-migration.ts drizzle/0009_signatures_signer_signed_at_idx.sql
 pnpm tsx scripts/apply-migration.ts drizzle/0010_repoint_comments_to_v0_1_0.sql
 pnpm tsx scripts/apply-migration.ts drizzle/0011_new_article_proposals.sql
+pnpm tsx scripts/apply-migration.ts drizzle/0012_proposal_license.sql
 ```
+
+0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). **Apply it before the deploy that ships it, not after**: that code writes both columns on every submission and reads them for the queue, so an un-migrated database refuses new proposals and shows the "could not be loaded" panel. It is additive and harmless to the code already running. It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`. Safe to re-run.
 
 0011 backs the "propose a new right" flow at `/propose`. It adds `title`, `pull_quote`, `hidden_at` and `hidden_reason` to `proposed_edits` plus three indexes; no existing row is touched, and every statement is `IF NOT EXISTS`. **`/propose` reads and writes nothing until it has run** — `listProposedRights` selects `title`, so the page throws `column "title" does not exist` on an un-migrated database. The page does not 500: it catches that, classifies it as a schema failure and renders a "could not be loaded" panel that is deliberately distinct from the empty-queue state, and logs a line naming this migration. An un-migrated deploy therefore looks un-migrated rather than looking like a queue nobody has posted to. Safe to re-run.
 
