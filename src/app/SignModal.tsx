@@ -396,6 +396,10 @@ export default function SignModal({
   // Start on sign-in when the opener asked for it. The reset above clears it
   // on close, so each open starts where its caller wanted.
   useEffect(() => {
+    // Intentional: which mode an open starts in comes from the opener's prop, and the
+    // reset effect above clears it on close. Same reasoning as that reset — this is
+    // modal lifecycle, not state derivable during render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open && startInSignIn) setSignInOnly(true);
   }, [open, startInSignIn]);
 
