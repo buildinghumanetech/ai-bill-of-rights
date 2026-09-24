@@ -1,5 +1,46 @@
 # Branch Progress: ci/add-github-actions
 
+## Progress Update as of [2026-09-24 01:25 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The new CI caught a real break on `main` the first time it ran against current
+`main` — and it is not from this branch. Fixed the stale test mock behind it;
+suite is now 1005/1005 across 96 files, tsc clean.
+
+### Detail of changes made:
+- **`main` was red on its own.** Reproduced at `origin/main` (`7e50105`) with no
+  local changes: `tests/components/propose-right-form.license.test.tsx` failed
+  with "expected spy to be called 1 times, but got 0 times".
+- **It is a SEMANTIC MERGE CONFLICT — two PRs each green in isolation.**
+  `002e787` (PR #84) added the licence test, whose Clerk mock was
+  `useAuth: () => ({ isSignedIn: true })`. Separately, `da5b4cd` (PR #85) added a
+  deliberate `if (!isLoaded)` early return to `ProposeRightForm.handleSubmit`,
+  fixing a real bug where an unresolved Clerk session read as signed-out and
+  pushed already-signed-in users into a sign-up Clerk refuses ("Session already
+  exists"). Neither commit is wrong. Merged together, the mock leaves `isLoaded`
+  undefined, the new guard fires, and submit returns before calling the action.
+  Verified the test is green at `002e787` and that the file does not even exist at
+  `da5b4cd` — they were parallel branches.
+- **Fix is in the test, not the product.** The guard is correct and documented;
+  the mock was written before it existed. Added `isLoaded: true` to the mock with
+  a comment explaining why omitting it silently skips the submit path.
+- **Audited the other `useAuth` mock.** `new-comment-form.mentions.test.tsx` has
+  the same shape, but `NewCommentForm` reads only `isSignedIn`, so it is inert
+  today. Left unchanged rather than widening this change.
+
+### Potential concerns to address:
+- **This is exactly the class of bug CI on `main` exists to catch, and it went
+  unnoticed because there was none.** Two green PRs merged into a red `main`. It
+  also means every other open PR in the repo was red through no fault of its own
+  until this fix.
+- **The fix is bundled into the CI branch rather than a separate PR.** Deliberate:
+  `main` being red blocks every PR including this one, so splitting it would need
+  two merge cycles to get anything green. It is its own commit and easy to
+  cherry-pick out if a reviewer wants it separated.
+
+---
+
 ## Progress Update as of [2026-09-24 00:45 Pacific]
 *(Most recent updates at top)*
 

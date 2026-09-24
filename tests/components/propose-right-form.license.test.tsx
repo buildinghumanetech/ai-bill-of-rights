@@ -11,7 +11,12 @@ vi.mock("@/server/actions/proposals", () => ({
   submitNewRightAction: (fd: FormData) => submitNewRightAction(fd),
 }));
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ isSignedIn: true }),
+  // `isLoaded` matters as much as `isSignedIn`: the form bails out early on
+  // `!isLoaded` so that a not-yet-resolved Clerk session can't be misread as
+  // signed-out (which pushed already-signed-in people into a sign-up Clerk
+  // refuses). A mock that omits it leaves `isLoaded` undefined, so submit
+  // returns before ever calling the action.
+  useAuth: () => ({ isLoaded: true, isSignedIn: true }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
