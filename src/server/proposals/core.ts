@@ -40,6 +40,24 @@ export interface CreateNewArticleInput {
 }
 
 /**
+ * The text as it was actually WRITTEN to the row — sanitised and truncated, not
+ * as the caller supplied it.
+ *
+ * Returned so that anything mirroring a proposal elsewhere sends what the site
+ * stores rather than re-deriving it from the raw form. The GitHub mirror used to
+ * read `formData` a second time, which meant a mirrored issue could carry
+ * control characters and untruncated text that appear nowhere on the site. The
+ * fix is structural: there is now one place the stored text comes from, and it
+ * is this.
+ */
+export interface StoredProposalText {
+  title: string;
+  body: string;
+  rationale: string;
+  pullQuote: string | null;
+}
+
+/**
  * Data-layer insert for a new-article proposal.
  *
  * Sanitises first, then validates the sanitised values — the other order lets
@@ -48,7 +66,10 @@ export interface CreateNewArticleInput {
 export async function createNewArticleProposal(
   db: any,
   input: CreateNewArticleInput,
-): Promise<{ ok: true; id: string } | { ok: false; error: string; field?: string }> {
+): Promise<
+  | { ok: true; id: string; stored: StoredProposalText }
+  | { ok: false; error: string; field?: string }
+> {
   if (input.license !== PROPOSAL_LICENSE.id) {
     return {
       ok: false,
@@ -93,7 +114,7 @@ export async function createNewArticleProposal(
     .values({ proposalId: row.id, signerId: input.proposerSignerId })
     .onConflictDoNothing();
 
-  return { ok: true, id: row.id };
+  return { ok: true, id: row.id, stored: { title, body, rationale, pullQuote } };
 }
 
 /**
