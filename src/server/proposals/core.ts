@@ -23,6 +23,7 @@ import {
   PULL_QUOTE_MAX,
 } from "@/lib/proposals/validate";
 import { PROPOSAL_LICENSE } from "@/lib/proposals/license";
+import type { Db } from "@/lib/db/types";
 
 export interface CreateNewArticleInput {
   baseVersionId: string;
@@ -64,7 +65,7 @@ export interface StoredProposalText {
  * a submission pass the length check on characters that are then stripped.
  */
 export async function createNewArticleProposal(
-  db: any,
+  db: Db,
   input: CreateNewArticleInput,
 ): Promise<
   | { ok: true; id: string; stored: StoredProposalText }
@@ -123,7 +124,7 @@ export async function createNewArticleProposal(
  * `toggleCommentUpvote`, kept the same so the two behave identically.
  */
 export async function toggleProposalUpvote(
-  db: any,
+  db: Db,
   input: { proposalId: string; signerId: string },
 ): Promise<{ state: "upvoted" | "removed" }> {
   const existing = await db
@@ -163,7 +164,7 @@ export async function toggleProposalUpvote(
  * other people's, so a DELETE would either fail or take their work with it.
  */
 export async function hideProposal(
-  db: any,
+  db: Db,
   proposalId: string,
   callerSignerId: string,
   callerIsAdmin: boolean,
@@ -190,7 +191,7 @@ export async function hideProposal(
 }
 
 export async function unhideProposal(
-  db: any,
+  db: Db,
   proposalId: string,
   callerIsAdmin: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -210,7 +211,7 @@ export async function unhideProposal(
  * is the reason the status enum has both values.
  */
 export async function decideProposal(
-  db: any,
+  db: Db,
   proposalId: string,
   decision: "accepted" | "rejected",
   callerSignerId: string,

@@ -21,6 +21,7 @@ import {
   saveWhyISignedForClerkUser,
 } from "@/lib/why-i-signed.server";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
+import type { Db } from "@/lib/db/types";
 
 const CLERK_ID = "user_why_test";
 
@@ -277,7 +278,13 @@ describe("saveWhyISignedForClerkUser — rate limited", () => {
       },
     };
 
-    const res = await saveWhyISignedForClerkUser(stubDb, CLERK_ID, "");
+    // Deliberate partial double — `update` exists only to fail the test if the
+    // no-op path writes. Cast rather than widen `Db`.
+    const res = await saveWhyISignedForClerkUser(
+      stubDb as unknown as Db,
+      CLERK_ID,
+      "",
+    );
     expect(res).toMatchObject({
       ok: true,
       signerId: "signer-1",

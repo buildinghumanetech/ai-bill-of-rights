@@ -170,6 +170,9 @@ describe("the switch-over", () => {
   it("happens the moment a signature succeeds, before any refresh", async () => {
     let setViewer: ((v: ViewerSignature | null) => void) | null = null;
     function Grab() {
+      // Intentional: this probe component exists purely to hand the test the
+      // context's setter so it can drive a state change from outside React.
+      // eslint-disable-next-line react-hooks/globals
       setViewer = useLiveSigners().setViewer;
       return null;
     }

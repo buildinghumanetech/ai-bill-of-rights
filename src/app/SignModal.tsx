@@ -364,6 +364,10 @@ export default function SignModal({
   // Reset state when closed
   useEffect(() => {
     if (!open) {
+      // Intentional: clearing a closed modal's state. A `key` on the caller would be the
+      // idiomatic alternative; it is a change to every place the modal is rendered, so it
+      // is left as a follow-up.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep("form");
       setMode(modeProp);
       setCode("");
@@ -392,6 +396,10 @@ export default function SignModal({
   // Start on sign-in when the opener asked for it. The reset above clears it
   // on close, so each open starts where its caller wanted.
   useEffect(() => {
+    // Intentional: which mode an open starts in comes from the opener's prop, and the
+    // reset effect above clears it on close. Same reasoning as that reset — this is
+    // modal lifecycle, not state derivable during render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open && startInSignIn) setSignInOnly(true);
   }, [open, startInSignIn]);
 
@@ -401,6 +409,10 @@ export default function SignModal({
   useEffect(() => {
     if (!open) return;
     if (!isSignedIn) {
+      // Intentional: guards an async fetch. The cleared state and `loading` are
+      // the two ends of a request that can only start after mount, so there is
+      // nothing to derive them from during render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSignatureStatus(null);
       return;
     }

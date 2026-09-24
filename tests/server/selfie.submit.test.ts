@@ -5,8 +5,9 @@ import { selfies, signers } from "@/lib/db/schema";
 import { submitSelfie } from "@/server/selfies/core";
 import { createInMemoryBackend } from "@/lib/storage/blob";
 import { tinyPngBuffer } from "../_fixtures/tiny-png";
+import type { Db } from "@/lib/db/types";
 
-async function makeSigner(db: any, clerkId = "u1") {
+async function makeSigner(db: Db, clerkId = "u1") {
   const [row] = await db
     .insert(signers)
     .values({
@@ -160,6 +161,6 @@ describe("submitSelfie", () => {
       .from(selfies)
       .where(eq(selfies.signerId, signerId));
     expect(rows).toHaveLength(2);
-    expect(rows.every((r: any) => r.status === "pending")).toBe(true);
+    expect(rows.every((r) => r.status === "pending")).toBe(true);
   });
 });

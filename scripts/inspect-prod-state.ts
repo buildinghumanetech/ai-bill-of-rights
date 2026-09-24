@@ -10,14 +10,14 @@ async function main() {
   const trackingExists = await sql(`
     SELECT to_regclass('drizzle.__drizzle_migrations') AS r
   `);
-  console.log("Drizzle migration tracking table:", (trackingExists as any[])[0]?.r ?? null);
+  console.log("Drizzle migration tracking table:", (trackingExists as Array<Record<string, unknown>>)[0]?.r ?? null);
 
   const tables = await sql(`
     SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public' ORDER BY table_name
   `);
   console.log("\nTables in public schema:");
-  for (const t of tables as any[]) console.log(`  ${t.table_name}`);
+  for (const t of tables as Array<Record<string, unknown>>) console.log(`  ${t.table_name}`);
 
   const expectedTables = [
     "versions",
@@ -32,7 +32,7 @@ async function main() {
     "selfies",
     "selfie_reports",
   ];
-  const existing = new Set((tables as any[]).map((t) => t.table_name));
+  const existing = new Set((tables as Array<Record<string, unknown>>).map((t) => t.table_name));
   const missing = expectedTables.filter((t) => !existing.has(t));
   console.log("\nMissing vs current schema:", missing.length === 0 ? "none" : missing.join(", "));
 
@@ -41,7 +41,7 @@ async function main() {
     WHERE table_schema = 'public' AND table_name = 'signers'
     ORDER BY column_name
   `);
-  const hasNotifPref = (cols as any[]).some(
+  const hasNotifPref = (cols as Array<Record<string, unknown>>).some(
     (c) => c.column_name === "notification_preference",
   );
   console.log(`\nsigners.notification_preference column: ${hasNotifPref ? "EXISTS" : "MISSING"}`);
@@ -51,8 +51,8 @@ async function main() {
     FROM signers
     WHERE location_text LIKE '%\\%%' ESCAPE '\\'
   `);
-  console.log(`\nSigners with %-encoded location_text: ${(encoded as any[]).length}`);
-  for (const r of encoded as any[]) {
+  console.log(`\nSigners with %-encoded location_text: ${(encoded as Array<Record<string, unknown>>).length}`);
+  for (const r of encoded as Array<Record<string, unknown>>) {
     console.log(`  ${r.display_name}: ${JSON.stringify(r.location_text)}`);
   }
 
@@ -61,7 +61,7 @@ async function main() {
       (SELECT count(*)::int FROM signers) AS signers,
       (SELECT count(*)::int FROM signatures) AS signatures
   `);
-  const c = (counts as any[])[0];
+  const c = (counts as Array<Record<string, unknown>>)[0];
   console.log(`\nTotals: ${c.signers} signers, ${c.signatures} signatures`);
 
   // For each existing legacy table that's also in our schema (comments,
@@ -70,7 +70,7 @@ async function main() {
   for (const t of ["comments", "comment_upvotes", "reports", "attestations"]) {
     if (existing.has(t)) {
       const r = await sql(`SELECT count(*)::int AS n FROM "${t}"`);
-      console.log(`\n${t} row count: ${(r as any[])[0]?.n}`);
+      console.log(`\n${t} row count: ${(r as Array<Record<string, unknown>>)[0]?.n}`);
     }
   }
 }

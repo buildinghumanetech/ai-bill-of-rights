@@ -28,6 +28,11 @@ export default function AdminEditSignerModal({
 
   useEffect(() => {
     if (open) {
+      // Intentional: reopening the modal must show the row's current values, not whatever
+      // was half-typed and abandoned last time. The idiomatic alternative is a `key` on
+      // the caller so React remounts this — that is a change to every call site, left as
+      // a follow-up.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayName(initialDisplayName);
       setAffiliation(initialAffiliation ?? "");
       setLocationText(initialLocationText ?? "");

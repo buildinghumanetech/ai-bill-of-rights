@@ -23,6 +23,7 @@ import { createTestDb, type TestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
 import { consentRecords, signatures, signers, versions } from "@/lib/db/schema";
 import { recordSignature } from "@/server/signatures/record";
+import { capturedFields as makeCapturedFields } from "../_helpers/captured-fields";
 
 const state = vi.hoisted(() => ({
   db: null as unknown,
@@ -132,7 +133,7 @@ beforeEach(async () => {
       signerId,
       versionString: v,
       consentTextHash: "a".repeat(64),
-      capturedFields: { ip: "203.0.113.45" } as any,
+      capturedFields: makeCapturedFields({ ip: "203.0.113.45" }),
     });
   }
 });

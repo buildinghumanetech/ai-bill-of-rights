@@ -10,10 +10,12 @@
 
 import { and, eq } from "drizzle-orm";
 import { commentReports } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
+import { errorText } from "@/lib/errors";
 
 /** Pure data-layer insert. Idempotent via unique constraint. */
 export async function reportComment(
-  db: any,
+  db: Db,
   input: { signerId: string; commentId: string },
 ): Promise<{ state: "reported" | "already_reported" }> {
   try {
@@ -22,8 +24,8 @@ export async function reportComment(
       reporterSignerId: input.signerId,
     });
     return { state: "reported" };
-  } catch (err: any) {
-    if (String(err?.message ?? "").includes("comment_reports_comment_reporter_unique")) {
+  } catch (err: unknown) {
+    if (errorText(err).includes("comment_reports_comment_reporter_unique")) {
       return { state: "already_reported" };
     }
     throw err;
@@ -35,7 +37,7 @@ export async function reportComment(
  * Returns the resulting flag state.
  */
 export async function toggleReportComment(
-  db: any,
+  db: Db,
   input: { signerId: string; commentId: string },
 ): Promise<{ state: "flagged" | "unflagged" }> {
   const existing = await db

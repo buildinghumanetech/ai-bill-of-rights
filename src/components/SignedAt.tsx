@@ -24,6 +24,11 @@ export default function SignedAt({ iso }: { iso: string }) {
   const [text, setText] = useState<string>(() => format(date));
 
   useEffect(() => {
+    // Intentional, and the point of this component: the server has no timezone so it
+    // renders UTC, and the client must re-format in local time once mounted. That is a
+    // post-hydration correction — what an effect is for. Hence suppressHydrationWarning
+    // on the <time> below.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setText(format(new Date(iso)));
   }, [iso]);
 

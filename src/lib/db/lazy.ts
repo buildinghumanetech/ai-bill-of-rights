@@ -1,3 +1,4 @@
+import type { Db } from "./types";
 /**
  * Lazy access to the production database client.
  *
@@ -29,12 +30,12 @@
  * site, which database a destructive write lands in. Make the caller say.
  */
 
-let _db: unknown | null = null;
+let _db: Db | null = null;
 
-export function getDb(): any {
+export function getDb(): Db {
   if (!_db) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _db = (require("@/lib/db") as { db: unknown }).db;
+    _db = (require("@/lib/db") as { db: Db }).db;
   }
   return _db;
 }

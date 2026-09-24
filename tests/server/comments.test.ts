@@ -101,7 +101,9 @@ describe("createComment (data layer)", () => {
         baseVersionId: versionId,
         signerId,
         body: "x",
-      } as any),
+        // Neither anchorId nor proposalId — the case under test. Cast because
+        // the type correctly forbids it; the runtime guard is what we assert.
+      } as unknown as Parameters<typeof createComment>[1]),
     ).rejects.toThrow(/anchor.*or.*proposal/i);
   });
 });
@@ -268,7 +270,7 @@ describe("deleteComment (data layer)", () => {
   });
 
   it("admin deleting own comment uses user_delete reason", async () => {
-    const { db, versionId } = await seed();
+    const { db } = await seed();
     const [admin] = await db
       .insert(signers)
       .values({
