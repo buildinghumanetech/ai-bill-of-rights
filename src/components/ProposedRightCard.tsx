@@ -28,6 +28,8 @@ export function ProposedRightCard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Endorsing needs a signature, not just an account; offer the way to sign.
+  const [needsSignature, setNeedsSignature] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   // Optimistic so the count moves on click. The server action revalidates
@@ -40,11 +42,16 @@ export function ProposedRightCard({
 
   function handleEndorse() {
     setError(null);
+    setNeedsSignature(false);
     // Undefined while Clerk loads — not the same as signed out.
     if (!isLoaded) return;
     if (!isSignedIn) {
+      // Signed out says nothing about whether they have signed: sign-in first,
+      // with create-account one click away in the modal.
       window.dispatchEvent(
-        new CustomEvent("open-sign-modal", { detail: { mode: "comment-only" } }),
+        new CustomEvent("open-sign-modal", {
+          detail: { mode: "comment-only", signIn: true },
+        }),
       );
       return;
     }
@@ -54,7 +61,10 @@ export function ProposedRightCard({
         mine: !optimistic.mine,
       });
       const res = await toggleProposalUpvoteAction(proposal.id);
-      if (!res.ok) setError(res.error ?? "Couldn't record that.");
+      if (!res.ok) {
+        setError(res.error ?? "Couldn't record that.");
+        if (res.code === "not_signer") setNeedsSignature(true);
+      }
       router.refresh();
     });
   }
@@ -176,7 +186,27 @@ export function ProposedRightCard({
             )}
           </div>
 
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="mt-2 text-sm text-red-600">
+              {error}
+              {needsSignature && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("open-sign-modal", { detail: { mode: "sign" } }),
+                      )
+                    }
+                    className="font-semibold underline underline-offset-4"
+                  >
+                    Sign the AI Bill of Rights
+                  </button>
+                </>
+              )}
+            </p>
+          )}
         </div>
       </div>
     </article>

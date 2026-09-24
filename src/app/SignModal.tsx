@@ -355,10 +355,16 @@ export default function SignModal({
     }
     setSignatureStatus({ state: "loading" });
     let cancelled = false;
-    getMySignatureStatus(VERSION).then((status) => {
-      if (cancelled) return;
-      setSignatureStatus(status);
-    });
+    getMySignatureStatus(VERSION)
+      .then((status) => {
+        if (cancelled) return;
+        setSignatureStatus(status);
+      })
+      // Unknown, not "loading" forever: an unanswered status must not hide
+      // the sign link from someone who has not signed.
+      .catch(() => {
+        if (!cancelled) setSignatureStatus(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -1675,17 +1681,32 @@ export default function SignModal({
                   You&apos;re all set. Close this window and pick up where you
                   left off — anything you wrote is still on the page.
                 </p>
-                {/* Neutral on purpose: a returning signer lands here too, and
-                    "you can sign any time" told people who had signed that
-                    their signature didn't exist. getMySignatureStatus can't
-                    be trusted to tell them apart at this step. */}
-                <p className="mt-2 text-xs text-blue-700">
-                  Your{" "}
-                  <a href="/account" className="underline underline-offset-4">
-                    account page
-                  </a>{" "}
-                  shows your signature status and settings.
-                </p>
+                {/* Only for someone we know has NOT signed. A returning
+                    signer lands here too, and offering them a signature they
+                    already gave reads as though it didn't exist. While the
+                    status is still loading, say nothing rather than guess. */}
+                {signatureStatus?.state !== "signed" &&
+                signatureStatus?.state !== "signed-earlier" &&
+                signatureStatus?.state !== "loading" ? (
+                  <p className="mt-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // The signing form is this modal: switch it over
+                        // rather than sending them to another page.
+                        setMode("sign");
+                        // Left on from the sign-in they just did; it hides
+                        // the name fields a signature needs.
+                        setSignInOnly(false);
+                        setStep("form");
+                        setError(null);
+                      }}
+                      className="font-semibold text-blue-700 underline underline-offset-4 hover:no-underline"
+                    >
+                      Sign the AI Bill of Rights
+                    </button>
+                  </p>
+                ) : null}
               </div>
             ) : null}
 

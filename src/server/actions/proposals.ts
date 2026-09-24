@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
-import { signers } from "@/lib/db/schema";
+import { signatures, signers } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/lazy";
 import { getCurrentVersion } from "@/lib/db/queries";
 import { enforceRateLimit, RateLimitError } from "@/lib/ratelimit/enforce";
@@ -32,9 +32,17 @@ type Me = { id: string; isAdmin: boolean };
  */
 type GateCode = "not_signed_in" | "not_signer";
 
-async function requireSigner(): Promise<
-  { ok: true; me: Me } | { ok: false; error: string; code?: GateCode }
-> {
+type Gate = { ok: true; me: Me } | { ok: false; error: string; code?: GateCode };
+
+const NOT_SIGNER_ERROR =
+  "Only people who have signed the AI Bill of Rights can file or endorse proposals.";
+
+/**
+ * Signed in, with an account row, not suspended. Enough for acting on your own
+ * proposal (withdraw) and for admin moderation — core checks ownership and
+ * `isAdmin` itself. NOT enough to file or endorse: see requireSigner.
+ */
+async function requireAccount(): Promise<Gate> {
   const { userId } = await auth();
   if (!userId) {
     return {
@@ -49,20 +57,38 @@ async function requireSigner(): Promise<
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
-  // Intended: proposals and endorsements come from verified signers (PR #82).
-  // The lookup is by Clerk user id only — `signers` stores no email or phone —
-  // so a Clerk account that never got a signer row reads as a non-signer here.
+  // The lookup is by Clerk user id only — `signers` stores no email or phone.
   if (rows.length === 0) {
-    return {
-      ok: false,
-      code: "not_signer",
-      error: "Only signers can file a proposal. Sign the Bill of Rights, then file it.",
-    };
+    return { ok: false, code: "not_signer", error: NOT_SIGNER_ERROR };
   }
   if (rows[0].softBannedAt) {
     return { ok: false, error: "This account is suspended pending moderator review." };
   }
   return { ok: true, me: { id: rows[0].id, isAdmin: Boolean(rows[0].isAdmin) } };
+}
+
+/**
+ * Someone who has actually SIGNED — at least one signature row, any version.
+ *
+ * A `signers` row alone is only an account: "create an account to comment"
+ * makes one without signing. Checking just the row let an account that had
+ * never signed file a proposal and endorse others, while /propose promises
+ * endorsements come from "the same verified people who signed the document".
+ * This runs inside every action that files or endorses, on the session's own
+ * identity, so the client-side notice is UX and this is the control.
+ */
+async function requireSigner(): Promise<Gate> {
+  const gate = await requireAccount();
+  if (!gate.ok) return gate;
+  const signed = await getDb()
+    .select({ id: signatures.id })
+    .from(signatures)
+    .where(eq(signatures.signerId, gate.me.id))
+    .limit(1);
+  if (signed.length === 0) {
+    return { ok: false, code: "not_signer", error: NOT_SIGNER_ERROR };
+  }
+  return gate;
 }
 
 export async function submitNewRightAction(
@@ -133,9 +159,9 @@ export async function submitNewRightAction(
 
 export async function toggleProposalUpvoteAction(
   proposalId: string,
-): Promise<{ ok: boolean; error?: string; state?: "upvoted" | "removed" }> {
+): Promise<{ ok: boolean; error?: string; code?: string; state?: "upvoted" | "removed" }> {
   const gate = await requireSigner();
-  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!gate.ok) return { ok: false, error: gate.error, code: gate.code };
   const res = await toggleProposalUpvote(getDb(), {
     proposalId,
     signerId: gate.me.id,
@@ -147,7 +173,7 @@ export async function toggleProposalUpvoteAction(
 export async function withdrawProposalAction(
   proposalId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const gate = await requireSigner();
+  const gate = await requireAccount();
   if (!gate.ok) return { ok: false, error: gate.error };
   const res = await hideProposal(getDb(), proposalId, gate.me.id, gate.me.isAdmin);
   revalidatePath("/propose");
@@ -158,7 +184,7 @@ export async function withdrawProposalAction(
 export async function unhideProposalAction(
   proposalId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const gate = await requireSigner();
+  const gate = await requireAccount();
   if (!gate.ok) return { ok: false, error: gate.error };
   const res = await unhideProposal(getDb(), proposalId, gate.me.isAdmin);
   revalidatePath("/propose");
@@ -170,7 +196,7 @@ export async function decideProposalAction(
   proposalId: string,
   decision: "accepted" | "rejected",
 ): Promise<{ ok: boolean; error?: string }> {
-  const gate = await requireSigner();
+  const gate = await requireAccount();
   if (!gate.ok) return { ok: false, error: gate.error };
   const res = await decideProposal(
     getDb(),

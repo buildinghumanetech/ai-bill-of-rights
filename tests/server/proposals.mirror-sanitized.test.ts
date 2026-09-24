@@ -19,7 +19,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import Module from "node:module";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
-import { proposalUpvotes, proposedEdits, signers, versions } from "@/lib/db/schema";
+import {
+  consentRecords,
+  proposalUpvotes,
+  proposedEdits,
+  signatures,
+  signers,
+  versions,
+} from "@/lib/db/schema";
 import { syncVersions } from "@/lib/db/sync";
 import { BODY_MAX, TITLE_MAX } from "@/lib/proposals/validate";
 import { LICENSE_FIELD, PROPOSAL_LICENSE } from "@/lib/proposals/license";
@@ -90,7 +97,10 @@ vi.mock("@/lib/github/mirror-proposal", () => ({
   },
 }));
 
-import { submitNewRightAction } from "@/server/actions/proposals";
+import {
+  submitNewRightAction,
+  toggleProposalUpvoteAction,
+} from "@/server/actions/proposals";
 
 const GOOD = {
   // The licence the form displays; createNewArticleProposal refuses a mismatch
@@ -139,6 +149,27 @@ async function setup() {
       verifiedAt: new Date(),
     })
     .returning({ id: signers.id });
+  // A real signature: the gate is "has signed", not "has an account".
+  const [c] = await db
+    .insert(consentRecords)
+    .values({ signerId: s.id, consentTextHash: "h" })
+    .returning({ id: consentRecords.id });
+  await db.insert(signatures).values({
+    signerId: s.id,
+    versionId: v.id,
+    versionHashAtSigning: "h",
+    consentRecordId: c.id,
+  });
+  // An account that never signed — what a "create an account to comment"
+  // signup leaves behind. It has a signers row and no signature.
+  await db.insert(signers).values({
+    clerkUserId: "u_comment_only",
+    displayName: "Bob",
+    affiliation: null,
+    locationText: null,
+    verificationMethod: "email",
+    verifiedAt: new Date(),
+  });
   state.db = db;
   state.clerkUserId = "u_proposer";
   return { db, versionId: v.id as string, signerId: s.id as string };
@@ -256,5 +287,33 @@ describe("signer gate refusals", () => {
     const res = await submitNewRightAction(form(GOOD));
     expect(res.ok).toBe(false);
     expect(res.code).toBe("not_signer");
+  });
+});
+
+/**
+ * A signers row is an ACCOUNT, not a signature: "create an account to comment"
+ * makes one without signing. Checking only for the row let an account that had
+ * never signed file a proposal and endorse one, while the page promises both
+ * are for "the same verified people who signed the document".
+ */
+describe("account without a signature", () => {
+  it("cannot file a proposal", async () => {
+    state.clerkUserId = "u_comment_only";
+    const res = await submitNewRightAction(form(GOOD));
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe("not_signer");
+    expect(await shared.db.select().from(proposedEdits)).toHaveLength(0);
+  });
+
+  it("cannot endorse one", async () => {
+    const filed = await submitNewRightAction(form(GOOD));
+    expect(filed.ok).toBe(true);
+
+    state.clerkUserId = "u_comment_only";
+    const res = await toggleProposalUpvoteAction(filed.id!);
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe("not_signer");
+    // Only the proposer's own endorsement.
+    expect(await shared.db.select().from(proposalUpvotes)).toHaveLength(1);
   });
 });
