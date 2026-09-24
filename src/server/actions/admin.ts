@@ -13,6 +13,7 @@ import {
 import { getCurrentAdmin } from "@/lib/admin/check";
 import { sha256Hex } from "@/lib/consent/hash";
 import { anonymizeSigner } from "@/server/signers/anonymize";
+import { deleteSigner } from "@/server/signers/delete";
 import {
   insertNonSigner,
   type AdminAddNonSignerResult,
@@ -28,28 +29,58 @@ async function requireAdmin() {
 }
 
 /**
- * Admin "Remove signer". Routes through the same `anonymizeSigner` used by the
- * user-facing revoke flow: scrubs private data (captured_fields, selfie blobs)
- * and renames to "Anonymized signer #N", while keeping the signature + count.
- * This both fixes the old hard-delete's FK violations (it omitted selfies and
- * every comment-system table, so it 500'd for any active signer) and keeps the
- * two removal paths consistent. To take down abusive *content*, admins use
- * `hideCommentAction` / the soft-ban, not this button.
+ * Admin "Delete": permanent removal. Runs the same `deleteSigner` cascade as
+ * "Delete my account" on /account, so the signer row, their signatures (and
+ * with them the public count), consent records, selfies, comments and
+ * everything else keyed to them are gone. Other people's content survives;
+ * see src/server/signers/delete.ts.
+ *
+ * Refuses the admin's own row. Deleting yourself here would also remove your
+ * admin rights mid-session, with no in-app way back; use /account instead.
  */
 export async function deleteSignerAction(
+  signerId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const ctx = await requireAdmin();
+  if (ctx.signer.id === signerId) {
+    return {
+      success: false,
+      error: "You can't delete your own signer here. Use /account instead.",
+    };
+  }
+  const db = getDb();
+  try {
+    await deleteSigner(db, signerId);
+    revalidateSignerPages(signerId);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Admin "Anonymize": the same `anonymizeSigner` used by the user-facing
+ * revoke flow. Scrubs private data (captured_fields, selfie blobs), renames
+ * to "Anonymized signer #N", and KEEPS the signature and the public count.
+ */
+export async function anonymizeSignerAction(
   signerId: string,
 ): Promise<{ success: boolean; error?: string }> {
   await requireAdmin();
   const db = getDb();
   try {
     await anonymizeSigner(db, signerId);
-    revalidatePath("/admin/signers");
-    revalidatePath("/signers");
-    revalidatePath(`/signatories/${signerId}`);
+    revalidateSignerPages(signerId);
     return { success: true };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }
+}
+
+function revalidateSignerPages(signerId: string) {
+  revalidatePath("/admin/signers");
+  revalidatePath("/signers");
+  revalidatePath(`/signatories/${signerId}`);
 }
 
 export async function deleteAttestationAction(

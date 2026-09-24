@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import {
+  anonymizeSignerAction,
   deleteSignerAction,
   setAdminFlagAction,
 } from "@/server/actions/admin";
@@ -28,12 +29,26 @@ export default function AdminRowActions({
 
   function handleDelete() {
     const confirmed = window.confirm(
-      `Anonymize ${displayName}? This scrubs their private data (contact info, location, any photo) and renames them to "Anonymized signer #N". Their signature and the public count are kept.`,
+      `Permanently delete ${displayName}? This removes the signer, their signature and everything they posted. The public count goes down by one. This cannot be undone.`,
     );
     if (!confirmed) return;
     setError(null);
     startTransition(async () => {
       const result = await deleteSignerAction(signerId);
+      if (!result.success) {
+        setError(result.error ?? "Couldn't delete this signer.");
+      }
+    });
+  }
+
+  function handleAnonymize() {
+    const confirmed = window.confirm(
+      `Anonymize ${displayName}? This scrubs their private data (contact info, location, any photo) and renames them to "Anonymized signer #N". Their signature and the public count are kept.`,
+    );
+    if (!confirmed) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await anonymizeSignerAction(signerId);
       if (!result.success) {
         setError(result.error ?? "Couldn't anonymize this signer.");
       }
@@ -72,6 +87,14 @@ export default function AdminRowActions({
           }`}
         >
           {pending ? "…" : isAdmin ? "Revoke admin" : "Make admin"}
+        </button>
+        <button
+          type="button"
+          onClick={handleAnonymize}
+          disabled={pending}
+          className="rounded-md bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 transition-colors hover:bg-zinc-100 disabled:opacity-50"
+        >
+          Anonymize
         </button>
         <button
           type="button"
