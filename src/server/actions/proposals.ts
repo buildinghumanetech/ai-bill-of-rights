@@ -24,8 +24,14 @@ import { LICENSE_FIELD } from "@/lib/proposals/license";
 
 type Me = { id: string; isAdmin: boolean };
 
+/**
+ * Stable code for "signed in to Clerk, but no signer row". The form matches on
+ * this, not on the message text, to turn the rejection into a way to sign.
+ */
+const NOT_SIGNER = "not_signer" as const;
+
 async function requireSigner(): Promise<
-  { ok: true; me: Me } | { ok: false; error: string }
+  { ok: true; me: Me } | { ok: false; error: string; code?: typeof NOT_SIGNER }
 > {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Not signed in." };
@@ -35,7 +41,16 @@ async function requireSigner(): Promise<
     .from(signers)
     .where(eq(signers.clerkUserId, userId))
     .limit(1);
-  if (rows.length === 0) return { ok: false, error: "Sign the Bill of Rights first." };
+  // Intended: proposals and endorsements come from verified signers (PR #82).
+  // The lookup is by Clerk user id only — `signers` stores no email or phone —
+  // so a Clerk account that never got a signer row reads as a non-signer here.
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      code: NOT_SIGNER,
+      error: "Only signers can file a proposal. Sign the Bill of Rights, then file it.",
+    };
+  }
   if (rows[0].softBannedAt) {
     return { ok: false, error: "This account is suspended pending moderator review." };
   }
@@ -44,9 +59,9 @@ async function requireSigner(): Promise<
 
 export async function submitNewRightAction(
   formData: FormData,
-): Promise<{ ok: boolean; error?: string; field?: string; id?: string }> {
+): Promise<{ ok: boolean; error?: string; code?: string; field?: string; id?: string }> {
   const gate = await requireSigner();
-  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!gate.ok) return { ok: false, error: gate.error, code: gate.code };
   const db = getDb();
 
   // The base version is resolved SERVER-SIDE from `is_current`, never read from

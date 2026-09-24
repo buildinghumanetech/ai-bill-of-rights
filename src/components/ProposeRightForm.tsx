@@ -29,13 +29,44 @@ import { LICENSE_FIELD, PROPOSAL_LICENSE } from "@/lib/proposals/license";
 const SIGN_IN_FIRST =
   "Sign in or create an account first — proposals are tied to a verified person. Your text stays on this page.";
 
-export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void }) {
+/** Opens the sign modal mounted on /propose (SignModalClient) in sign mode. */
+function openSignModal() {
+  window.dispatchEvent(new CustomEvent("open-sign-modal", { detail: { mode: "sign" } }));
+}
+
+function SignCta() {
+  return (
+    <button
+      type="button"
+      onClick={openSignModal}
+      className="mt-2 inline-block rounded-full bg-amber-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-800"
+    >
+      Sign the Bill of Rights
+    </button>
+  );
+}
+
+export function ProposeRightForm({
+  onPosted,
+  needsSignature = false,
+}: {
+  onPosted?: (id: string) => void;
+  /**
+   * Signed in, but with no signer row. The server refuses the submission in
+   * that case, so say so ABOVE the compose box — not after a whole proposal
+   * has been written.
+   */
+  needsSignature?: boolean;
+}) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [rationale, setRationale] = useState("");
   const [pullQuote, setPullQuote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  // Set when the server rejected the submission for want of a signer row, so
+  // the error carries a way to sign instead of being a dead end.
+  const [notSigner, setNotSigner] = useState(false);
   const [posted, setPosted] = useState(false);
   const [pending, startTransition] = useTransition();
   const { isLoaded, isSignedIn } = useAuth();
@@ -50,6 +81,7 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
+    setNotSigner(false);
 
     const check = validateNewArticle({ title, body, rationale, pullQuote });
     if (!check.ok) {
@@ -92,6 +124,7 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
       if (!res.ok) {
         if (res.field) setErrors({ [res.field]: res.error ?? "" });
         else setFormError(res.error ?? "Couldn't file your proposal.");
+        if (res.code === "not_signer") setNotSigner(true);
         return;
       }
       setPosted(true);
@@ -127,6 +160,20 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {needsSignature && (
+        <div
+          role="status"
+          className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <p>
+            Only signers can file a proposal. You&apos;re signed in, but this
+            account hasn&apos;t signed the Bill of Rights yet. Sign first; you
+            can draft here in the meantime, and your text stays on this page.
+          </p>
+          <SignCta />
+        </div>
+      )}
+
       <Field
         label="Name of the right"
         hint="Plain second person, like the other eleven. No number — that's assigned when it's published."
@@ -190,9 +237,10 @@ export function ProposeRightForm({ onPosted }: { onPosted?: (id: string) => void
       </Field>
 
       {shownFormError && (
-        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {shownFormError}
-        </p>
+        <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p>{shownFormError}</p>
+          {notSigner && <SignCta />}
+        </div>
       )}
 
       {/* The licence grant. It sits directly above the button, always

@@ -131,7 +131,16 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-**Nothing is pending.** 0009, 0010, 0011 and 0012 have all been applied to production; this was checked against the production schema and data on 2026-09-24. When a new migration ships, add its `apply-migration.ts` command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
+**Pending — apply these first, in this order:**
+
+```bash
+pnpm tsx scripts/apply-migration.ts drizzle/0007_why_i_signed_and_referrals.sql
+pnpm tsx scripts/apply-migration.ts drizzle/0008_referral_fk_on_delete_set_null.sql
+```
+
+Checked read-only against production on 2026-09-24: `signers.why_i_signed` and `signers.referred_by_signer_id` do not exist (`42703 column "why_i_signed" does not exist`). `upsertSignerProfile` runs `select()` over every `signers` column, so while they are missing, **every new signature and every new account fails**. The newest signer row and the newest signature are both dated 2026-07-09. Both files are idempotent.
+
+0009, 0010, 0011 and 0012 have all been applied to production. When a new migration ships, add its `apply-migration.ts` command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
 
 0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`.
 

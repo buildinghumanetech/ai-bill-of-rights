@@ -38,6 +38,9 @@ export default async function ProposePage() {
   const current = await getCurrentVersion().catch(() => null);
 
   let viewerSignerId: string | null = null;
+  // Signed in to Clerk but with no signer row: the one viewer the server will
+  // refuse at submit time. Known here, so the form can say so up front.
+  let signedInWithoutSignerRow = false;
   let queue: QueueState = { kind: "ok", proposals: [] };
 
   if (current) {
@@ -50,6 +53,7 @@ export default async function ProposePage() {
           .where(eq(signers.clerkUserId, userId))
           .limit(1);
         if (me.length > 0) viewerSignerId = me[0].id;
+        else signedInWithoutSignerRow = true;
       }
     } catch {
       // auth() can throw at the edges; an anonymous read is the correct fallback.
@@ -123,7 +127,7 @@ export default async function ProposePage() {
           to say plainly why yours is not.
         </p>
         <div className="mt-8">
-          <ProposeRightForm />
+          <ProposeRightForm needsSignature={signedInWithoutSignerRow} />
         </div>
       </section>
 
