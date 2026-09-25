@@ -28,7 +28,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- same untyped drizzle client as @/lib/db/queries
 type Db = any;
 
-export const SENDER = "Erika Anderson <signature@ai-for-people.org>";
+export const SENDER = "Erika Anderson <signature@theaibill.org>";
 export const REPLY_TO = "erika@buildinghumanetech.com";
 export const SITE_ORIGIN = "https://theaibill.org";
 

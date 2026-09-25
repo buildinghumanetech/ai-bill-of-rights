@@ -61,7 +61,16 @@ describe("versionEmail", () => {
     expect(text).toContain("The site has a new home too: theaibill.org.");
     const update = versionEmail({ ...BASE, relaunch: false, version: "0.2.0" });
     expect(update.text).not.toContain("new home");
-    expect(update.subject).toBe("Version 0.2.0 of the AI Bill of Rights is out");
+    expect(update.subject).toBe("Version 0.2.0 of The People's AI Bill of Rights is out");
+  });
+
+  it("calls it The People's AI Bill of Rights everywhere", () => {
+    expect(subject).toBe("A new version of The People's AI Bill of Rights");
+    expect(text).toContain("Thank you for signing The People's AI Bill of Rights.");
+    expect(text).toContain("because you signed The People's AI Bill of Rights");
+    for (const s of [subject, text, html]) {
+      expect(s.replace(/The People's AI Bill of Rights/g, "")).not.toContain("AI Bill of Rights");
+    }
   });
 
   it("greets plainly with no name, and leaves out a missing number", () => {

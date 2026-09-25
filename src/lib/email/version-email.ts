@@ -71,14 +71,14 @@ export function versionEmail(opts: VersionEmailInput): {
   const siteHost = opts.siteOrigin.replace(/^https?:\/\//, "");
 
   const subject = opts.relaunch
-    ? "A new version of the AI Bill of Rights"
-    : `Version ${opts.version} of the AI Bill of Rights is out`;
+    ? "A new version of The People's AI Bill of Rights"
+    : `Version ${opts.version} of The People's AI Bill of Rights is out`;
 
   const paragraphs: string[] = [];
   paragraphs.push(
     opts.signerNumber
-      ? `Thank you for signing the AI Bill of Rights. You're signer #${opts.signerNumber.toLocaleString("en-US")}.`
-      : "Thank you for signing the AI Bill of Rights.",
+      ? `Thank you for signing The People's AI Bill of Rights. You're signer #${opts.signerNumber.toLocaleString("en-US")}.`
+      : "Thank you for signing The People's AI Bill of Rights.",
   );
   paragraphs.push(
     `On ${longDate(opts.publishedAt)}, we published a new version, v${opts.version}. ${opts.summary}`,
@@ -92,7 +92,7 @@ export function versionEmail(opts: VersionEmailInput): {
     ? `The site has a new home too: ${siteHost}.`
     : null;
   const footer =
-    "You're getting this because you signed the AI Bill of Rights and asked to hear about new versions.";
+    "You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.";
 
   const text = [
     firstName ? `Hi ${firstName},` : "Hi,",

@@ -1,5 +1,24 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-09-24 20:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The email now comes from "Erika Anderson <signature@theaibill.org>" instead of ai-for-people.org, because the domain moved and Resend has theaibill.org verified. Reply-To is still erika@buildinghumanetech.com. The email calls the project "The People's AI Bill of Rights" in the subject, the thank-you line, and the footer. The relaunch subject is now "A new version of The People's AI Bill of Rights". **Nothing has been sent to signers.** One new test email went to Erika only.
+
+### Detail of changes made:
+- `src/server/email/campaign.ts`: `SENDER` now uses `signature@theaibill.org`. `REPLY_TO` is unchanged.
+- `src/lib/email/version-email.ts`: all three mentions of the name (the subject for both the relaunch and version updates, the thank-you line, the footer) now read "The People's AI Bill of Rights". `esc()` does not escape apostrophes, and doesn't need to in HTML text.
+- `tests/lib/version-email.test.ts`: a new test pins the relaunch subject and fails if the bare "AI Bill of Rights" appears anywhere in the subject, text, or HTML. `tests/server/version-email-campaign.test.ts` expects the new From.
+- The rename is limited to the email. Site pages, including `/unsubscribe/[token]`, still say "AI Bill of Rights". That wording is `SITE_NAME` in `src/lib/site-metadata.ts`, and changing it is a separate decision.
+- 1,165 tests pass and `tsc` is clean. ESLint passes on every file this branch touches. Repo-wide `pnpm lint` shows 153 errors in untouched files (mostly `no-explicit-any`), which the earlier "ESLint is clean" note didn't account for.
+
+### Potential concerns to address:
+- The unsubscribe confirmation page still says "the AI Bill of Rights", so its wording doesn't match the email. This is minor.
+- Earlier concerns still apply: the real `CLERK_SECRET_KEY` is needed for the exact count, and the send must wait until #95 is live.
+
+---
+
 ## Progress Update as of 2026-09-24 14:00 Pacific
 *(Most recent updates at top)*
 

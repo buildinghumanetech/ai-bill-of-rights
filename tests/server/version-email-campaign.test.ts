@@ -161,7 +161,7 @@ describe("sending", () => {
 
     const [row] = await db.select().from(emailSends);
     expect(sent[0]).toMatchObject({
-      from: "Erika Anderson <signature@ai-for-people.org>",
+      from: "Erika Anderson <signature@theaibill.org>",
       replyTo: "erika@buildinghumanetech.com",
       headers: {
         "List-Unsubscribe": `<https://theaibill.org/api/unsubscribe/${row.unsubscribeToken}>`,
