@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   greetingName,
+  shareDraftHref,
   versionEmail,
   VERSION_EMAIL_CTA,
   VERSION_EMAIL_SHARE_CTA,
 } from "@/lib/email/version-email";
 
 const WHAT_CHANGED = "https://theaibill.org/v/0.1.0#what-changed";
-const SHARE = "https://theaibill.org/s/abc2345";
+const SHARE = "https://theaibill.org/s/abc2345?via=email";
+const DRAFT =
+  "mailto:?subject=I%20signed%20The%20People's%20AI%20Bill%20of%20Rights&body=I%20just%20added%20my%20name%20to%20The%20People's%20AI%20Bill%20of%20Rights%2C%20a%20people's%20demand%20for%20how%20AI%20companies%20treat%20us.%20It%20takes%20a%20minute.%20Will%20you%20sign%20too%3F%20https%3A%2F%2Ftheaibill.org%2Fs%2Fabc2345%3Fvia%3Demail";
+const DRAFT_HTML = DRAFT.replace(/&/g, "&amp;");
 const UNSUB = "https://theaibill.org/unsubscribe/tok123";
 
 const BASE = {
@@ -42,11 +46,10 @@ describe("the relaunch email", () => {
     expect(subject).toBe("We've updated The People's AI Bill of Rights: v0.1.0");
     expect(text).toBe(
       [
-        "Hi Ada,",
-        "Thanks for being signer #12 on The People's AI Bill of Rights.",
+        "Hi Ada, thanks for being signer #12 on The People's AI Bill of Rights.",
         "You asked to hear about updates. We've created v0.1.0, which adds Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.",
         `See the update:\n${WHAT_CHANGED}`,
-        `Spread the word:\n${SHARE}`,
+        `Spread the word:\n${DRAFT}`,
         "Thanks!\nErika",
         `You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.\nUnsubscribe: ${UNSUB}`,
       ].join("\n\n"),
@@ -62,22 +65,22 @@ describe("the relaunch email", () => {
   it("drops the date, new-home and plain-URL lines", () => {
     expect(text).not.toMatch(/new home|published|July/);
     // In the HTML, URLs appear only as link targets, never as visible text.
-    expect(html.replace(/href="[^"]*"/g, "")).not.toContain("https://");
+    expect(html.replace(/href="[^"]*"/g, "")).not.toMatch(/https:|mailto:/);
   });
 
   it("never suggests the earlier signature lapsed", () => {
     expect(text).not.toMatch(/re-?sign|expire|invalid|no longer|lapse|renew/i);
   });
 
-  it("links the two buttons to what changed and to their share link", () => {
+  it("links the two buttons to what changed and to a share draft", () => {
     expect(VERSION_EMAIL_CTA).toBe("See the update");
     expect(VERSION_EMAIL_SHARE_CTA).toBe("Spread the word");
     const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-    expect(new Set(hrefs)).toEqual(new Set([WHAT_CHANGED, SHARE, UNSUB]));
+    expect(new Set(hrefs)).toEqual(new Set([WHAT_CHANGED, DRAFT_HTML, UNSUB]));
     const button = (label: string) =>
       html.match(new RegExp(`<a [^>]*>${label}</a>`))?.[0] ?? "";
     expect(button("See the update")).toContain(`href="${WHAT_CHANGED}"`);
-    expect(button("Spread the word")).toContain(`href="${SHARE}"`);
+    expect(button("Spread the word")).toContain(`href="${DRAFT_HTML}"`);
   });
 
   it("makes See the update a solid blue pill and Spread the word a blue outline pill", () => {
@@ -137,11 +140,37 @@ describe("the relaunch email", () => {
   });
 });
 
+describe("shareDraftHref", () => {
+  it("opens a draft with no To, the approved subject, and the body with their link", () => {
+    const href = shareDraftHref(SHARE);
+    expect(href).toBe(DRAFT);
+    expect(href.startsWith("mailto:?")).toBe(true);
+    const params = new URLSearchParams(href.slice("mailto:?".length));
+    expect(params.get("subject")).toBe("I signed The People's AI Bill of Rights");
+    expect(params.get("body")).toBe(
+      "I just added my name to The People's AI Bill of Rights, a people's demand for how AI companies treat us. It takes a minute. Will you sign too? https://theaibill.org/s/abc2345?via=email",
+    );
+  });
+
+  it("never form-encodes spaces as +, which mail apps read literally", () => {
+    expect(shareDraftHref(SHARE)).not.toContain("+");
+  });
+
+  it("carries the bare site when there's no short link", () => {
+    expect(shareDraftHref("https://theaibill.org")).toMatch(/too%3F%20https%3A%2F%2Ftheaibill\.org$/);
+  });
+});
+
 describe("variations", () => {
-  it("greets plainly without a usable name, and thanks plainly without a number", () => {
-    const plain = versionEmail({ ...BASE, name: "E.", signerNumber: null });
-    expect(plain.text.startsWith("Hi,\n\n")).toBe(true);
-    expect(plain.text).toContain("Thanks for signing The People's AI Bill of Rights.");
+  it("greets plainly on the same line without a usable name", () => {
+    const plain = versionEmail({ ...BASE, name: "E." });
+    expect(plain.text.startsWith("Hi, thanks for being signer #12 on The People's AI Bill of Rights.\n\n")).toBe(true);
+    expect(plain.html).toContain(">Hi, thanks for being signer #12 on");
+  });
+
+  it("thanks plainly without a number", () => {
+    const plain = versionEmail({ ...BASE, signerNumber: null });
+    expect(plain.text.startsWith("Hi Ada, thanks for signing The People's AI Bill of Rights.")).toBe(true);
     expect(plain.text).not.toContain("signer #");
   });
 

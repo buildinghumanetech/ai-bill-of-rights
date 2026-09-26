@@ -4,7 +4,8 @@
  *
  * House rules for this copy, all enforced by tests/lib/version-email.test.ts:
  *  - It informs; it does not ask anyone to re-sign. Two buttons: "See the
- *    update" (what changed) and "Spread the word" (their own share link).
+ *    update" (what changed) and "Spread the word" (a mailto: draft carrying
+ *    their own short link, so referrals count).
  *  - Nothing may suggest an earlier signature expired or stopped counting.
  *  - No em dashes.
  *  - Every email carries a one-click unsubscribe link. It's legally required.
@@ -29,7 +30,10 @@ export interface VersionEmailInput {
   relaunch?: boolean;
   /** e.g. "https://theaibill.org" (no trailing slash). */
   siteOrigin: string;
-  /** Their own share link, so referrals from it count. */
+  /**
+   * The link their friends get in the "Spread the word" draft: their own
+   * theaibill.org/s/<slug>?via=email, or the bare site when they have no slug.
+   */
   shareUrl: string;
   unsubscribeUrl: string;
 }
@@ -54,6 +58,19 @@ export function greetingName(name: string | null | undefined): string | null {
   if (!first || first.includes("@") || first.includes("*")) return null;
   if (first.replace(/\.$/, "").length <= 1) return null;
   return first;
+}
+
+export const SHARE_DRAFT_SUBJECT = "I signed The People's AI Bill of Rights";
+
+/**
+ * "Spread the word": a draft in the reader's own email app, To left empty.
+ * Percent-encoded with encodeURIComponent, not URLSearchParams, because RFC
+ * 6068 reads "+" in a mailto as a literal plus (see shareHrefs in
+ * src/lib/share/urls.ts).
+ */
+export function shareDraftHref(shareUrl: string): string {
+  const body = `I just added my name to The People's AI Bill of Rights, a people's demand for how AI companies treat us. It takes a minute. Will you sign too? ${shareUrl}`;
+  return `mailto:?subject=${encodeURIComponent(SHARE_DRAFT_SUBJECT)}&body=${encodeURIComponent(body)}`;
 }
 
 function esc(s: string): string {
@@ -129,11 +146,13 @@ export function versionEmail(opts: VersionEmailInput): {
   const whatChangedUrl = `${opts.siteOrigin}/v/${opts.version}#what-changed`;
 
   const subject = `We've updated The People's AI Bill of Rights: v${opts.version}`;
-  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const shareHref = shareDraftHref(opts.shareUrl);
+
+  const hi = firstName ? `Hi ${firstName},` : "Hi,";
   const paragraphs = [
     opts.signerNumber
-      ? `Thanks for being signer #${opts.signerNumber.toLocaleString("en-US")} on The People's AI Bill of Rights.`
-      : "Thanks for signing The People's AI Bill of Rights.",
+      ? `${hi} thanks for being signer #${opts.signerNumber.toLocaleString("en-US")} on The People's AI Bill of Rights.`
+      : `${hi} thanks for signing The People's AI Bill of Rights.`,
     opts.relaunch
       ? `You asked to hear about updates. We've created v${opts.version}, which ${opts.summary}`
       : `You asked to hear about updates. We've created v${opts.version}. ${opts.summary}`,
@@ -142,10 +161,9 @@ export function versionEmail(opts: VersionEmailInput): {
     "You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.";
 
   const text = [
-    greeting,
     ...paragraphs,
     `${VERSION_EMAIL_CTA}:\n${whatChangedUrl}`,
-    `${VERSION_EMAIL_SHARE_CTA}:\n${opts.shareUrl}`,
+    `${VERSION_EMAIL_SHARE_CTA}:\n${shareHref}`,
     "Thanks!\nErika",
     `${footer}\nUnsubscribe: ${opts.unsubscribeUrl}`,
   ].join("\n\n");
@@ -156,12 +174,11 @@ export function versionEmail(opts: VersionEmailInput): {
 <html>
 <body style="margin:0;padding:0;background:${WHITE};font-family:${FONT};">
 <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
-  ${p(esc(greeting))}
   ${paragraphs.map((s) => p(esc(s))).join("\n  ")}
   <div style="margin:24px 0 12px;">
   ${pillRow([
     { label: VERSION_EMAIL_CTA, href: whatChangedUrl, solid: true, vmlWidth: 170 },
-    { label: VERSION_EMAIL_SHARE_CTA, href: opts.shareUrl, solid: false, vmlWidth: 186 },
+    { label: VERSION_EMAIL_SHARE_CTA, href: shareHref, solid: false, vmlWidth: 186 },
   ])}
   </div>
   ${p("Thanks!<br>Erika")}

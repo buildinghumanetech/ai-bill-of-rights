@@ -21,7 +21,7 @@ import { getSignatureNumber } from "@/lib/db/queries";
 import type { EmailMessage } from "@/lib/email/send";
 import { versionEmail } from "@/lib/email/version-email";
 import { findShareSlug, getOrCreateShareSlug } from "@/lib/share/short-links";
-import { signerShareLink } from "@/lib/share/urls";
+import { signerShortShareUrl } from "@/lib/share/urls";
 import {
   wantsVersionEmail,
   type NotificationPreference,
@@ -182,10 +182,11 @@ export function newUnsubscribeToken(): string {
 /**
  * The email one recipient gets, with its one-click unsubscribe headers.
  *
- * "Spread the word" links to their own short share link, so referrals from it
- * count. A real send creates the slug if they have none; a dry run or test
- * (`createShareSlug: false`) only reads one, so it writes nothing. With no
- * slug, it's the long /signatories/<id>?ref=<id> link, which counts the same.
+ * "Spread the word" drafts an email carrying their own short link,
+ * theaibill.org/s/<slug>?via=email, so referrals count. A real send creates
+ * the slug if they have none; a dry run or test (`createShareSlug: false`)
+ * only reads one, so it writes nothing. With no slug, the draft carries the
+ * bare site.
  */
 export async function renderMessage(
   db: Db,
@@ -210,7 +211,7 @@ export async function renderMessage(
     summary: spec.summary,
     relaunch: spec.relaunch,
     siteOrigin: SITE_ORIGIN,
-    shareUrl: signerShareLink(SITE_ORIGIN, recipient.signerId, slug),
+    shareUrl: slug ? signerShortShareUrl(SITE_ORIGIN, slug, "email") : SITE_ORIGIN,
     unsubscribeUrl,
   });
   return {
@@ -226,6 +227,57 @@ export async function renderMessage(
       "List-Unsubscribe": `<${SITE_ORIGIN}/api/unsubscribe/${unsubscribeToken}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     },
+  };
+}
+
+/**
+ * The signer a test email is about: the one whose display name matches,
+ * ignoring case and spacing, so the number and share link in a test are the
+ * tester's own. Throws unless exactly one signer matches. Read-only.
+ */
+export async function findTestSigner(
+  db: Db,
+  displayName: string,
+  email: string,
+): Promise<Recipient> {
+  const want = displayName.trim().replace(/\s+/g, " ").toLowerCase();
+  const rows: Array<{
+    signerId: string;
+    clerkUserId: string;
+    displayName: string;
+    preference: NotificationPreference;
+    version: string;
+  }> = await db
+    .select({
+      signerId: signers.id,
+      clerkUserId: signers.clerkUserId,
+      displayName: signers.displayName,
+      preference: signers.notificationPreference,
+      version: versions.version,
+    })
+    .from(signers)
+    .innerJoin(signatures, eq(signatures.signerId, signers.id))
+    .innerJoin(versions, eq(versions.id, signatures.versionId))
+    .orderBy(asc(signers.id), desc(signatures.signedAt));
+  const matches = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const name = r.displayName.trim().replace(/\s+/g, " ").toLowerCase();
+    // First row per signer is their most recent signature.
+    if (name === want && !matches.has(r.signerId)) matches.set(r.signerId, r);
+  }
+  if (matches.size !== 1) {
+    throw new Error(
+      `Expected exactly one signer named "${displayName}" for the test, found ${matches.size}. Pass --test-signer "<display name>".`,
+    );
+  }
+  const [r] = matches.values();
+  return {
+    signerId: r.signerId,
+    clerkUserId: r.clerkUserId,
+    displayName: r.displayName,
+    preference: r.preference,
+    signedVersion: r.version,
+    email,
   };
 }
 

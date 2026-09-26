@@ -11,6 +11,7 @@ import { consentRecords, emailSends, shareLinks, signers } from "@/lib/db/schema
 import { recordSignature } from "@/server/signatures/record";
 import {
   buildAudience,
+  findTestSigner,
   renderMessage,
   sendCampaign,
   unsubscribeByToken,
@@ -172,7 +173,7 @@ describe("sending", () => {
     expect(sent[0].text).toContain(`https://theaibill.org/unsubscribe/${row.unsubscribeToken}`);
   });
 
-  it("greets by display name and links Spread the word to their own short link", async () => {
+  it("greets by display name and drafts Spread the word with their own short link", async () => {
     const id = await signer("Ada Lovelace");
     const sent: EmailMessage[] = [];
     const { recipients } = await buildAudience(db, RELAUNCH, contacts);
@@ -180,19 +181,31 @@ describe("sending", () => {
 
     const [link] = await db.select().from(shareLinks).where(eq(shareLinks.signerId, id));
     expect(link?.slug).toMatch(/^[a-z2-9]{7}$/);
-    expect(sent[0].text.startsWith("Hi Ada,")).toBe(true);
-    expect(sent[0].text).toContain(`Spread the word:\nhttps://theaibill.org/s/${link.slug}`);
-    expect(sent[0].html).toContain(`href="https://theaibill.org/s/${link.slug}"`);
+    expect(sent[0].text.startsWith("Hi Ada, thanks for being signer #")).toBe(true);
+    const draft = sent[0].text.match(/Spread the word:\n(mailto:\S+)/)?.[1] ?? "";
+    const body = new URLSearchParams(draft.slice("mailto:?".length)).get("body");
+    expect(body?.endsWith(`Will you sign too? https://theaibill.org/s/${link.slug}?via=email`)).toBe(true);
   });
 
-  it("writes no share link for a dry run or test, and falls back to the long link", async () => {
-    const id = await signer("a");
+  it("writes no share link for a dry run or test, and falls back to the bare site", async () => {
+    await signer("a");
     const { recipients } = await buildAudience(db, RELAUNCH, contacts);
     const m = await renderMessage(db, RELAUNCH, recipients[0], "tok", "t@example.com", {
       createShareSlug: false,
     });
     expect(await db.select().from(shareLinks)).toHaveLength(0);
-    expect(m.text).toContain(`Spread the word:\nhttps://theaibill.org/signatories/${id}?ref=${id}`);
+    expect(m.text).toContain("Will%20you%20sign%20too%3F%20https%3A%2F%2Ftheaibill.org\n");
+  });
+
+  it("finds the tester's own signer record by display name, or refuses", async () => {
+    const erika = await signer("Erika Anderson", { signed: ["0.1.0"] });
+    await signer("Erika");
+    const me = await findTestSigner(db, "  erika   anderson ", "t@example.com");
+    expect(me).toMatchObject({ signerId: erika, signedVersion: "0.1.0", email: "t@example.com" });
+
+    await expect(findTestSigner(db, "Nobody", "t@example.com")).rejects.toThrow(/found 0/);
+    await signer("erika  Anderson");
+    await expect(findTestSigner(db, "Erika Anderson", "t@example.com")).rejects.toThrow(/found 2/);
   });
 
   it("releases a failed batch so a rerun retries it, and stops past 2% failures", async () => {

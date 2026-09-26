@@ -1,5 +1,26 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-09-26 13:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The greeting and thank-you are now one line: "Hi Erika, thanks for being signer #N on The People's AI Bill of Rights." With no usable name it's "Hi, thanks for being...". "Spread the word" is now a `mailto:` link with the To field empty. It pre-fills the subject "I signed The People's AI Bill of Rights" and a body ending in the signer's own `theaibill.org/s/<slug>?via=email` link, or `https://theaibill.org` when they have no slug. Test sends now use the tester's own signer record (display name "Erika Anderson" by default) for the number and the link, not the first person in the audience. **Nothing has been sent to signers.** One test went to Erika only.
+
+### Detail of changes made:
+- `src/lib/email/version-email.ts`: new `shareDraftHref(shareUrl)` and `SHARE_DRAFT_SUBJECT`. It encodes with `encodeURIComponent`, never `URLSearchParams`, because RFC 6068 reads `+` as a literal plus. It follows the same reasoning as `shareHrefs` in `src/lib/share/urls.ts`, but uses its own subject and body, since that shared `SHARE_EMAIL_SUBJECT` still says "Sign the AI Bill of Rights". The greeting paragraph is gone; "Hi X," now starts the thanks sentence. Without a signer number, it reads "Hi X, thanks for signing ...".
+- `src/server/email/campaign.ts`: `renderMessage` passes `signerShortShareUrl(SITE_ORIGIN, slug, "email")` when there's a slug, else `SITE_ORIGIN`. It no longer falls back to the long signatory link, as Erika asked. New `findTestSigner(db, displayName, email)` returns the one signer whose display name matches, ignoring case and extra spaces. It's read-only and throws unless exactly one signer matches.
+- `scripts/send-version-email.ts`: test mode calls `findTestSigner` with `--test-signer`, which defaults to the name in `SENDER` ("Erika Anderson"). `--test-name` still sets the greeting. It prints the signer id and the share link used. It still writes nothing (`createShareSlug: false`), so if Erika has no slug yet, her test carries the bare site.
+- Tests: `tests/lib/version-email.test.ts` checks the one-line greeting in both forms, the exact mailto (with To empty, the approved subject and body, and no `+`), and the bare-site fallback. `tests/server/version-email-campaign.test.ts` checks the mailto body ends with the created short link and `?via=email`, and the `findTestSigner` match, 0-match and 2-match cases.
+- 1,183 tests pass, `tsc` is clean, and ESLint is clean on every TypeScript file the branch touches.
+
+### Potential concerns to address:
+- The plain-text part shows "Spread the word:" followed by the whole encoded `mailto:` URL, which is long and hard to read. Most clients render it as a link.
+- Some webmail setups don't open mailto links (for example, Gmail in a browser without a mail handler set), so the button can do nothing there. The short link only appears inside the draft.
+- `findTestSigner` matches by display name. If Erika renames her signer record, pass `--test-signer`.
+- The real send still needs the production `CLERK_SECRET_KEY` for the exact count, and it must wait until #95 is live.
+
+---
+
 ## Progress Update as of 2026-09-26 13:00 Pacific
 *(Most recent updates at top)*
 

@@ -5,8 +5,10 @@
  *   pnpm tsx scripts/send-version-email.ts relaunch --env ~/prod.env
  *   pnpm tsx scripts/send-version-email.ts version 0.2.0 --env ~/prod.env
  *
- *   # One test email to one address, greeting --test-name. Records nothing,
- *   # looks up no addresses, and its unsubscribe link is a placeholder.
+ *   # One test email to one address, greeting --test-name. Its signer number
+ *   # and share link are the signer named --test-signer (default: the
+ *   # sender, Erika Anderson). Records nothing, looks up no addresses, and
+ *   # its unsubscribe link is a placeholder.
  *   pnpm tsx scripts/send-version-email.ts relaunch --env ~/prod.env --test-to you@example.com --test-name Erika
  *
  *   # The real send. --confirm must equal the recipient count the dry run
@@ -87,22 +89,22 @@ async function main(): Promise<void> {
 
   const testTo = flag("test-to");
   if (testTo) {
-    // No address lookup: every candidate "lives" at the test address, and the
-    // first one supplies the signer number and share link for the sample.
-    // --test-name stands in for their display name.
-    const { recipients } = await campaign.buildAudience(db, spec, async (cs) =>
-      new Map(cs.map((c) => [c.signerId, { email: testTo }])),
-    );
-    const sample = recipients[0];
-    if (!sample) throw new Error("No one in the audience to base a test email on.");
+    // The tester's own signer record supplies the signer number and share
+    // link, so what they click in the test is theirs. --test-name stands in
+    // for the display name in the greeting. No address lookup, no writes.
+    const who = flag("test-signer") ?? campaign.SENDER.replace(/\s*<.*$/, "");
+    const me = await campaign.findTestSigner(db, who, testTo);
     const message = await campaign.renderMessage(
       db,
       spec,
-      { ...sample, displayName: flag("test-name") ?? "" },
+      { ...me, displayName: flag("test-name") ?? "" },
       "test-placeholder-not-a-real-token",
       testTo,
       { createShareSlug: false },
     );
+    const draft = message.text.match(/Spread the word:\n(mailto:\S+)/)?.[1] ?? "";
+    const link = new URLSearchParams(draft.slice("mailto:?".length)).get("body")?.split(" ").pop();
+    console.log(`Test uses signer "${me.displayName}" (${me.signerId}); share link ${link}.`);
     message.subject = `[Test] ${message.subject}`;
     await sendEmailBatch([message]);
     console.log(`Sent ONE test email to ${testTo}. Nothing was recorded.`);
