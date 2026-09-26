@@ -1,5 +1,24 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-09-26 12:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The email's call to action is now one button that says "See the update". It's built like the site's blue pill button, as a table-based bulletproof button with a VML version for Outlook, and a small gray plain-text copy of the link sits under it. The email uses only the site palette: white, near-black #09090b, gray #71717a and blue #2563eb. The unsubscribe pages now say "The People's AI Bill of Rights", and their fallback button is the same blue pill. **Nothing has been sent to signers.** One test went to Erika only.
+
+### Detail of changes made:
+- `src/lib/email/version-email.ts`: `VERSION_EMAIL_CTA` is "See the update". It adds palette constants (`INK`, `GRAY`, `BLUE`) and `FONT` ("Geist, -apple-system, Helvetica, Arial, sans-serif"; mail clients rarely have Geist and fall back). The button is a `role="presentation"` table whose cell carries `bgcolor` and radius, around an inline-block link (padding 12px 24px, 16px, weight 600, radius 999px). It's wrapped in `<!--[if !mso]>`, and Outlook gets a `v:roundrect` pill (170x46, `arcsize="50%"`) instead, because Outlook ignores border-radius. The table is `align="left"` and sized to its text. A 13px gray link under it shows the raw URL. The plain-text part reads "See the update:" followed by the URL.
+- `src/app/unsubscribe/[token]/UnsubscribeConfirm.tsx` and `page.tsx`: they use the full name in the confirmation text, the home link, and the page title ("Unsubscribe from The People's AI Bill of Rights"). Text is zinc-950 and zinc-500, and the fallback Unsubscribe button is `bg-[#2563eb]` `rounded-full`.
+- Tests: `tests/lib/version-email.test.ts` checks the button structure and styles, the VML fallback, the gray link under the button, that every link but unsubscribe goes to what changed, and that the only colors are the four palette hex values. New `tests/app/unsubscribe-confirm.test.tsx` checks the name, the blue pill, no green or purple class in any state, and the title.
+- 1,172 tests pass, `tsc` is clean, and ESLint is clean on every TypeScript file the branch touches.
+
+### Potential concerns to address:
+- The VML width is a fixed 170px, sized for "See the update". If the label changes, change the width too.
+- Other emails in `src/lib/email/templates.ts` (the signing confirmation, for one) still use green (#059669 and #15803d) and say "AI Bill of Rights". They're outside this PR.
+- The real send still needs the production `CLERK_SECRET_KEY` for the exact count, and it must wait until #95 is live.
+
+---
+
 ## Progress Update as of 2026-09-24 20:00 Pacific
 *(Most recent updates at top)*
 

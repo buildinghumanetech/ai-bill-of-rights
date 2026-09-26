@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { UnsubscribeConfirm } from "./UnsubscribeConfirm";
 
 export const metadata: Metadata = {
-  title: "Unsubscribe",
+  title: "Unsubscribe from The People's AI Bill of Rights",
   robots: { index: false, follow: false },
 };
 

@@ -35,9 +35,54 @@ describe("versionEmail", () => {
   });
 
   it("has exactly one call to action, to what changed", () => {
-    expect(text).toContain(`${VERSION_EMAIL_CTA}:\nhttps://theaibill.org/v/0.1.0#what-changed`);
+    expect(VERSION_EMAIL_CTA).toBe("See the update");
+    expect(text).toContain("See the update:\nhttps://theaibill.org/v/0.1.0#what-changed");
     expect(text.split(VERSION_EMAIL_CTA)).toHaveLength(2);
-    expect(html).toContain('href="https://theaibill.org/v/0.1.0#what-changed"');
+    // Every link but the unsubscribe goes to what changed: the button, its
+    // Outlook twin, and the plain-text fallback under it.
+    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(hrefs)).toEqual(
+      new Set([
+        "https://theaibill.org/v/0.1.0#what-changed",
+        "https://theaibill.org/unsubscribe/tok123",
+      ]),
+    );
+  });
+
+  it("uses a bulletproof pill button styled like the site", () => {
+    // Table-based for Gmail and Apple Mail, VML for Outlook on Windows.
+    expect(html).toMatch(/<table role="presentation"[^>]*>\s*<tr>\s*<td[^>]*bgcolor="#2563eb"/);
+    expect(html).toContain('<v:roundrect');
+    expect(html).toContain('arcsize="50%"');
+    expect(html).toContain('fillcolor="#2563eb"');
+    const a = html.match(/<a [^>]*>See the update<\/a>/)?.[0] ?? "";
+    for (const rule of [
+      "background:#2563eb",
+      "color:#ffffff",
+      "font-weight:600",
+      "font-size:16px",
+      "border-radius:999px",
+      "padding:12px 24px",
+      "display:inline-block",
+      "font-family:Geist, -apple-system, Helvetica, Arial, sans-serif",
+    ]) {
+      expect(a).toContain(rule);
+    }
+    // Sized to its text, not full width.
+    expect(html).not.toMatch(/width:100%|width="100%"/);
+  });
+
+  it("puts a small gray plain-text link under the button", () => {
+    const after = html.slice(html.indexOf("<!--<![endif]-->"));
+    expect(after).toMatch(
+      /<p style="[^"]*font-size:13px[^"]*color:#71717a[^"]*"><a href="https:\/\/theaibill\.org\/v\/0\.1\.0#what-changed"[^>]*>https:\/\/theaibill\.org\/v\/0\.1\.0#what-changed<\/a>/,
+    );
+  });
+
+  it("uses only the site palette: white, near-black, gray, blue", () => {
+    const colors = new Set(html.toLowerCase().match(/#[0-9a-f]{6}\b|#[0-9a-f]{3}\b/g));
+    expect([...colors].sort()).toEqual(["#09090b", "#2563eb", "#71717a", "#ffffff"]);
+    expect(html).not.toMatch(/green|purple|violet|emerald/i);
   });
 
   it("informs, and never suggests the earlier signature lapsed", () => {
