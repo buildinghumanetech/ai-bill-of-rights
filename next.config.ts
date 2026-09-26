@@ -22,6 +22,11 @@ export const RESOURCE_SLUG_REDIRECTS: Record<string, string> = {
 };
 
 const nextConfig: NextConfig = {
+  // The OG image routes read Geist from assets/fonts at request time
+  // (src/app/api/og/geist.ts); make sure those files ship with them.
+  outputFileTracingIncludes: {
+    "/api/og/**": ["./assets/fonts/**/*"],
+  },
   async redirects() {
     return Object.entries(RESOURCE_SLUG_REDIRECTS).map(([from, to]) => ({
       source: `/resources/${from}`,

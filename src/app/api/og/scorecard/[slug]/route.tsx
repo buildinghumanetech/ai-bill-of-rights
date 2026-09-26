@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { assessedCount, getScorecardEntry } from "@/lib/scorecard";
 import { Banner, FooterCta, OG_SIZE, Shell, STATUS_SWATCH } from "../card";
+import { OG_COLORS as C, OG_TAG, cardDate, loadGeist } from "../../style";
 
 export const runtime = "nodejs";
 
@@ -21,12 +22,13 @@ export async function GET(
 
   const total = entry.assessments.length;
   const assessed = assessedCount(entry);
+  const fonts = await loadGeist();
 
   return new ImageResponse(
     (
       <Shell>
         <Banner
-          eyebrow="AI Bill of Rights Scorecard"
+          eyebrow={`${OG_TAG} Scorecard`}
           title={entry.company}
           badge={`${assessed} of ${total} commitments assessed`}
         />
@@ -37,16 +39,16 @@ export async function GET(
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "#fef3c7",
-              borderBottom: "2px solid #fcd34d",
+              background: C.band,
+              borderBottom: `1px solid ${C.bandBorder}`,
               padding: "8px 60px",
               fontSize: 17,
               fontWeight: 700,
-              color: "#92400e",
+              color: C.tag,
               letterSpacing: 2,
             }}
           >
-            EXAMPLE ENTRY — NOT A REAL COMPANY
+            EXAMPLE ENTRY: NOT A REAL COMPANY
           </div>
         ) : null}
 
@@ -56,14 +58,15 @@ export async function GET(
             flex: 1,
             flexDirection: "column",
             justifyContent: "center",
-            padding: "24px 56px",
+            // 16px floor between the caption and the footer.
+            padding: "12px 56px 16px",
           }}
         >
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 12,
+              gap: 10,
             }}
           >
             {entry.assessments.map((a) => {
@@ -75,7 +78,7 @@ export async function GET(
                     display: "flex",
                     flexDirection: "column",
                     width: 208,
-                    padding: "12px 14px",
+                    padding: "10px 14px",
                     borderRadius: 12,
                     background: swatch.bg,
                     border: `2px solid ${swatch.border}`,
@@ -99,7 +102,7 @@ export async function GET(
                       marginTop: 2,
                     }}
                   >
-                    {swatch.label === "—" ? "Not assessed" : swatch.label}
+                    {swatch.label}
                   </div>
                 </div>
               );
@@ -110,16 +113,16 @@ export async function GET(
             style={{
               fontSize: 18,
               color: "#71717a",
-              marginTop: 20,
+              marginTop: 12,
             }}
           >
-            {`Every assessment cites a public source. Last reviewed ${entry.lastReviewed}.`}
+            {`Every assessment cites a public source. Last reviewed ${cardDate(entry.lastReviewed)}.`}
           </div>
         </div>
 
-        <FooterCta text="ai-for-people.org/scorecard — read the sources yourself" />
+        <FooterCta text="theaibill.org/scorecard: read the sources yourself" />
       </Shell>
     ),
-    OG_SIZE,
+    { ...OG_SIZE, fonts },
   );
 }
