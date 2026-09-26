@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { assessedCount, getScorecardEntry } from "@/lib/scorecard";
 import { Banner, FooterCta, OG_SIZE, Shell, STATUS_SWATCH } from "../card";
+import { OG_TAG, loadGeist } from "../../style";
 
 export const runtime = "nodejs";
 
@@ -21,12 +22,13 @@ export async function GET(
 
   const total = entry.assessments.length;
   const assessed = assessedCount(entry);
+  const fonts = await loadGeist();
 
   return new ImageResponse(
     (
       <Shell>
         <Banner
-          eyebrow="AI Bill of Rights Scorecard"
+          eyebrow={`${OG_TAG} Scorecard`}
           title={entry.company}
           badge={`${assessed} of ${total} commitments assessed`}
         />
@@ -46,7 +48,7 @@ export async function GET(
               letterSpacing: 2,
             }}
           >
-            EXAMPLE ENTRY — NOT A REAL COMPANY
+            EXAMPLE ENTRY: NOT A REAL COMPANY
           </div>
         ) : null}
 
@@ -56,7 +58,7 @@ export async function GET(
             flex: 1,
             flexDirection: "column",
             justifyContent: "center",
-            padding: "24px 56px",
+            padding: "12px 56px",
           }}
         >
           <div
@@ -99,7 +101,7 @@ export async function GET(
                       marginTop: 2,
                     }}
                   >
-                    {swatch.label === "—" ? "Not assessed" : swatch.label}
+                    {swatch.label}
                   </div>
                 </div>
               );
@@ -110,16 +112,16 @@ export async function GET(
             style={{
               fontSize: 18,
               color: "#71717a",
-              marginTop: 20,
+              marginTop: 12,
             }}
           >
             {`Every assessment cites a public source. Last reviewed ${entry.lastReviewed}.`}
           </div>
         </div>
 
-        <FooterCta text="ai-for-people.org/scorecard — read the sources yourself" />
+        <FooterCta text="theaibill.org/scorecard: read the sources yourself" />
       </Shell>
     ),
-    OG_SIZE,
+    { ...OG_SIZE, fonts },
   );
 }

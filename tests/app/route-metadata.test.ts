@@ -118,7 +118,7 @@ describe("/about metadata", () => {
   it("carries its own share card", async () => {
     const { metadata } = await import("@/app/about/page");
     expectOwnCard(metadata);
-    expect(metadata.title).toBe(`About — ${SITE_NAME}`);
+    expect(metadata.title).toBe(`About | ${SITE_NAME}`);
   });
 });
 
@@ -136,7 +136,7 @@ describe("/resources/[slug] metadata", () => {
       params: Promise.resolve({ slug }),
     });
     expectOwnCard(meta);
-    expect(meta.title).toBe(`${resource.title} — ${SITE_NAME}`);
+    expect(meta.title).toBe(`${resource.title} | ${SITE_NAME}`);
   });
 
   it("carries its own share card for an unknown slug", async () => {
@@ -145,7 +145,7 @@ describe("/resources/[slug] metadata", () => {
       params: Promise.resolve({ slug: "does-not-exist" }),
     });
     expectOwnCard(meta);
-    expect(meta.title).toBe(`Resource not found — ${SITE_NAME}`);
+    expect(meta.title).toBe(`Resource not found | ${SITE_NAME}`);
   });
 });
 
@@ -175,12 +175,12 @@ describe("/signatories/[id] metadata", () => {
     const meta = await generateMetadata({ params: Promise.resolve({ id: "gone" }) });
 
     expectOwnCard(meta);
-    expect(meta.title).toBe(`Signer not found — ${SITE_NAME}`);
+    expect(meta.title).toBe(`Signer not found | ${SITE_NAME}`);
     // No signer, so no signer card — but it falls back to the site image
     // rather than to nothing. A missing-signer link still unfurls as the
     // project, which is the most useful thing a dead link can do.
     expect((meta.openGraph as Og).images).toEqual([
-      { url: OG_IMAGE_URL, width: 1200, height: 630 },
+      expect.objectContaining({ url: OG_IMAGE_URL, width: 1200, height: 630 }),
     ]);
   });
 });
@@ -216,7 +216,7 @@ describe("/scorecard/[slug] metadata", () => {
 
     expectOwnCard(meta);
     // Used to hardcode "AI Bill of Rights" — one word off SITE_NAME.
-    expect(meta.title).toBe(`${entry.company} — ${SITE_NAME} Scorecard`);
+    expect(meta.title).toBe(`${entry.company} | ${SITE_NAME} Scorecard`);
     expect((meta.openGraph as Og).type).toBe("article");
   });
 
@@ -227,6 +227,6 @@ describe("/scorecard/[slug] metadata", () => {
     });
 
     expectOwnCard(meta);
-    expect(meta.title).toBe(`Scorecard entry not found — ${SITE_NAME}`);
+    expect(meta.title).toBe(`Scorecard entry not found | ${SITE_NAME}`);
   });
 });

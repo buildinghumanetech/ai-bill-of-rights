@@ -33,15 +33,28 @@ import type { Metadata } from "next";
  * `src/app/resources/[slug]/page.tsx`, and `src/app/signatories/[id]/page.tsx`.
  * A rename would need to visit those too.
  */
-export const SITE_NAME = "The AI Bill of Rights";
+export const SITE_NAME = "The People's AI Bill of Rights";
 
 export const SITE_TAGLINE = "A People's Demand for Human-Centered AI";
 
-/** The name plus its disambiguating tagline — used wherever the title stands alone. */
-export const SITE_TITLE = `${SITE_NAME} — ${SITE_TAGLINE}`;
+/**
+ * The name plus its disambiguating tagline, used wherever the title stands
+ * alone. Joined with a colon: nothing the site sends to a link preview carries
+ * an em dash.
+ */
+export const SITE_TITLE = `${SITE_NAME}: ${SITE_TAGLINE}`;
 
 export const SITE_DESCRIPTION =
-  "Eleven commitments we're demanding from every AI company, backed by the signatures of real people. Read the document, sign it, or mark up the next draft.";
+  "The future is ours to name. Make your voice heard. Sign at theaibill.org";
+
+/**
+ * Link previews carry no em dashes. Page titles and descriptions can come from
+ * content files (resource titles and subtitles use them), so they are
+ * normalized here rather than edited at every source.
+ */
+export function withoutEmDashes(text: string): string {
+  return text.replace(/\s*\u2014\s*/g, ", ");
+}
 
 export const PRODUCTION_ORIGIN = "https://ai-for-people.org";
 
@@ -98,20 +111,24 @@ export function getSiteUrl(): string {
  * point their share cards at the homepage. `metadataBase` covers canonical
  * resolution without that hazard.
  *
- * The image is the one thing here that inheritance makes *better* rather than
- * riskier. `/api/og` renders the document itself, not the homepage — it names
- * the site and its eleven commitments and says nothing route-specific — so a
- * route that inherits it shares as the site, which is exactly right for the
- * ones that have no card of their own. That set currently includes
- * `/bill-of-rights` and `/signatories`, the two most shareable pages we have.
- * Contrast `og:url`, which is wrong the moment it is inherited. Any route that
- * wants a *different* picture overrides the whole `openGraph` block anyway,
- * via `buildPageMetadata`.
+ * The image inherits well: the site card (`public/og-v3.png`, the photo wall
+ * with "The future is ours to name") says nothing route-specific, so a route
+ * that defines no card of its own shares as the site, which is right. Contrast
+ * `og:url`, which is wrong the moment it is inherited. A route that wants a
+ * different picture (`/signatories/[id]`, `/scorecard`) passes `imageUrl` to
+ * `buildPageMetadata`.
  */
-export const OG_IMAGE_URL = "/api/og";
+export const OG_IMAGE_URL = "/og-v3.png";
 
 const OG_IMAGE_ALT =
-  "The AI Bill of Rights — eleven commitments demanded of every AI company";
+  "The People's AI Bill of Rights. The future is ours to name. Make your voice heard. Sign at theaibill.org";
+
+const SITE_CARD = {
+  url: OG_IMAGE_URL,
+  width: 1200,
+  height: 630,
+  alt: OG_IMAGE_ALT,
+};
 
 export function buildRootMetadata(): Metadata {
   return {
@@ -123,15 +140,13 @@ export function buildRootMetadata(): Metadata {
       description: SITE_DESCRIPTION,
       siteName: SITE_NAME,
       type: "website",
-      images: [
-        { url: OG_IMAGE_URL, width: 1200, height: 630, alt: OG_IMAGE_ALT },
-      ],
+      images: [SITE_CARD],
     },
     twitter: {
       card: "summary_large_image",
       title: SITE_TITLE,
       description: SITE_DESCRIPTION,
-      images: [OG_IMAGE_URL],
+      images: [SITE_CARD],
     },
   };
 }
@@ -191,14 +206,17 @@ export function buildPageMetadata({
       `[site-metadata] appendSiteName:false on ${JSON.stringify(pageTitle)}, which does not contain ${JSON.stringify(SITE_NAME)}. Use the opt-out only for titles that already name the site.`,
     );
   }
-  const title = appendSiteName ? `${pageTitle} — ${SITE_NAME}` : pageTitle;
+  const title = withoutEmDashes(
+    appendSiteName ? `${pageTitle} | ${SITE_NAME}` : pageTitle,
+  );
+  description = withoutEmDashes(description);
   // Fall back to the site card rather than shipping no image. A route that
   // defines no `openGraph` at all inherits the root's — image included — so
   // without this default, merely *adopting this helper* would downgrade such a
   // route to a bare text card. That is not hypothetical: `/about` and
-  // `/resources/[slug]` regressed exactly that way. `/api/og` describes the
-  // document rather than any one page, so it is always a truthful fallback.
-  const image = imageUrl ?? OG_IMAGE_URL;
+  // `/resources/[slug]` regressed exactly that way. The site card says nothing
+  // page-specific, so it is always a truthful fallback.
+  const image = imageUrl ? { url: imageUrl, width: 1200, height: 630 } : SITE_CARD;
   return {
     title,
     description,
@@ -208,7 +226,7 @@ export function buildPageMetadata({
       siteName: SITE_NAME,
       type: ogType,
       ...(url ? { url } : {}),
-      images: [{ url: image, width: 1200, height: 630 }],
+      images: [image],
     },
     twitter: {
       card: "summary_large_image",

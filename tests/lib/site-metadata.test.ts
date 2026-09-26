@@ -8,6 +8,7 @@ import {
   SITE_TITLE,
   buildPageMetadata,
   buildRootMetadata,
+  withoutEmDashes,
   getSiteUrl,
 } from "@/lib/site-metadata";
 
@@ -16,6 +17,34 @@ const ORIGINAL_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
 afterEach(() => {
   if (ORIGINAL_SITE_URL === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
   else process.env.NEXT_PUBLIC_SITE_URL = ORIGINAL_SITE_URL;
+});
+
+describe("the new name and line", () => {
+  it("names the site, keeps the tagline behind a colon, and has no em dashes", () => {
+    expect(SITE_NAME).toBe("The People's AI Bill of Rights");
+    expect(SITE_TITLE).toBe(
+      "The People's AI Bill of Rights: A People's Demand for Human-Centered AI",
+    );
+    expect(SITE_DESCRIPTION).toBe(
+      "The future is ours to name. Make your voice heard. Sign at theaibill.org",
+    );
+    expect(OG_IMAGE_URL).toBe("/og-v3.png");
+    expect(SITE_TITLE + SITE_DESCRIPTION).not.toContain("\u2014");
+  });
+
+  it("strips em dashes from page titles and descriptions that come from content", () => {
+    expect(withoutEmDashes("GDPR Article 22 \u2014 Automated Decisions")).toBe(
+      "GDPR Article 22, Automated Decisions",
+    );
+    const meta = buildPageMetadata({
+      title: "A \u2014 B",
+      description: "Rights \u2014 and remedies",
+    });
+    const og = meta.openGraph as { title?: string; description?: string };
+    for (const v of [meta.title, meta.description, og.title, og.description]) {
+      expect(String(v)).not.toContain("\u2014");
+    }
+  });
 });
 
 describe("SITE_TITLE", () => {
@@ -92,11 +121,11 @@ describe("buildRootMetadata", () => {
         url: OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: expect.stringContaining("AI Bill of Rights"),
+        alt: expect.stringContaining("The future is ours to name."),
       },
     ]);
     expect((meta.twitter as { images?: unknown }).images).toEqual([
-      OG_IMAGE_URL,
+      expect.objectContaining({ url: OG_IMAGE_URL, width: 1200, height: 630 }),
     ]);
   });
 
@@ -207,7 +236,7 @@ describe("buildPageMetadata", () => {
     const og = meta.openGraph as { title?: string; description?: string };
     const tw = meta.twitter as { title?: string; description?: string };
     for (const value of [meta.title, og.title, tw.title]) {
-      expect(value).toBe(`About — ${SITE_NAME}`);
+      expect(value).toBe(`About | ${SITE_NAME}`);
       // The page title leads; the site name trails it as context, and the
       // homepage's tagline stays off subpages entirely.
       expect(String(value).startsWith("About")).toBe(true);
@@ -222,7 +251,7 @@ describe("buildPageMetadata", () => {
     // disagreed with SITE_NAME ("The AI Bill of Rights") and would have been
     // missed by a rename.
     const meta = buildPageMetadata({ title: "Page", description: "D" });
-    expect(meta.title).toBe(`Page — ${SITE_NAME}`);
+    expect(meta.title).toBe(`Page | ${SITE_NAME}`);
   });
 
   it("leaves the title alone when it already names the site in prose", () => {
@@ -275,13 +304,13 @@ describe("buildPageMetadata", () => {
   it("falls back to the site card so no route ships an imageless preview", () => {
     const plain = buildPageMetadata({ title: "T", description: "D" });
     expect((plain.openGraph as { images?: unknown }).images).toEqual([
-      { url: OG_IMAGE_URL, width: 1200, height: 630 },
+      expect.objectContaining({ url: OG_IMAGE_URL, width: 1200, height: 630 }),
     ]);
     expect((plain.twitter as { card?: string }).card).toBe(
       "summary_large_image",
     );
     expect((plain.twitter as { images?: unknown }).images).toEqual([
-      OG_IMAGE_URL,
+      expect.objectContaining({ url: OG_IMAGE_URL, width: 1200, height: 630 }),
     ]);
   });
 

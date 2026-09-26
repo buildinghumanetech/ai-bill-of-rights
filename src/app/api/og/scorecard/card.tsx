@@ -1,9 +1,11 @@
 import { NOT_ASSESSED, type ScorecardStatus } from "@/lib/scorecard";
+import { OG_COLORS as C } from "../style";
 
 /**
  * Shared chrome for the scorecard OG cards, in the same family as the signer
- * card at `src/app/api/og/signer/[id]/route.tsx`: emerald banner, white body,
- * amber footer CTA.
+ * card at `src/app/api/og/signer/[id]/route.tsx`: light gray band, white body,
+ * amber footer CTA, Geist, blue accent (see ../style.ts). No green: "Meets"
+ * uses the site blue on these cards.
  *
  * These run through Satori, which supports a small subset of CSS — every node
  * with more than one child needs an explicit `display: flex`, and colours must
@@ -17,9 +19,9 @@ export const STATUS_SWATCH: Record<
   { bg: string; fg: string; border: string; label: string }
 > = {
   meets: {
-    bg: "#d1fae5",
-    fg: "#065f46",
-    border: "#6ee7b7",
+    bg: "#dbeafe",
+    fg: "#1e40af",
+    border: "#93c5fd",
     label: "Meets",
   },
   partial: {
@@ -44,7 +46,7 @@ export const STATUS_SWATCH: Record<
     bg: "#f4f4f5",
     fg: "#a1a1aa",
     border: "#e4e4e7",
-    label: "—",
+    label: "Not assessed",
   },
 };
 
@@ -64,7 +66,8 @@ export function Banner({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        background: "#059669",
+        background: C.band,
+        borderBottom: `1px solid ${C.bandBorder}`,
         height: 230,
         padding: "32px 60px",
       }}
@@ -72,7 +75,8 @@ export function Banner({
       <div
         style={{
           fontSize: 20,
-          color: "rgba(255,255,255,0.8)",
+          fontWeight: 600,
+          color: C.tag,
           letterSpacing: 4,
           textTransform: "uppercase",
         }}
@@ -82,8 +86,9 @@ export function Banner({
       <div
         style={{
           fontSize: 54,
-          fontWeight: 700,
-          color: "#fff",
+          fontWeight: 600,
+          letterSpacing: -1,
+          color: C.ink,
           marginTop: 6,
           textAlign: "center",
         }}
@@ -96,11 +101,11 @@ export function Banner({
             display: "flex",
             marginTop: 14,
             padding: "6px 24px",
-            background: "rgba(255,255,255,0.2)",
+            background: C.blueTint,
             borderRadius: 9999,
             fontSize: 18,
-            fontWeight: 700,
-            color: "#fff",
+            fontWeight: 600,
+            color: C.blue,
             letterSpacing: 1,
           }}
         >
@@ -138,8 +143,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        fontFamily: "sans-serif",
-        background: "#fff",
+        fontFamily: "Geist",
+        background: C.white,
       }}
     >
       {children}

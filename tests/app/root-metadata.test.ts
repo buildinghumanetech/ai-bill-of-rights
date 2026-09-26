@@ -72,12 +72,12 @@ describe("root metadata", () => {
       card?: string;
       title?: string;
       description?: string;
-      images?: string[];
+      images?: unknown[];
     };
     expect(tw.card).toBe("summary_large_image");
     expect(tw.title).toBe(SITE_TITLE);
     expect(tw.description).toBe(SITE_DESCRIPTION);
-    expect(tw.images).toEqual([OG_IMAGE_URL]);
+    expect(tw.images).toEqual([expect.objectContaining({ url: OG_IMAGE_URL, width: 1200, height: 630 })]);
   });
 
   it("keeps the People's Demand framing on the card that stands alone", () => {
