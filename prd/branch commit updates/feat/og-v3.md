@@ -1,5 +1,26 @@
 # Branch Progress: feat/og-v3
 
+## Progress Update as of 2026-09-26 13:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Following Erika's review notes, scorecard status pills keep their meaning colors: "Meets" is green again (`#d1fae5` / `#065f46` / `#6ee7b7`, as before and as on the scorecard page). The no-green rule covers brand and accent color only. The signer card's footer ("Join them. Sign at theaibill.org") keeps its text but moves from amber to the light gray band (`#fafafa`, `#71717a` text, `1px #e4e4e7` top border). Preview PNGs are saved to `~/Downloads/og-v3-previews/`.
+
+### Detail of changes made:
+- `src/app/api/og/scorecard/card.tsx`: the `STATUS_SWATCH.meets` values are restored, and the header comment says green is a status color only.
+- `src/app/api/og/signer/[id]/route.tsx`: the footer uses `C.band` / `C.bandBorder` / `C.tag`. No amber is left on the signer card.
+- `tests/app/api/og.site-style.test.ts`:
+  - Green is allowed only on status pills. A pill is identified by its swatch's background AND its `2px` swatch border, or by its swatch's color on its own verdict label. Everything else must be green-free.
+  - The company card asserts that "Meets" is drawn in its green.
+  - A new test checks the signer footer is the gray band with no amber.
+  - Mutation-checked both ways: a green badge fails, and a blue "Meets" fails. An earlier, looser pill match (background alone) let a green badge through; that's fixed.
+- 1,134 tests pass; `tsc` is clean.
+
+### Potential concerns to address:
+- The scorecard cards' footer (`FooterCta`) and the "EXAMPLE ENTRY" strip are still amber. Erika only asked about the signer card; ask before changing them.
+
+---
+
 ## Progress Update as of 2026-09-26 13:15 Pacific
 *(Most recent updates at top)*
 
@@ -16,7 +37,7 @@ First commit. This replaces the closed #98 and the abandoned restyle; the site's
 - Tests: new `tests/app/api/og.site-style.test.ts` records what each route hands ImageResponse and checks the band, tag, headline colors, avatar, quote accents, the Geist fonts, and no green, old domain or em dash. It was mutation-checked by putting a green avatar back. Metadata tests were updated for the new name, title, description, image and " | ". 1,133 tests pass; `tsc` is clean; there are no new ESLint findings project-wide against main.
 
 ### Potential concerns to address:
-- On the per-company scorecard card, "Meets" (blue) sits next to "Unclear" (sky blue). They're readable apart, but closer than green vs sky was. The scorecard page itself still shows "Meets" in green, because the site's look is unchanged.
+- (Resolved 13:30: "Meets" is green again.)
 - The "ai-for-people.org" mentions outside the OG images (team inbox `hello@ai-for-people.org`, `PRODUCTION_ORIGIN`, env fallbacks, the share-link domain list) are deliberately untouched (Erika chose "link previews only").
 - `SITE_NAME` also shows in visible copy that reads it (the homepage h1, the scorecard page h1, the signer page titles).
 

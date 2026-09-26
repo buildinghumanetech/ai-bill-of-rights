@@ -1,8 +1,9 @@
 /**
  * The generated share cards (the "I signed" card and both scorecard cards)
  * wear the site's look: light gray band with a hairline border, gray uppercase
- * tag, near-black type, blue accents, Geist. No green, no old domain, no em
- * dashes.
+ * tag, near-black type, blue accents, Geist. No green as a brand or accent
+ * color (it appears only in scorecard status pills, where "Meets" keeps the
+ * same green as the scorecard page), no old domain, no em dashes.
  *
  * `next/og` is replaced with a recorder, so these assertions read the element
  * tree and options each route hands to ImageResponse rather than pixels. The
@@ -35,6 +36,7 @@ import { GET as signerCard } from "@/app/api/og/signer/[id]/route";
 import { GET as scorecardCard } from "@/app/api/og/scorecard/route";
 import { GET as companyCard } from "@/app/api/og/scorecard/[slug]/route";
 import { getSignerById, getSignatureNumber } from "@/lib/db/queries";
+import { STATUS_SWATCH } from "@/app/api/og/scorecard/card";
 
 const SIGNER_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -66,8 +68,22 @@ const GREENS = [
   "#6ee7b7", "#a7f3d0", "#d1fae5", "#ecfdf5", "#16a34a", "#22c55e",
 ];
 
+const SWATCHES = Object.values(STATUS_SWATCH);
+
+/** A status pill, or the verdict label inside one: the only place green may appear. */
+function isStatusPill(n: Node): boolean {
+  return SWATCHES.some(
+    (s) =>
+      // The pill: its swatch's background AND its swatch's border together.
+      (n.style.background === s.bg && n.style.border === `2px solid ${s.border}`) ||
+      // The verdict inside it: its swatch's color on its swatch's own label.
+      (n.style.color === s.fg && n.text === s.label),
+  );
+}
+
 function expectSiteLook(nodes: Node[]) {
-  const styles = JSON.stringify(nodes.map((n) => n.style)).toLowerCase();
+  const brand = nodes.filter((n) => !isStatusPill(n));
+  const styles = JSON.stringify(brand.map((n) => n.style)).toLowerCase();
   for (const g of GREENS) expect(styles).not.toContain(g);
   const text = nodes.map((n) => n.text).join(" ");
   expect(text).not.toContain("—");
@@ -122,6 +138,19 @@ describe("the I signed card", () => {
     expect(nodes.some((n) => n.text === "Why I signed")).toBe(false);
   });
 
+  it("ends with the call to action in a light gray band, not amber", async () => {
+    const { nodes } = await renderSigner(null);
+    const cta = nodes.find((n) => n.text === "Join them. Sign at theaibill.org");
+    expect(cta?.style.color).toBe("#71717a");
+    const bands = nodes.filter((n) => n.style.background === "#fafafa");
+    expect(bands).toHaveLength(2);
+    expect(bands[1].style.borderTop).toBe("1px solid #e4e4e7");
+    const styles = JSON.stringify(nodes.map((n) => n.style)).toLowerCase();
+    for (const amber of ["#fffbeb", "#fde68a", "#92400e"]) {
+      expect(styles).not.toContain(amber);
+    }
+  });
+
   it("marks the quote with a blue label and a blue left bar", async () => {
     const { nodes } = await renderSigner("Because the people who use AI should have a say.");
     expectSiteLook(nodes);
@@ -138,12 +167,20 @@ describe("the scorecard cards", () => {
     expectGeist(options);
   });
 
-  it("share the look, the tag and Geist on a company card, with Meets in blue", async () => {
+  it("share the look, the tag and Geist on a company card, and keep status colors", async () => {
     await companyCard(new Request("http://localhost"), {
       params: Promise.resolve({ slug: "example-ai-labs" }),
     });
     const { element, options } = captured.calls[0];
-    expectSiteLook(flatten(element as ReactNode));
+    const nodes = flatten(element as ReactNode);
+    expectSiteLook(nodes);
     expectGeist(options);
+    // "Meets" keeps its green, as on the scorecard page; the example entry
+    // has one, so the pill is actually drawn here.
+    expect(GREENS).toContain(STATUS_SWATCH.meets.bg);
+    expect(GREENS).toContain(STATUS_SWATCH.meets.border);
+    const meets = nodes.find((n) => n.text === "Meets");
+    expect(meets?.style.color).toBe(STATUS_SWATCH.meets.fg);
+    expect(nodes.some((n) => n.style.background === STATUS_SWATCH.meets.bg)).toBe(true);
   });
 });

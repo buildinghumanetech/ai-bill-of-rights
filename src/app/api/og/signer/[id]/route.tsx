@@ -219,14 +219,14 @@ export async function GET(
           ) : null}
         </div>
 
-        {/* Amber accent bar at the bottom */}
+        {/* Call to action, in the same light gray as the top band */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#fffbeb",
-            borderTop: "2px solid #fde68a",
+            background: C.band,
+            borderTop: `1px solid ${C.bandBorder}`,
             padding: "14px 60px",
           }}
         >
@@ -234,7 +234,7 @@ export async function GET(
             style={{
               fontSize: 18,
               fontWeight: 600,
-              color: "#92400e",
+              color: C.tag,
             }}
           >
             Join them. Sign at theaibill.org

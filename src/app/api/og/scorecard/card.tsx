@@ -4,8 +4,9 @@ import { OG_COLORS as C } from "../style";
 /**
  * Shared chrome for the scorecard OG cards, in the same family as the signer
  * card at `src/app/api/og/signer/[id]/route.tsx`: light gray band, white body,
- * amber footer CTA, Geist, blue accent (see ../style.ts). No green: "Meets"
- * uses the site blue on these cards.
+ * amber footer CTA, Geist, blue accent (see ../style.ts). Green is not a
+ * brand or accent color here; it appears only as the "Meets" status color,
+ * which matches the scorecard page (src/app/scorecard/status-style.ts).
  *
  * These run through Satori, which supports a small subset of CSS — every node
  * with more than one child needs an explicit `display: flex`, and colours must
@@ -19,9 +20,9 @@ export const STATUS_SWATCH: Record<
   { bg: string; fg: string; border: string; label: string }
 > = {
   meets: {
-    bg: "#dbeafe",
-    fg: "#1e40af",
-    border: "#93c5fd",
+    bg: "#d1fae5",
+    fg: "#065f46",
+    border: "#6ee7b7",
     label: "Meets",
   },
   partial: {
