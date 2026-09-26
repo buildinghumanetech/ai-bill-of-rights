@@ -15,12 +15,6 @@ type Db = any;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** First word of a display name, unless it is masked ("E****"). */
-function firstNameFromDisplay(displayName: string): string | null {
-  const first = displayName.trim().split(/\s+/)[0] ?? "";
-  return first && !first.includes("*") ? first : null;
-}
-
 export async function lookupContacts(
   db: Db,
   candidates: Candidate[],
@@ -43,7 +37,7 @@ export async function lookupContacts(
         const u = byId.get(c.clerkUserId);
         const email =
           u?.primaryEmailAddress?.emailAddress ?? u?.emailAddresses?.[0]?.emailAddress;
-        if (email) out.set(c.signerId, { email, firstName: u?.firstName ?? null });
+        if (email) out.set(c.signerId, { email });
       }
     }
   }
@@ -61,7 +55,7 @@ export async function lookupContacts(
     };
     const value = fields.contact_value?.trim() ?? "";
     if (fields.contact_method === "email" && EMAIL_RE.test(value)) {
-      out.set(c.signerId, { email: value, firstName: firstNameFromDisplay(c.displayName) });
+      out.set(c.signerId, { email: value });
     }
   }
   return out;

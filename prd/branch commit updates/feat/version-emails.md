@@ -1,5 +1,32 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-09-26 13:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The relaunch email now uses Erika's exact copy. The subject is "We've updated The People's AI Bill of Rights: v0.1.0". The greeting uses the first word of the display name, the thank-you line gives the signer number, one paragraph says what v0.1.0 changed, and it signs off "Thanks! Erika". Two pill buttons sit side by side: "See the update" (solid blue) and a new "Spread the word" (white with a 1.5px blue border). "Spread the word" goes to the signer's own short share link, so referrals count. The date line, the "new home" line, the signed-version line, and the plain URL under the button are gone. The gray unsubscribe footer stays. **Nothing has been sent to signers.** One test went to Erika only.
+
+### Detail of changes made:
+- `src/lib/email/version-email.ts`, rewritten:
+  - The input takes `name` (display name) and `shareUrl`. It no longer takes `publishedAt` or `signedVersion`, and `longDate` is gone.
+  - `greetingName()` takes the first word of the name. It returns null ("Hi,") when that word is blank, one letter with or without a period, masked ("E****"), or contains "@".
+  - For the relaunch, `summary` is a clause after "which"; for a version update it's the changelog as full sentences ("We've created v0.2.0. Adds ..."). Both use the same subject.
+  - The buttons are built by `pill()`/`pillRow()`. Each is a bulletproof table inside an inline-block `div`, so they sit side by side and wrap to a stack when there isn't room for both. There's no media query; on a 375px phone the content width is 327px and the pair needs about 348px. Both pills have a 1.5px blue border and 10.5px by 22.5px padding, so they're the same height (46px).
+  - Outlook on Windows gets one table row of two VML roundrects instead: 170px wide for "See the update" and 186px for "Spread the word", at 46px tall. The widths come from measuring Arial Bold 16px (114px and 125px of text), plus 48px of padding and some slack.
+- `src/server/email/campaign.ts`: `renderMessage` greets from `recipient.displayName`. It builds the share link with `signerShareLink(SITE_ORIGIN, id, slug)`: `/s/<slug>` when there's a slug, otherwise the long `/signatories/<id>?ref=<id>` link, which also counts referrals. A real send calls `getOrCreateShareSlug`. It takes a new `opts.createShareSlug`; `false` uses the new read-only `findShareSlug` (in `src/lib/share/short-links.ts`), so a dry run or test writes nothing. `Contact.firstName` is gone, and `contacts.ts` no longer reads Clerk's firstName, because the rule is the display name.
+- `scripts/send-version-email.ts`: `RELAUNCH_SUMMARY` is now the "which ..." clause. `--test-name` stands in for the display name. The test and dry run pass `createShareSlug: false`.
+- There's no site-wide share page (no /share route). When a signer has no slug, the link falls back to their own signer page with `?ref`, which is where `signerShareLink` already sends people.
+- Tests: `tests/lib/version-email.test.ts` checks the exact text, the greeting rules, both buttons' styles and links, the side-by-side markup, the VML widths, the footer, and the palette. `tests/server/version-email-campaign.test.ts` checks that a real send creates the slug and links to it, and that `createShareSlug: false` writes no row and uses the long link.
+- 1,178 tests pass, `tsc` is clean, and ESLint is clean on every TypeScript file the branch touches.
+
+### Potential concerns to address:
+- The test email uses the first audience member's signer number and share link, not Erika's. Clicking "Spread the word" in a test opens that signer's page.
+- The real send creates a `share_links` row for any recipient who doesn't have one yet. That's intended, but it's a write the dry run doesn't show.
+- Stacking on mobile relies on inline-block wrapping, and I haven't checked it on a device.
+- The real send still needs the production `CLERK_SECRET_KEY` for the exact count, and it must wait until #95 is live.
+
+---
+
 ## Progress Update as of 2026-09-26 12:30 Pacific
 *(Most recent updates at top)*
 

@@ -7,10 +7,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, type TestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { consentRecords, emailSends, signers } from "@/lib/db/schema";
+import { consentRecords, emailSends, shareLinks, signers } from "@/lib/db/schema";
 import { recordSignature } from "@/server/signatures/record";
 import {
   buildAudience,
+  renderMessage,
   sendCampaign,
   unsubscribeByToken,
   type Candidate,
@@ -86,7 +87,7 @@ const contacts = async (cs: Candidate[]) =>
   new Map<string, Contact>(
     cs
       .filter((c) => !c.displayName.startsWith("phone"))
-      .map((c) => [c.signerId, { email: `${c.displayName}@example.com`, firstName: c.displayName }]),
+      .map((c) => [c.signerId, { email: `${c.displayName}@example.com` }]),
   );
 
 describe("the relaunch audience", () => {
@@ -169,6 +170,29 @@ describe("sending", () => {
       },
     });
     expect(sent[0].text).toContain(`https://theaibill.org/unsubscribe/${row.unsubscribeToken}`);
+  });
+
+  it("greets by display name and links Spread the word to their own short link", async () => {
+    const id = await signer("Ada Lovelace");
+    const sent: EmailMessage[] = [];
+    const { recipients } = await buildAudience(db, RELAUNCH, contacts);
+    await sendCampaign(db, RELAUNCH, recipients, async (m) => void sent.push(...m));
+
+    const [link] = await db.select().from(shareLinks).where(eq(shareLinks.signerId, id));
+    expect(link?.slug).toMatch(/^[a-z2-9]{7}$/);
+    expect(sent[0].text.startsWith("Hi Ada,")).toBe(true);
+    expect(sent[0].text).toContain(`Spread the word:\nhttps://theaibill.org/s/${link.slug}`);
+    expect(sent[0].html).toContain(`href="https://theaibill.org/s/${link.slug}"`);
+  });
+
+  it("writes no share link for a dry run or test, and falls back to the long link", async () => {
+    const id = await signer("a");
+    const { recipients } = await buildAudience(db, RELAUNCH, contacts);
+    const m = await renderMessage(db, RELAUNCH, recipients[0], "tok", "t@example.com", {
+      createShareSlug: false,
+    });
+    expect(await db.select().from(shareLinks)).toHaveLength(0);
+    expect(m.text).toContain(`Spread the word:\nhttps://theaibill.org/signatories/${id}?ref=${id}`);
   });
 
   it("releases a failed batch so a rerun retries it, and stops past 2% failures", async () => {

@@ -76,6 +76,19 @@ export async function getOrCreateShareSlug(
   }
 }
 
+/** The signer's existing slug, or null. Read-only; never throws. */
+export async function findShareSlug(
+  db: Db,
+  signerId: string,
+): Promise<string | null> {
+  try {
+    return await slugFor(db, signerId);
+  } catch (err) {
+    console.warn("[share-links] could not read a short link:", err);
+    return null;
+  }
+}
+
 /** The signer a slug points at, or null. Never throws. */
 export async function resolveShareSlug(
   db: Db,

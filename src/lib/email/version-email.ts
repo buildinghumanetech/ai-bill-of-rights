@@ -3,61 +3,57 @@
  * relaunch email, and every version update after it.
  *
  * House rules for this copy, all enforced by tests/lib/version-email.test.ts:
- *  - It informs; it does not ask anyone to re-sign. One call to action, the
- *    "See the update" button, with the same link in plain text under it.
+ *  - It informs; it does not ask anyone to re-sign. Two buttons: "See the
+ *    update" (what changed) and "Spread the word" (their own share link).
  *  - Nothing may suggest an earlier signature expired or stopped counting.
- *  - No em dashes. Dates written out ("Friday, July 24th").
- *  - Every email carries a one-click unsubscribe link.
+ *  - No em dashes.
+ *  - Every email carries a one-click unsubscribe link. It's legally required.
  *  - Only the site's palette: white, near-black, gray, blue. No green or purple.
  */
 
 export interface VersionEmailInput {
-  /** Real first name, never a masked display name. Blank greets plainly. */
-  firstName?: string | null;
+  /**
+   * Their display name. The greeting uses its first word, or greets plainly
+   * when that's blank, an initial, masked, or an email address.
+   */
+  name?: string | null;
   /** Their place in line, from their first signature. Null leaves it out. */
   signerNumber?: number | null;
   /** The version this email is about, e.g. "0.1.0". */
   version: string;
-  /** ISO date it was published, e.g. "2026-07-24". */
-  publishedAt: string;
-  /** One or two plain sentences on what changed. */
+  /**
+   * What changed. For the relaunch, a clause that follows "which" ("adds
+   * ..."); for a version update, one or two full sentences.
+   */
   summary: string;
-  /** The version they signed, when it's an earlier one. */
-  signedVersion?: string | null;
-  /** The relaunch email also announces the site's new home. */
   relaunch?: boolean;
   /** e.g. "https://theaibill.org" (no trailing slash). */
   siteOrigin: string;
+  /** Their own share link, so referrals from it count. */
+  shareUrl: string;
   unsubscribeUrl: string;
 }
 
 export const VERSION_EMAIL_CTA = "See the update";
+export const VERSION_EMAIL_SHARE_CTA = "Spread the word";
 
 /** The site's palette, and its font stack with fallbacks for mail clients. */
 const INK = "#09090b";
 const GRAY = "#71717a";
 const BLUE = "#2563eb";
+const WHITE = "#ffffff";
 const FONT = "Geist, -apple-system, Helvetica, Arial, sans-serif";
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const WEEKDAYS = [
-  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-];
-
-function ordinal(n: number): string {
-  const teen = n % 100 >= 11 && n % 100 <= 13;
-  const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
-  return `${n}${suffix}`;
-}
-
-/** "2026-07-24" → "Friday, July 24th". Read as a calendar date, not a moment. */
-export function longDate(isoDate: string): string {
-  const [y, m, d] = isoDate.slice(0, 10).split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  return `${WEEKDAYS[date.getUTCDay()]}, ${MONTHS[m - 1]} ${ordinal(d)}`;
+/**
+ * The name to greet, or null for a plain "Hi,". Takes the first word of the
+ * display name, and skips it when it's only an initial ("E", "E."), masked
+ * ("E****"), or an email address.
+ */
+export function greetingName(name: string | null | undefined): string | null {
+  const first = name?.trim().split(/\s+/)[0] ?? "";
+  if (!first || first.includes("@") || first.includes("*")) return null;
+  if (first.replace(/\.$/, "").length <= 1) return null;
+  return first;
 }
 
 function esc(s: string): string {
@@ -68,82 +64,107 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+interface PillSpec {
+  label: string;
+  href: string;
+  /** Solid blue, or white with a blue border and blue text. */
+  solid: boolean;
+  /** Outlook's VML pill has no auto width; sized for the label in Arial Bold 16px. */
+  vmlWidth: number;
+}
+
+/**
+ * A bulletproof pill button. Everywhere but Outlook on Windows, a table cell
+ * carries the color so it survives clients that strip styles from links, and
+ * the cell sits in an inline-block, so two buttons sit side by side and wrap
+ * to a stack on a narrow screen. Outlook ignores border-radius, so it gets a
+ * VML pill of the same size instead (see `pillRow`).
+ */
+function pill({ label, href, solid }: PillSpec): string {
+  const bg = solid ? BLUE : WHITE;
+  const fg = solid ? WHITE : BLUE;
+  // Both carry a 1.5px border, so the solid and outline pills match in size.
+  const link = `display:inline-block;padding:10.5px 22.5px;border:1.5px solid ${BLUE};border-radius:999px;background:${bg};color:${fg};font-family:${FONT};font-size:16px;font-weight:600;line-height:22px;text-decoration:none;white-space:nowrap;`;
+  return `<div style="display:inline-block;vertical-align:top;margin:0 12px 12px 0;">
+      <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse:separate;">
+        <tr>
+          <td align="center" bgcolor="${bg}" style="background:${bg};border-radius:999px;">
+            <a href="${esc(href)}" target="_blank" style="${link}">${esc(label)}</a>
+          </td>
+        </tr>
+      </table>
+    </div>`;
+}
+
+function vmlPill({ label, href, solid, vmlWidth }: PillSpec): string {
+  const bg = solid ? BLUE : WHITE;
+  const fg = solid ? WHITE : BLUE;
+  return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${esc(href)}" style="height:46px;v-text-anchor:middle;width:${vmlWidth}px;" arcsize="50%" strokecolor="${BLUE}" strokeweight="1.5px" fillcolor="${bg}">
+        <w:anchorlock/>
+        <center style="color:${fg};font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;">${esc(label)}</center>
+      </v:roundrect>`;
+}
+
+function pillRow(buttons: PillSpec[]): string {
+  return `<!--[if mso]>
+  <table role="presentation" border="0" cellspacing="0" cellpadding="0"><tr>
+    ${buttons.map((b) => `<td style="padding:0 12px 12px 0;">
+      ${vmlPill(b)}
+    </td>`).join("\n    ")}
+  </tr></table>
+  <![endif]-->
+  <!--[if !mso]><!-->
+  <div style="font-size:0;line-height:0;">
+    ${buttons.map(pill).join("\n    ")}
+  </div>
+  <!--<![endif]-->`;
+}
+
 export function versionEmail(opts: VersionEmailInput): {
   subject: string;
   text: string;
   html: string;
 } {
-  const firstName = opts.firstName?.trim().split(/\s+/)[0] ?? "";
+  const firstName = greetingName(opts.name);
   const whatChangedUrl = `${opts.siteOrigin}/v/${opts.version}#what-changed`;
-  const siteHost = opts.siteOrigin.replace(/^https?:\/\//, "");
 
-  const subject = opts.relaunch
-    ? "A new version of The People's AI Bill of Rights"
-    : `Version ${opts.version} of The People's AI Bill of Rights is out`;
-
-  const paragraphs: string[] = [];
-  paragraphs.push(
+  const subject = `We've updated The People's AI Bill of Rights: v${opts.version}`;
+  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const paragraphs = [
     opts.signerNumber
-      ? `Thank you for signing The People's AI Bill of Rights. You're signer #${opts.signerNumber.toLocaleString("en-US")}.`
-      : "Thank you for signing The People's AI Bill of Rights.",
-  );
-  paragraphs.push(
-    `On ${longDate(opts.publishedAt)}, we published a new version, v${opts.version}. ${opts.summary}`,
-  );
-  if (opts.signedVersion) {
-    paragraphs.push(
-      `Your signature on v${opts.signedVersion} stands, and you're still counted.`,
-    );
-  }
-  const closing = opts.relaunch
-    ? `The site has a new home too: ${siteHost}.`
-    : null;
+      ? `Thanks for being signer #${opts.signerNumber.toLocaleString("en-US")} on The People's AI Bill of Rights.`
+      : "Thanks for signing The People's AI Bill of Rights.",
+    opts.relaunch
+      ? `You asked to hear about updates. We've created v${opts.version}, which ${opts.summary}`
+      : `You asked to hear about updates. We've created v${opts.version}. ${opts.summary}`,
+  ];
   const footer =
     "You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.";
 
   const text = [
-    firstName ? `Hi ${firstName},` : "Hi,",
+    greeting,
     ...paragraphs,
     `${VERSION_EMAIL_CTA}:\n${whatChangedUrl}`,
-    ...(closing ? [closing] : []),
-    "Erika Anderson",
+    `${VERSION_EMAIL_SHARE_CTA}:\n${opts.shareUrl}`,
+    "Thanks!\nErika",
     `${footer}\nUnsubscribe: ${opts.unsubscribeUrl}`,
   ].join("\n\n");
 
   const p = (s: string) =>
     `<p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:${INK};">${s}</p>`;
-  const href = esc(whatChangedUrl);
-  // A bulletproof button: a table cell carries the color, so it survives
-  // clients that strip styles from links. Outlook on Windows ignores
-  // border-radius, so it gets a VML pill of the same size instead.
-  const button = `<!--[if mso]>
-  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${href}" style="height:46px;v-text-anchor:middle;width:170px;" arcsize="50%" stroke="f" fillcolor="${BLUE}">
-    <w:anchorlock/>
-    <center style="color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;">${esc(VERSION_EMAIL_CTA)}</center>
-  </v:roundrect>
-  <![endif]-->
-  <!--[if !mso]><!-->
-  <table role="presentation" border="0" cellspacing="0" cellpadding="0" align="left" style="border-collapse:separate;">
-    <tr>
-      <td align="center" bgcolor="${BLUE}" style="background:${BLUE};border-radius:999px;">
-        <a href="${href}" target="_blank" style="display:inline-block;padding:12px 24px;border-radius:999px;background:${BLUE};color:#ffffff;font-family:${FONT};font-size:16px;font-weight:600;line-height:22px;text-decoration:none;">${esc(VERSION_EMAIL_CTA)}</a>
-      </td>
-    </tr>
-  </table>
-  <!--<![endif]-->`;
   const html = `<!DOCTYPE html>
 <html>
-<body style="margin:0;padding:0;background:#ffffff;font-family:${FONT};">
+<body style="margin:0;padding:0;background:${WHITE};font-family:${FONT};">
 <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
-  ${p(esc(firstName ? `Hi ${firstName},` : "Hi,"))}
+  ${p(esc(greeting))}
   ${paragraphs.map((s) => p(esc(s))).join("\n  ")}
-  <div style="margin:24px 0 8px;">
-  ${button}
+  <div style="margin:24px 0 12px;">
+  ${pillRow([
+    { label: VERSION_EMAIL_CTA, href: whatChangedUrl, solid: true, vmlWidth: 170 },
+    { label: VERSION_EMAIL_SHARE_CTA, href: opts.shareUrl, solid: false, vmlWidth: 186 },
+  ])}
   </div>
-  <div style="clear:both;"></div>
-  <p style="margin:0 0 24px;font-size:13px;line-height:1.5;color:${GRAY};"><a href="${href}" style="color:${GRAY};text-decoration:underline;word-break:break-all;">${href}</a></p>
-  ${closing ? p(esc(closing)) : ""}
-  ${p("Erika Anderson")}
+  ${p("Thanks!<br>Erika")}
   <p style="margin:32px 0 0;font-size:13px;line-height:1.5;color:${GRAY};">${esc(footer)} <a href="${esc(opts.unsubscribeUrl)}" style="color:${GRAY};text-decoration:underline;">Unsubscribe</a>.</p>
 </div>
 </body>

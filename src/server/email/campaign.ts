@@ -20,6 +20,8 @@ import type { VersionLevel } from "@/lib/content/versions-index";
 import { getSignatureNumber } from "@/lib/db/queries";
 import type { EmailMessage } from "@/lib/email/send";
 import { versionEmail } from "@/lib/email/version-email";
+import { findShareSlug, getOrCreateShareSlug } from "@/lib/share/short-links";
+import { signerShareLink } from "@/lib/share/urls";
 import {
   wantsVersionEmail,
   type NotificationPreference,
@@ -58,7 +60,6 @@ export interface Candidate {
 
 export interface Contact {
   email: string;
-  firstName: string | null;
 }
 
 export type ContactLookup = (c: Candidate[]) => Promise<Map<string, Contact>>;
@@ -178,28 +179,38 @@ export function newUnsubscribeToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
-/** The email one recipient gets, with its one-click unsubscribe headers. */
+/**
+ * The email one recipient gets, with its one-click unsubscribe headers.
+ *
+ * "Spread the word" links to their own short share link, so referrals from it
+ * count. A real send creates the slug if they have none; a dry run or test
+ * (`createShareSlug: false`) only reads one, so it writes nothing. With no
+ * slug, it's the long /signatories/<id>?ref=<id> link, which counts the same.
+ */
 export async function renderMessage(
   db: Db,
   spec: CampaignSpec,
   recipient: Recipient,
   unsubscribeToken: string,
   to: string = recipient.email,
+  opts: { createShareSlug?: boolean } = {},
 ): Promise<EmailMessage> {
   const unsubscribeUrl = `${SITE_ORIGIN}/unsubscribe/${unsubscribeToken}`;
   const signerNumber = await getSignatureNumber(recipient.signerId, db).catch(
     () => null,
   );
+  const slug =
+    opts.createShareSlug === false
+      ? await findShareSlug(db, recipient.signerId)
+      : await getOrCreateShareSlug(db, recipient.signerId);
   const { subject, text, html } = versionEmail({
-    firstName: recipient.firstName,
+    name: recipient.displayName,
     signerNumber,
     version: spec.version,
-    publishedAt: spec.publishedAt,
     summary: spec.summary,
-    signedVersion:
-      recipient.signedVersion !== spec.version ? recipient.signedVersion : null,
     relaunch: spec.relaunch,
     siteOrigin: SITE_ORIGIN,
+    shareUrl: signerShareLink(SITE_ORIGIN, recipient.signerId, slug),
     unsubscribeUrl,
   });
   return {

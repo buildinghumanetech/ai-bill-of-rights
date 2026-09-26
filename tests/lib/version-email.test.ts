@@ -1,32 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { longDate, versionEmail, VERSION_EMAIL_CTA } from "@/lib/email/version-email";
+import {
+  greetingName,
+  versionEmail,
+  VERSION_EMAIL_CTA,
+  VERSION_EMAIL_SHARE_CTA,
+} from "@/lib/email/version-email";
+
+const WHAT_CHANGED = "https://theaibill.org/v/0.1.0#what-changed";
+const SHARE = "https://theaibill.org/s/abc2345";
+const UNSUB = "https://theaibill.org/unsubscribe/tok123";
 
 const BASE = {
-  firstName: "Ada",
+  name: "Ada Lovelace",
   signerNumber: 12,
   version: "0.1.0",
-  publishedAt: "2026-07-24",
-  summary: "It adds two articles.",
-  signedVersion: "0.0.1",
+  summary:
+    "adds Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.",
   relaunch: true,
   siteOrigin: "https://theaibill.org",
-  unsubscribeUrl: "https://theaibill.org/unsubscribe/tok123",
+  shareUrl: SHARE,
+  unsubscribeUrl: UNSUB,
 };
 
-describe("longDate", () => {
-  it("writes dates out in full", () => {
-    expect(longDate("2026-07-24")).toBe("Friday, July 24th");
-    expect(longDate("2026-09-24")).toBe("Thursday, September 24th");
-    expect(longDate("2026-09-01")).toBe("Tuesday, September 1st");
-    expect(longDate("2026-09-02")).toBe("Wednesday, September 2nd");
-    expect(longDate("2026-09-03")).toBe("Thursday, September 3rd");
-    expect(longDate("2026-09-11")).toBe("Friday, September 11th");
-    expect(longDate("2026-09-22")).toBe("Tuesday, September 22nd");
+describe("greetingName", () => {
+  it("is the first word of the display name", () => {
+    expect(greetingName("Ada Lovelace")).toBe("Ada");
+    expect(greetingName("  Grace  ")).toBe("Grace");
+  });
+
+  it("greets plainly for a blank name, an initial, a mask or an email", () => {
+    for (const name of [null, undefined, "", "   ", "E", "E.", "E. Anderson", "E****", "ada@example.com"]) {
+      expect(greetingName(name)).toBeNull();
+    }
   });
 });
 
-describe("versionEmail", () => {
+describe("the relaunch email", () => {
   const { subject, text, html } = versionEmail(BASE);
+
+  it("is exactly the approved copy", () => {
+    expect(subject).toBe("We've updated The People's AI Bill of Rights: v0.1.0");
+    expect(text).toBe(
+      [
+        "Hi Ada,",
+        "Thanks for being signer #12 on The People's AI Bill of Rights.",
+        "You asked to hear about updates. We've created v0.1.0, which adds Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.",
+        `See the update:\n${WHAT_CHANGED}`,
+        `Spread the word:\n${SHARE}`,
+        "Thanks!\nErika",
+        `You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.\nUnsubscribe: ${UNSUB}`,
+      ].join("\n\n"),
+    );
+  });
 
   it("has no em or en dashes anywhere", () => {
     for (const s of [subject, text, html]) {
@@ -34,48 +59,68 @@ describe("versionEmail", () => {
     }
   });
 
-  it("has exactly one call to action, to what changed", () => {
-    expect(VERSION_EMAIL_CTA).toBe("See the update");
-    expect(text).toContain("See the update:\nhttps://theaibill.org/v/0.1.0#what-changed");
-    expect(text.split(VERSION_EMAIL_CTA)).toHaveLength(2);
-    // Every link but the unsubscribe goes to what changed: the button, its
-    // Outlook twin, and the plain-text fallback under it.
-    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-    expect(new Set(hrefs)).toEqual(
-      new Set([
-        "https://theaibill.org/v/0.1.0#what-changed",
-        "https://theaibill.org/unsubscribe/tok123",
-      ]),
-    );
+  it("drops the date, new-home and plain-URL lines", () => {
+    expect(text).not.toMatch(/new home|published|July/);
+    // In the HTML, URLs appear only as link targets, never as visible text.
+    expect(html.replace(/href="[^"]*"/g, "")).not.toContain("https://");
   });
 
-  it("uses a bulletproof pill button styled like the site", () => {
-    // Table-based for Gmail and Apple Mail, VML for Outlook on Windows.
-    expect(html).toMatch(/<table role="presentation"[^>]*>\s*<tr>\s*<td[^>]*bgcolor="#2563eb"/);
-    expect(html).toContain('<v:roundrect');
-    expect(html).toContain('arcsize="50%"');
-    expect(html).toContain('fillcolor="#2563eb"');
-    const a = html.match(/<a [^>]*>See the update<\/a>/)?.[0] ?? "";
-    for (const rule of [
-      "background:#2563eb",
-      "color:#ffffff",
+  it("never suggests the earlier signature lapsed", () => {
+    expect(text).not.toMatch(/re-?sign|expire|invalid|no longer|lapse|renew/i);
+  });
+
+  it("links the two buttons to what changed and to their share link", () => {
+    expect(VERSION_EMAIL_CTA).toBe("See the update");
+    expect(VERSION_EMAIL_SHARE_CTA).toBe("Spread the word");
+    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(hrefs)).toEqual(new Set([WHAT_CHANGED, SHARE, UNSUB]));
+    const button = (label: string) =>
+      html.match(new RegExp(`<a [^>]*>${label}</a>`))?.[0] ?? "";
+    expect(button("See the update")).toContain(`href="${WHAT_CHANGED}"`);
+    expect(button("Spread the word")).toContain(`href="${SHARE}"`);
+  });
+
+  it("makes See the update a solid blue pill and Spread the word a blue outline pill", () => {
+    const style = (label: string) =>
+      html.match(new RegExp(`<a [^>]*style="([^"]*)"[^>]*>${label}</a>`))?.[1] ?? "";
+    const shared = [
+      "border:1.5px solid #2563eb",
+      "border-radius:999px",
       "font-weight:600",
       "font-size:16px",
-      "border-radius:999px",
-      "padding:12px 24px",
       "display:inline-block",
       "font-family:Geist, -apple-system, Helvetica, Arial, sans-serif",
-    ]) {
-      expect(a).toContain(rule);
+    ];
+    for (const rule of [...shared, "background:#2563eb", "color:#ffffff"]) {
+      expect(style("See the update")).toContain(rule);
     }
-    // Sized to its text, not full width.
+    for (const rule of [...shared, "background:#ffffff", "color:#2563eb"]) {
+      expect(style("Spread the word")).toContain(rule);
+    }
+  });
+
+  it("sets the buttons side by side, wrapping to a stack on narrow screens", () => {
+    const nonMso = html.slice(html.indexOf("<!--[if !mso]><!-->"), html.indexOf("<!--<![endif]-->"));
+    const cells = nonMso.match(/<div style="display:inline-block;[^"]*">\s*<table role="presentation"/g);
+    expect(cells).toHaveLength(2);
     expect(html).not.toMatch(/width:100%|width="100%"/);
   });
 
-  it("puts a small gray plain-text link under the button", () => {
-    const after = html.slice(html.indexOf("<!--<![endif]-->"));
-    expect(after).toMatch(
-      /<p style="[^"]*font-size:13px[^"]*color:#71717a[^"]*"><a href="https:\/\/theaibill\.org\/v\/0\.1\.0#what-changed"[^>]*>https:\/\/theaibill\.org\/v\/0\.1\.0#what-changed<\/a>/,
+  it("gives Outlook a VML pill per button, wide enough for each label", () => {
+    const mso = html.slice(html.indexOf("<!--[if mso]>"), html.indexOf("<![endif]-->"));
+    const pills = [...mso.matchAll(/<v:roundrect [^>]*style="[^"]*width:(\d+)px;"[^>]*>[\s\S]*?<center[^>]*>([^<]+)<\/center>/g)];
+    expect(pills.map((m) => m[2])).toEqual(["See the update", "Spread the word"]);
+    // Arial Bold 16px: 114px and 126px of text, plus 24px padding each side.
+    expect(Number(pills[0][1])).toBeGreaterThanOrEqual(114 + 48);
+    expect(Number(pills[1][1])).toBeGreaterThanOrEqual(126 + 48);
+    expect(mso).toContain('fillcolor="#2563eb"');
+    expect(mso).toContain('fillcolor="#ffffff"');
+    expect(mso.match(/arcsize="50%"/g)).toHaveLength(2);
+  });
+
+  it("keeps the small gray unsubscribe footer", () => {
+    expect(html).toMatch(
+      /<p style="[^"]*font-size:13px[^"]*color:#71717a[^"]*">You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions\. <a href="https:\/\/theaibill\.org\/unsubscribe\/tok123"[^>]*>Unsubscribe<\/a>/,
     );
   });
 
@@ -85,42 +130,33 @@ describe("versionEmail", () => {
     expect(html).not.toMatch(/green|purple|violet|emerald/i);
   });
 
-  it("informs, and never suggests the earlier signature lapsed", () => {
-    expect(text).toContain("Your signature on v0.0.1 stands, and you're still counted.");
-    expect(text).not.toMatch(/re-?sign|expire|invalid|no longer|lapse|renew/i);
-  });
-
-  it("greets by first name, gives their number and the date in full", () => {
-    expect(text.startsWith("Hi Ada,")).toBe(true);
-    expect(text).toContain("You're signer #12.");
-    expect(text).toContain("On Friday, July 24th, we published a new version, v0.1.0.");
-  });
-
-  it("signs off as Erika and carries an unsubscribe link", () => {
-    expect(text).toContain("Erika Anderson");
-    expect(text).toContain("Unsubscribe: https://theaibill.org/unsubscribe/tok123");
-    expect(html).toContain('href="https://theaibill.org/unsubscribe/tok123"');
-  });
-
-  it("announces the new home only in the relaunch", () => {
-    expect(text).toContain("The site has a new home too: theaibill.org.");
-    const update = versionEmail({ ...BASE, relaunch: false, version: "0.2.0" });
-    expect(update.text).not.toContain("new home");
-    expect(update.subject).toBe("Version 0.2.0 of The People's AI Bill of Rights is out");
-  });
-
   it("calls it The People's AI Bill of Rights everywhere", () => {
-    expect(subject).toBe("A new version of The People's AI Bill of Rights");
-    expect(text).toContain("Thank you for signing The People's AI Bill of Rights.");
-    expect(text).toContain("because you signed The People's AI Bill of Rights");
     for (const s of [subject, text, html]) {
       expect(s.replace(/The People's AI Bill of Rights/g, "")).not.toContain("AI Bill of Rights");
     }
   });
+});
 
-  it("greets plainly with no name, and leaves out a missing number", () => {
-    const plain = versionEmail({ ...BASE, firstName: null, signerNumber: null });
-    expect(plain.text.startsWith("Hi,")).toBe(true);
+describe("variations", () => {
+  it("greets plainly without a usable name, and thanks plainly without a number", () => {
+    const plain = versionEmail({ ...BASE, name: "E.", signerNumber: null });
+    expect(plain.text.startsWith("Hi,\n\n")).toBe(true);
+    expect(plain.text).toContain("Thanks for signing The People's AI Bill of Rights.");
     expect(plain.text).not.toContain("signer #");
+  });
+
+  it("writes large signer numbers with a comma", () => {
+    expect(versionEmail({ ...BASE, signerNumber: 1234 }).text).toContain("signer #1,234 on");
+  });
+
+  it("gives a version update the same subject and its changelog as sentences", () => {
+    const update = versionEmail({
+      ...BASE,
+      relaunch: false,
+      version: "0.2.0",
+      summary: "Adds Article 12.",
+    });
+    expect(update.subject).toBe("We've updated The People's AI Bill of Rights: v0.2.0");
+    expect(update.text).toContain("We've created v0.2.0. Adds Article 12.");
   });
 });

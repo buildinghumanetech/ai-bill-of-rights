@@ -34,8 +34,9 @@ for (const p of (flag("env") ?? ".env.local").split(",")) {
   config({ path: p.trim().replace(/^~/, os.homedir()), override: true, quiet: true });
 }
 
+// Follows "We've created v0.1.0, which".
 const RELAUNCH_SUMMARY =
-  "It adds two articles, Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.";
+  "adds Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.";
 
 async function main(): Promise<void> {
   const [mode, versionArg] = args;
@@ -87,18 +88,20 @@ async function main(): Promise<void> {
   const testTo = flag("test-to");
   if (testTo) {
     // No address lookup: every candidate "lives" at the test address, and the
-    // first one supplies the signer number and signed version for the sample.
+    // first one supplies the signer number and share link for the sample.
+    // --test-name stands in for their display name.
     const { recipients } = await campaign.buildAudience(db, spec, async (cs) =>
-      new Map(cs.map((c) => [c.signerId, { email: testTo, firstName: flag("test-name") ?? null }])),
+      new Map(cs.map((c) => [c.signerId, { email: testTo }])),
     );
     const sample = recipients[0];
     if (!sample) throw new Error("No one in the audience to base a test email on.");
     const message = await campaign.renderMessage(
       db,
       spec,
-      sample,
+      { ...sample, displayName: flag("test-name") ?? "" },
       "test-placeholder-not-a-real-token",
       testTo,
+      { createShareSlug: false },
     );
     message.subject = `[Test] ${message.subject}`;
     await sendEmailBatch([message]);
@@ -142,7 +145,9 @@ async function main(): Promise<void> {
   if (!args.includes("--send")) {
     const sample = recipients[0];
     if (sample) {
-      const m = await campaign.renderMessage(db, spec, sample, "SAMPLE-TOKEN", "sample@example.com");
+      const m = await campaign.renderMessage(db, spec, sample, "SAMPLE-TOKEN", "sample@example.com", {
+        createShareSlug: false,
+      });
       console.log(`\n--- Sample (dry run) ---\nFrom: ${m.from}\nReply-To: ${m.replyTo}\nSubject: ${m.subject}\n\n${m.text}\n`);
     }
     console.log("Dry run: nothing was sent. Add --send --confirm <recipients> to send.");
