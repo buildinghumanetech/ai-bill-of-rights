@@ -63,6 +63,8 @@ function flatten(node: ReactNode, out: Node[] = []): Node[] {
   return out;
 }
 
+const AMBERS = ["#fffbeb", "#fef3c7", "#fde68a", "#fcd34d", "#92400e"];
+
 const GREENS = [
   "#059669", "#047857", "#065f46", "#064e3b", "#10b981", "#34d399",
   "#6ee7b7", "#a7f3d0", "#d1fae5", "#ecfdf5", "#16a34a", "#22c55e",
@@ -85,6 +87,8 @@ function expectSiteLook(nodes: Node[]) {
   const brand = nodes.filter((n) => !isStatusPill(n));
   const styles = JSON.stringify(brand.map((n) => n.style)).toLowerCase();
   for (const g of GREENS) expect(styles).not.toContain(g);
+  // Amber too is a status color only (the "Partial" pill), never chrome.
+  for (const a of AMBERS) expect(styles).not.toContain(a);
   const text = nodes.map((n) => n.text).join(" ");
   expect(text).not.toContain("—");
   expect(text).not.toMatch(/ai-for-people|first 1,000/i);
@@ -182,5 +186,15 @@ describe("the scorecard cards", () => {
     const meets = nodes.find((n) => n.text === "Meets");
     expect(meets?.style.color).toBe(STATUS_SWATCH.meets.fg);
     expect(nodes.some((n) => n.style.background === STATUS_SWATCH.meets.bg)).toBe(true);
+    // The example-entry strip and the footer are the light gray band.
+    for (const text of ["EXAMPLE ENTRY: NOT A REAL COMPANY", "theaibill.org/scorecard: read the sources yourself"]) {
+      const node = nodes.find((n) => n.text === text);
+      expect(node?.style.color).toBe("#71717a");
+    }
+    const strip = nodes.find((n) => n.text === "EXAMPLE ENTRY: NOT A REAL COMPANY");
+    expect(strip?.style.background).toBe("#fafafa");
+    expect(strip?.style.borderBottom).toBe("1px solid #e4e4e7");
+    // The Partial pill keeps its amber.
+    expect(nodes.find((n) => n.text === "Partial")?.style.color).toBe(STATUS_SWATCH.partial.fg);
   });
 });

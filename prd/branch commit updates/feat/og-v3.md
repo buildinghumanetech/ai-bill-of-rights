@@ -1,5 +1,22 @@
 # Branch Progress: feat/og-v3
 
+## Progress Update as of 2026-09-26 14:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The scorecard cards' footer bar and the "EXAMPLE ENTRY" strip are now the same light gray band as the signer card (`#fafafa`, `#71717a` text, `1px #e4e4e7` border), replacing amber. Status pills keep their green, amber, red and sky colors. The scorecard PNGs were re-rendered into `~/Downloads/og-v3-previews/` (company card, plus the index card).
+
+### Detail of changes made:
+- `src/app/api/og/scorecard/card.tsx` `FooterCta`: `C.band` background, `1px C.bandBorder` top border, `C.tag` text.
+- `src/app/api/og/scorecard/[slug]/route.tsx`: the example strip uses `C.band`, a `1px C.bandBorder` bottom border and `C.tag` text.
+- `tests/app/api/og.site-style.test.ts`: amber joins green as status-pill-only (`AMBERS` checked on every non-pill node of every card). The company card asserts the gray strip and footer, and that the "Partial" pill keeps its amber. Mutation-checked: an amber footer fails it.
+- 1,134 tests pass; `tsc` is clean.
+
+### Potential concerns to address:
+- None new. The only amber and green left on any card are the status pills.
+
+---
+
 ## Progress Update as of 2026-09-26 13:30 Pacific
 *(Most recent updates at top)*
 
@@ -17,7 +34,7 @@ Following Erika's review notes, scorecard status pills keep their meaning colors
 - 1,134 tests pass; `tsc` is clean.
 
 ### Potential concerns to address:
-- The scorecard cards' footer (`FooterCta`) and the "EXAMPLE ENTRY" strip are still amber. Erika only asked about the signer card; ask before changing them.
+- (Resolved 14:00: the scorecard footer and example strip are now gray.)
 
 ---
 

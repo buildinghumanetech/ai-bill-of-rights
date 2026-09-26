@@ -4,7 +4,7 @@ import { OG_COLORS as C } from "../style";
 /**
  * Shared chrome for the scorecard OG cards, in the same family as the signer
  * card at `src/app/api/og/signer/[id]/route.tsx`: light gray band, white body,
- * amber footer CTA, Geist, blue accent (see ../style.ts). Green is not a
+ * light gray footer CTA, Geist, blue accent (see ../style.ts). Green is not a
  * brand or accent color here; it appears only as the "Meets" status color,
  * which matches the scorecard page (src/app/scorecard/status-style.ts).
  *
@@ -124,12 +124,12 @@ export function FooterCta({ text }: { text: string }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#fffbeb",
-        borderTop: "2px solid #fde68a",
+        background: C.band,
+        borderTop: `1px solid ${C.bandBorder}`,
         padding: "14px 60px",
       }}
     >
-      <div style={{ fontSize: 18, fontWeight: 600, color: "#92400e" }}>
+      <div style={{ fontSize: 18, fontWeight: 600, color: C.tag }}>
         {text}
       </div>
     </div>

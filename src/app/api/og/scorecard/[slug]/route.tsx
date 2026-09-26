@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { assessedCount, getScorecardEntry } from "@/lib/scorecard";
 import { Banner, FooterCta, OG_SIZE, Shell, STATUS_SWATCH } from "../card";
-import { OG_TAG, loadGeist } from "../../style";
+import { OG_COLORS as C, OG_TAG, loadGeist } from "../../style";
 
 export const runtime = "nodejs";
 
@@ -39,12 +39,12 @@ export async function GET(
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "#fef3c7",
-              borderBottom: "2px solid #fcd34d",
+              background: C.band,
+              borderBottom: `1px solid ${C.bandBorder}`,
               padding: "8px 60px",
               fontSize: 17,
               fontWeight: 700,
-              color: "#92400e",
+              color: C.tag,
               letterSpacing: 2,
             }}
           >
