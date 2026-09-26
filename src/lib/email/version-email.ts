@@ -60,7 +60,7 @@ export function greetingName(name: string | null | undefined): string | null {
   return first;
 }
 
-export const SHARE_DRAFT_SUBJECT = "I signed The People's AI Bill of Rights";
+export const SHARE_DRAFT_SUBJECT = "I signed The People's AI Bill of Rights. Add your signature.";
 
 /**
  * "Spread the word": a draft in the reader's own email app, To left empty.
@@ -69,7 +69,17 @@ export const SHARE_DRAFT_SUBJECT = "I signed The People's AI Bill of Rights";
  * src/lib/share/urls.ts).
  */
 export function shareDraftHref(shareUrl: string): string {
-  const body = `I just added my name to The People's AI Bill of Rights, a people's demand for how AI companies treat us. It takes a minute. Will you sign too? ${shareUrl}`;
+  // The sentence, a blank line, the link, then two blank lines so the
+  // sender's email signature doesn't sit right under the link. CRLF, as RFC
+  // 6068 asks; encodeURIComponent turns each into %0D%0A.
+  const body = [
+    "I've added my name to The People's AI Bill of Rights, a people's demand for human-centered AI. It just takes a minute. Will you sign too?",
+    "",
+    shareUrl,
+    "",
+    "",
+    "",
+  ].join("\r\n");
   return `mailto:?subject=${encodeURIComponent(SHARE_DRAFT_SUBJECT)}&body=${encodeURIComponent(body)}`;
 }
 

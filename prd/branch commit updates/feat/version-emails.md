@@ -1,5 +1,24 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-09-26 14:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+The "Spread the word" draft has new copy and line breaks. The subject is "I signed The People's AI Bill of Rights. Add your signature." The body is the sentence "I've added my name to The People's AI Bill of Rights, a people's demand for human-centered AI. It just takes a minute. Will you sign too?", then a blank line, the link, and two blank lines at the end so the sender's email signature doesn't sit right under the link. Newlines are CRLF, encoded as `%0D%0A`. **Nothing has been sent to signers.** One test went to Erika only.
+
+### Detail of changes made:
+- `src/lib/email/version-email.ts`: `SHARE_DRAFT_SUBJECT` is the new subject. `shareDraftHref` joins `[sentence, "", link, "", "", ""]` with `\r\n`, and `encodeURIComponent` turns each into `%0D%0A`, giving `link%0D%0A%0D%0A%0D%0A` at the end.
+- `scripts/send-version-email.ts`: the test-mode log trims whitespace before taking the link, since the body now ends in blank lines.
+- Tests: the exact encoded mailto, the decoded body with its line breaks, a check that every newline is encoded as `%0D%0A` with no bare `%0A` and no raw newline, and the bare-site fallback. The campaign test's body assertions use the new ending.
+- 1,185 tests pass, `tsc` is clean, and ESLint is clean on every TypeScript file the branch touches.
+
+### Potential concerns to address:
+- Some mail apps trim trailing blank lines from a mailto body, so the two blank lines at the end may not survive everywhere. Gmail on the web and Apple Mail are worth checking by hand.
+- Erika's signer record still has no short link, so her tests carry `https://theaibill.org` as the link.
+- The real send still needs the production `CLERK_SECRET_KEY` for the exact count.
+
+---
+
 ## Progress Update as of 2026-09-26 14:00 Pacific
 *(Most recent updates at top)*
 

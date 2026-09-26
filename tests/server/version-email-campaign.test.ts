@@ -184,7 +184,7 @@ describe("sending", () => {
     expect(sent[0].text.startsWith("Hi Ada, thanks for being signer #")).toBe(true);
     const draft = sent[0].text.match(/Spread the word:\n(mailto:\S+)/)?.[1] ?? "";
     const body = new URLSearchParams(draft.slice("mailto:?".length)).get("body");
-    expect(body?.endsWith(`Will you sign too? https://theaibill.org/s/${link.slug}?via=email`)).toBe(true);
+    expect(body?.endsWith(`Will you sign too?\r\n\r\nhttps://theaibill.org/s/${link.slug}?via=email\r\n\r\n\r\n`)).toBe(true);
   });
 
   it("writes no share link for a dry run or test, and falls back to the bare site", async () => {
@@ -194,7 +194,7 @@ describe("sending", () => {
       createShareSlug: false,
     });
     expect(await db.select().from(shareLinks)).toHaveLength(0);
-    expect(m.text).toContain("Will%20you%20sign%20too%3F%20https%3A%2F%2Ftheaibill.org\n");
+    expect(m.text).toContain("too%3F%0D%0A%0D%0Ahttps%3A%2F%2Ftheaibill.org%0D%0A%0D%0A%0D%0A\n");
   });
 
   it("finds the tester's own signer record by display name, or refuses", async () => {

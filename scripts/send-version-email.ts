@@ -103,7 +103,7 @@ async function main(): Promise<void> {
       { createShareSlug: false },
     );
     const draft = message.text.match(/Spread the word:\n(mailto:\S+)/)?.[1] ?? "";
-    const link = new URLSearchParams(draft.slice("mailto:?".length)).get("body")?.split(" ").pop();
+    const link = new URLSearchParams(draft.slice("mailto:?".length)).get("body")?.trim().split(/\s+/).pop();
     console.log(`Test uses signer "${me.displayName}" (${me.signerId}); share link ${link}.`);
     message.subject = `[Test] ${message.subject}`;
     await sendEmailBatch([message]);

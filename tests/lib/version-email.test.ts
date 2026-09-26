@@ -10,7 +10,7 @@ import {
 const HOME = "https://theaibill.org/?via=email";
 const SHARE = "https://theaibill.org/s/abc2345?via=email";
 const DRAFT =
-  "mailto:?subject=I%20signed%20The%20People's%20AI%20Bill%20of%20Rights&body=I%20just%20added%20my%20name%20to%20The%20People's%20AI%20Bill%20of%20Rights%2C%20a%20people's%20demand%20for%20how%20AI%20companies%20treat%20us.%20It%20takes%20a%20minute.%20Will%20you%20sign%20too%3F%20https%3A%2F%2Ftheaibill.org%2Fs%2Fabc2345%3Fvia%3Demail";
+  "mailto:?subject=I%20signed%20The%20People's%20AI%20Bill%20of%20Rights.%20Add%20your%20signature.&body=I've%20added%20my%20name%20to%20The%20People's%20AI%20Bill%20of%20Rights%2C%20a%20people's%20demand%20for%20human-centered%20AI.%20It%20just%20takes%20a%20minute.%20Will%20you%20sign%20too%3F%0D%0A%0D%0Ahttps%3A%2F%2Ftheaibill.org%2Fs%2Fabc2345%3Fvia%3Demail%0D%0A%0D%0A%0D%0A";
 const DRAFT_HTML = DRAFT.replace(/&/g, "&amp;");
 const UNSUB = "https://theaibill.org/unsubscribe/tok123";
 
@@ -159,10 +159,18 @@ describe("shareDraftHref", () => {
     expect(href).toBe(DRAFT);
     expect(href.startsWith("mailto:?")).toBe(true);
     const params = new URLSearchParams(href.slice("mailto:?".length));
-    expect(params.get("subject")).toBe("I signed The People's AI Bill of Rights");
+    expect(params.get("subject")).toBe("I signed The People's AI Bill of Rights. Add your signature.");
+    // The sentence, a blank line, the link, then two blank lines.
     expect(params.get("body")).toBe(
-      "I just added my name to The People's AI Bill of Rights, a people's demand for how AI companies treat us. It takes a minute. Will you sign too? https://theaibill.org/s/abc2345?via=email",
+      "I've added my name to The People's AI Bill of Rights, a people's demand for human-centered AI. It just takes a minute. Will you sign too?\r\n\r\nhttps://theaibill.org/s/abc2345?via=email\r\n\r\n\r\n",
     );
+  });
+
+  it("breaks lines with %0D%0A", () => {
+    const body = shareDraftHref(SHARE).split("&body=")[1];
+    expect(body).toContain("too%3F%0D%0A%0D%0Ahttps");
+    expect(body.endsWith("email%0D%0A%0D%0A%0D%0A")).toBe(true);
+    expect(body).not.toMatch(/%0A(?<!%0D%0A)|[\r\n]/);
   });
 
   it("never form-encodes spaces as +, which mail apps read literally", () => {
@@ -170,7 +178,9 @@ describe("shareDraftHref", () => {
   });
 
   it("carries the bare site when there's no short link", () => {
-    expect(shareDraftHref("https://theaibill.org")).toMatch(/too%3F%20https%3A%2F%2Ftheaibill\.org$/);
+    expect(shareDraftHref("https://theaibill.org")).toMatch(
+      /too%3F%0D%0A%0D%0Ahttps%3A%2F%2Ftheaibill\.org%0D%0A%0D%0A%0D%0A$/,
+    );
   });
 });
 
