@@ -104,8 +104,17 @@ vi.mock("@/server/profile/upsert", () => ({
     (upsertSignerProfile as unknown as (...a: unknown[]) => unknown)(...args),
 }));
 
+const recordSignature = vi.fn(async () => ({ signatureId: "sig_1" }));
 vi.mock("@/server/signatures/record", () => ({
-  recordSignature: async () => ({ signatureId: "sig_1" }),
+  recordSignature: (...args: unknown[]) =>
+    (recordSignature as unknown as (...a: unknown[]) => unknown)(...args),
+}));
+
+// Whether the account has already signed some version. Covered against a
+// real database in short-links-and-viewer.test.ts.
+let signedAlready = false;
+vi.mock("@/server/signatures/has-signed", () => ({
+  hasSignedAnyVersion: async () => signedAlready,
 }));
 
 vi.mock("@/lib/db/queries", () => ({
@@ -151,6 +160,8 @@ beforeEach(() => {
   liveReferrers.add(REFERRER_ID);
   attributionAlreadyOnRow = null;
   upsertSignerProfile.mockClear();
+  recordSignature.mockClear();
+  signedAlready = false;
   clerkUser.firstName = null;
   getOrCreateShareSlug.mockReset();
   getOrCreateShareSlug.mockResolvedValue(null);
@@ -344,5 +355,18 @@ describe("recordSignatureFromModal — reading the attribution cookies", () => {
       FAKE_DB,
       expect.objectContaining({ referredBySignerId: null }),
     );
+  });
+});
+
+describe("recordSignatureFromModal — someone who has already signed", () => {
+  it("records nothing, rewrites nothing and emails nobody, and says they already signed", async () => {
+    signedAlready = true;
+    const res = await recordSignatureFromModal(INPUT);
+    expect(res).toMatchObject({ success: false, alreadySigned: true });
+    // Re-signing is only offered on /v/<version>. The form must not add a
+    // signature, and a retyped name must not overwrite the one they signed as.
+    expect(recordSignature).not.toHaveBeenCalled();
+    expect(upsertSignerProfile).not.toHaveBeenCalled();
+    expect(sentEmails).toHaveLength(0);
   });
 });
