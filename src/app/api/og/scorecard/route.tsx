@@ -7,7 +7,7 @@ import {
   type ScorecardEntry,
 } from "@/lib/scorecard";
 import { Banner, FooterCta, OG_SIZE, Shell } from "./card";
-import { OG_COLORS as C, OG_TAG, loadGeist } from "../style";
+import { OG_COLORS as C, OG_TAG, cardDate, loadGeist } from "../style";
 
 export const runtime = "nodejs";
 
@@ -37,7 +37,7 @@ export async function GET() {
         <Banner
           eyebrow={OG_TAG}
           title="Scorecard"
-          badge={lastReviewed ? `Last reviewed ${lastReviewed}` : null}
+          badge={lastReviewed ? `Last reviewed ${cardDate(lastReviewed)}` : null}
         />
 
         <div

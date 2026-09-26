@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { assessedCount, getScorecardEntry } from "@/lib/scorecard";
 import { Banner, FooterCta, OG_SIZE, Shell, STATUS_SWATCH } from "../card";
-import { OG_COLORS as C, OG_TAG, loadGeist } from "../../style";
+import { OG_COLORS as C, OG_TAG, cardDate, loadGeist } from "../../style";
 
 export const runtime = "nodejs";
 
@@ -58,14 +58,15 @@ export async function GET(
             flex: 1,
             flexDirection: "column",
             justifyContent: "center",
-            padding: "12px 56px",
+            // 16px floor between the caption and the footer.
+            padding: "12px 56px 16px",
           }}
         >
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 12,
+              gap: 10,
             }}
           >
             {entry.assessments.map((a) => {
@@ -77,7 +78,7 @@ export async function GET(
                     display: "flex",
                     flexDirection: "column",
                     width: 208,
-                    padding: "12px 14px",
+                    padding: "10px 14px",
                     borderRadius: 12,
                     background: swatch.bg,
                     border: `2px solid ${swatch.border}`,
@@ -115,7 +116,7 @@ export async function GET(
               marginTop: 12,
             }}
           >
-            {`Every assessment cites a public source. Last reviewed ${entry.lastReviewed}.`}
+            {`Every assessment cites a public source. Last reviewed ${cardDate(entry.lastReviewed)}.`}
           </div>
         </div>
 

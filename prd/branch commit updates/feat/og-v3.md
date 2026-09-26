@@ -1,5 +1,23 @@
 # Branch Progress: feat/og-v3
 
+## Progress Update as of 2026-09-26 14:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Dates on cards are now written in prose ("Last reviewed Friday, July 24th, 2026"), via a shared `cardDate()` used for every date on any card. The company scorecard card's caption has at least 16px above the footer (measured: 18px). On the signer card, the gray top band is now 190px with the tag and headline centered, and the avatar and name block is vertically centered in the white area, with and without a quote. All previews are re-rendered in `~/Downloads/og-v3-previews/`.
+
+### Detail of changes made:
+- `src/app/api/og/style.ts`: `cardDate("2026-07-24")` gives "Friday, July 24th, 2026". It's read as a UTC calendar date, and non-ISO input passes through unchanged.
+- The scorecard index badge and the company card caption use `cardDate`. The company card body padding is `12px 56px 16px`, and the pill grid is tightened (gap 10px, pill padding 10px 14px, was 12/12) so the content fits and the 16px floor holds. Measured by pixel scan: 18px.
+- `src/app/api/og/signer/[id]/route.tsx`: band `height: 190`, `padding: "0 60px"` (centered). The white area's padding is symmetric, and the negative `marginTop` offsets on the avatar, name and quote are removed (they were for the old overlap). Measured: the band text has 44px above and 46px below (descenders); the avatar block has 106px above and below with a quote, 94px without.
+- Tests: `cardDate` cases (st/nd/rd/th, teens, non-dates); the company card shows the prose date; the signer band is 190px and centered, the white area uses `alignItems: center`, and no negative top margins remain.
+- 1,136 tests pass; `tsc` is clean.
+
+### Potential concerns to address:
+- The company card is at capacity with the example strip and 11 pills. A future 12th article, or a longer caption, would need the band or the pills to shrink again.
+
+---
+
 ## Progress Update as of 2026-09-26 14:00 Pacific
 *(Most recent updates at top)*
 

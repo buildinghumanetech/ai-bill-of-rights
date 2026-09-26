@@ -37,6 +37,7 @@ import { GET as scorecardCard } from "@/app/api/og/scorecard/route";
 import { GET as companyCard } from "@/app/api/og/scorecard/[slug]/route";
 import { getSignerById, getSignatureNumber } from "@/lib/db/queries";
 import { STATUS_SWATCH } from "@/app/api/og/scorecard/card";
+import { cardDate } from "@/app/api/og/style";
 
 const SIGNER_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -128,7 +129,34 @@ async function renderSigner(whyISigned: string | null) {
   return { nodes: flatten(element as ReactNode), options };
 }
 
+describe("dates on cards", () => {
+  it("are written out in prose", () => {
+    expect(cardDate("2026-07-24")).toBe("Friday, July 24th, 2026");
+    expect(cardDate("2026-09-01")).toBe("Tuesday, September 1st, 2026");
+    expect(cardDate("2026-09-02")).toBe("Wednesday, September 2nd, 2026");
+    expect(cardDate("2026-09-03")).toBe("Thursday, September 3rd, 2026");
+    expect(cardDate("2026-09-11")).toBe("Friday, September 11th, 2026");
+    expect(cardDate("2026-09-22")).toBe("Tuesday, September 22nd, 2026");
+    expect(cardDate("not a date")).toBe("not a date");
+  });
+});
+
 describe("the I signed card", () => {
+  it("centers the tag and headline in a 190px band, and the avatar block in the white area", async () => {
+    for (const why of [null, "Because the people who use AI should have a say."]) {
+      const { nodes } = await renderSigner(why);
+      const band = nodes.find((n) => n.style.background === "#fafafa");
+      expect(band?.style.height).toBe(190);
+      expect(band?.style.justifyContent).toBe("center");
+      const white = nodes.find((n) => n.style.background === "#ffffff" && n.style.flex === 1);
+      expect(white?.style.alignItems).toBe("center");
+      // Nothing pulls the avatar, name or quote off-center any more.
+      for (const n of nodes) {
+        expect(typeof n.style.marginTop === "number" && n.style.marginTop < 0).toBe(false);
+      }
+    }
+  });
+
   it("says I signed. in near-black, then the number in blue, under the gray tag", async () => {
     const { nodes, options } = await renderSigner(null);
     expectSiteLook(nodes);
@@ -194,6 +222,8 @@ describe("the scorecard cards", () => {
     const strip = nodes.find((n) => n.text === "EXAMPLE ENTRY: NOT A REAL COMPANY");
     expect(strip?.style.background).toBe("#fafafa");
     expect(strip?.style.borderBottom).toBe("1px solid #e4e4e7");
+    // Dates are written out.
+    expect(nodes.some((n) => n.text.includes("Last reviewed Friday, July 24th, 2026."))).toBe(true);
     // The Partial pill keeps its amber.
     expect(nodes.find((n) => n.text === "Partial")?.style.color).toBe(STATUS_SWATCH.partial.fg);
   });

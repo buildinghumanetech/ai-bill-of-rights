@@ -59,3 +59,26 @@ export function loadGeist(): Promise<OgFont[]> {
   });
   return geist;
 }
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const WEEKDAYS = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+];
+
+/**
+ * Every date on a card, in prose: "2026-07-24" → "Friday, July 24th, 2026".
+ * Read as a calendar date (UTC), never shifted by the server's time zone.
+ * Anything that isn't YYYY-MM-DD is returned unchanged.
+ */
+export function cardDate(isoDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (!m) return isoDate;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
+  const teen = d % 100 >= 11 && d % 100 <= 13;
+  const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[d % 10] ?? "th";
+  return `${weekday}, ${MONTHS[mo - 1]} ${d}${suffix}, ${y}`;
+}

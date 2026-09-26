@@ -61,8 +61,9 @@ export async function GET(
             justifyContent: "center",
             background: C.band,
             borderBottom: `1px solid ${C.bandBorder}`,
-            height: 260,
-            padding: "36px 60px 56px",
+            // Tag and headline sit centered in a ~190px band.
+            height: 190,
+            padding: "0 60px",
           }}
         >
           <div
@@ -98,16 +99,17 @@ export async function GET(
             display: "flex",
             flex: 1,
             background: C.white,
-            padding: quote ? "0 56px 30px" : "0 60px 36px",
+            // Symmetric, so alignItems:center puts the avatar and name in the
+            // vertical middle of the white area, quote or no quote.
+            padding: quote ? "0 56px" : "0 60px",
             alignItems: "center",
             gap: quote ? 32 : 40,
           }}
         >
-          {/* Avatar — positioned to overlap the banner/white boundary */}
+          {/* Avatar, centered in the white area */}
           <div
             style={{
               display: "flex",
-              marginTop: quote ? -52 : -60,
               flexShrink: 0,
             }}
           >
@@ -154,7 +156,6 @@ export async function GET(
               flexDirection: "column",
               flex: 1,
               minWidth: 0,
-              marginTop: quote ? -14 : -20,
             }}
           >
             <div
@@ -191,7 +192,6 @@ export async function GET(
                 flexShrink: 0,
                 borderLeft: `5px solid ${C.blue}`,
                 padding: "6px 0 6px 24px",
-                marginTop: -14,
               }}
             >
               <div
