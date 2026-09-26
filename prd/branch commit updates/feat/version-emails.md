@@ -1,5 +1,24 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-09-26 14:00 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+"See the update" now links to the homepage, `https://theaibill.org/?via=email`, and nothing in the email links to `/v/<version>#what-changed` anymore. The relaunch has its new-home line back, "We also have a new home: theaibill.org.", placed after the v0.1.0 paragraph and before the buttons. theaibill.org in that line links to the same tracked homepage URL. **Nothing has been sent to signers.** One test went to Erika only.
+
+### Detail of changes made:
+- `src/lib/email/version-email.ts`: `whatChangedUrl` is replaced by `homeUrl` (`${siteOrigin}/?via=email`). The new-home line appears only when `relaunch` is true. In HTML, the host is a blue (#2563eb) underlined link. The plain text keeps the exact wording, with no URL after the host.
+- `tests/lib/version-email.test.ts`: the exact-copy test includes the new-home line. New tests check that the line's link is tracked and that it sits between the v0.1.0 paragraph and the buttons, that no "what-changed" remains anywhere, and that version updates don't get the new-home line but do link "See the update" to the tracked homepage.
+- 1,184 tests pass, `tsc` is clean, and ESLint is clean on every TypeScript file the branch touches.
+
+### Potential concerns to address:
+- The earlier concern "Don't send until #95 is live" was only about the `/v/0.1.0#what-changed` link and the "Add my name" button there. The email no longer links to that page, so it no longer depends on #95.
+- `via=email` is also the share-channel value that `?via=` uses for signer-to-signer email shares. Homepage visits from this email carry no `ref`, so no referral is credited, but channel reports will lump them in with email shares unless they're filtered by `ref`.
+- The plain-text new-home line has no link. Most clients will autolink "theaibill.org" without the `via` tag.
+- The real send still needs the production `CLERK_SECRET_KEY` for the exact count.
+
+---
+
 ## Progress Update as of 2026-09-26 13:30 Pacific
 *(Most recent updates at top)*
 

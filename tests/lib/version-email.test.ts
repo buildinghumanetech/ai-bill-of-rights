@@ -7,7 +7,7 @@ import {
   VERSION_EMAIL_SHARE_CTA,
 } from "@/lib/email/version-email";
 
-const WHAT_CHANGED = "https://theaibill.org/v/0.1.0#what-changed";
+const HOME = "https://theaibill.org/?via=email";
 const SHARE = "https://theaibill.org/s/abc2345?via=email";
 const DRAFT =
   "mailto:?subject=I%20signed%20The%20People's%20AI%20Bill%20of%20Rights&body=I%20just%20added%20my%20name%20to%20The%20People's%20AI%20Bill%20of%20Rights%2C%20a%20people's%20demand%20for%20how%20AI%20companies%20treat%20us.%20It%20takes%20a%20minute.%20Will%20you%20sign%20too%3F%20https%3A%2F%2Ftheaibill.org%2Fs%2Fabc2345%3Fvia%3Demail";
@@ -48,7 +48,8 @@ describe("the relaunch email", () => {
       [
         "Hi Ada, thanks for being signer #12 on The People's AI Bill of Rights.",
         "You asked to hear about updates. We've created v0.1.0, which adds Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.",
-        `See the update:\n${WHAT_CHANGED}`,
+        "We also have a new home: theaibill.org.",
+        `See the update:\n${HOME}`,
         `Spread the word:\n${DRAFT}`,
         "Thanks!\nErika",
         `You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.\nUnsubscribe: ${UNSUB}`,
@@ -62,8 +63,9 @@ describe("the relaunch email", () => {
     }
   });
 
-  it("drops the date, new-home and plain-URL lines", () => {
-    expect(text).not.toMatch(/new home|published|July/);
+  it("drops the date, what-changed and plain-URL lines", () => {
+    expect(text).not.toMatch(/published|July|what-changed/);
+    expect(html).not.toContain("what-changed");
     // In the HTML, URLs appear only as link targets, never as visible text.
     expect(html.replace(/href="[^"]*"/g, "")).not.toMatch(/https:|mailto:/);
   });
@@ -72,14 +74,25 @@ describe("the relaunch email", () => {
     expect(text).not.toMatch(/re-?sign|expire|invalid|no longer|lapse|renew/i);
   });
 
-  it("links the two buttons to what changed and to a share draft", () => {
+  it("announces the new home with a tracked link, after v0.1.0 and before the buttons", () => {
+    const line = html.match(/<p [^>]*>We also have a new home: (<a [^>]*>[^<]*<\/a>)\.<\/p>/);
+    expect(line?.[1]).toBe(
+      `<a href="https://theaibill.org/?via=email" style="color:#2563eb;text-decoration:underline;">theaibill.org</a>`,
+    );
+    const at = (s: string) => html.indexOf(s);
+    expect(at("We've created v0.1.0")).toBeGreaterThan(-1);
+    expect(at("We've created v0.1.0")).toBeLessThan(at("We also have a new home"));
+    expect(at("We also have a new home")).toBeLessThan(at("<!--[if mso]>"));
+  });
+
+  it("links the two buttons to the homepage and to a share draft", () => {
     expect(VERSION_EMAIL_CTA).toBe("See the update");
     expect(VERSION_EMAIL_SHARE_CTA).toBe("Spread the word");
     const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-    expect(new Set(hrefs)).toEqual(new Set([WHAT_CHANGED, DRAFT_HTML, UNSUB]));
+    expect(new Set(hrefs)).toEqual(new Set([HOME, DRAFT_HTML, UNSUB]));
     const button = (label: string) =>
       html.match(new RegExp(`<a [^>]*>${label}</a>`))?.[0] ?? "";
-    expect(button("See the update")).toContain(`href="${WHAT_CHANGED}"`);
+    expect(button("See the update")).toContain(`href="${HOME}"`);
     expect(button("Spread the word")).toContain(`href="${DRAFT_HTML}"`);
   });
 
@@ -187,5 +200,7 @@ describe("variations", () => {
     });
     expect(update.subject).toBe("We've updated The People's AI Bill of Rights: v0.2.0");
     expect(update.text).toContain("We've created v0.2.0. Adds Article 12.");
+    expect(update.text).not.toContain("new home");
+    expect(update.text).toContain("See the update:\nhttps://theaibill.org/?via=email");
   });
 });

@@ -4,8 +4,8 @@
  *
  * House rules for this copy, all enforced by tests/lib/version-email.test.ts:
  *  - It informs; it does not ask anyone to re-sign. Two buttons: "See the
- *    update" (what changed) and "Spread the word" (a mailto: draft carrying
- *    their own short link, so referrals count).
+ *    update" (the homepage, tagged ?via=email) and "Spread the word" (a
+ *    mailto: draft carrying their own short link, so referrals count).
  *  - Nothing may suggest an earlier signature expired or stopped counting.
  *  - No em dashes.
  *  - Every email carries a one-click unsubscribe link. It's legally required.
@@ -143,7 +143,9 @@ export function versionEmail(opts: VersionEmailInput): {
   html: string;
 } {
   const firstName = greetingName(opts.name);
-  const whatChangedUrl = `${opts.siteOrigin}/v/${opts.version}#what-changed`;
+  // The homepage, tagged so visits from this email can be told apart.
+  const homeUrl = `${opts.siteOrigin}/?via=email`;
+  const siteHost = opts.siteOrigin.replace(/^https?:\/\//, "");
 
   const subject = `We've updated The People's AI Bill of Rights: v${opts.version}`;
   const shareHref = shareDraftHref(opts.shareUrl);
@@ -157,12 +159,15 @@ export function versionEmail(opts: VersionEmailInput): {
       ? `You asked to hear about updates. We've created v${opts.version}, which ${opts.summary}`
       : `You asked to hear about updates. We've created v${opts.version}. ${opts.summary}`,
   ];
+  // The relaunch also announces the move to the new domain.
+  const newHome = opts.relaunch ? `We also have a new home: ${siteHost}.` : null;
   const footer =
     "You're getting this because you signed The People's AI Bill of Rights and asked to hear about new versions.";
 
   const text = [
     ...paragraphs,
-    `${VERSION_EMAIL_CTA}:\n${whatChangedUrl}`,
+    ...(newHome ? [newHome] : []),
+    `${VERSION_EMAIL_CTA}:\n${homeUrl}`,
     `${VERSION_EMAIL_SHARE_CTA}:\n${shareHref}`,
     "Thanks!\nErika",
     `${footer}\nUnsubscribe: ${opts.unsubscribeUrl}`,
@@ -175,9 +180,10 @@ export function versionEmail(opts: VersionEmailInput): {
 <body style="margin:0;padding:0;background:${WHITE};font-family:${FONT};">
 <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
   ${paragraphs.map((s) => p(esc(s))).join("\n  ")}
+  ${newHome ? p(`We also have a new home: <a href="${esc(homeUrl)}" style="color:${BLUE};text-decoration:underline;">${esc(siteHost)}</a>.`) : ""}
   <div style="margin:24px 0 12px;">
   ${pillRow([
-    { label: VERSION_EMAIL_CTA, href: whatChangedUrl, solid: true, vmlWidth: 170 },
+    { label: VERSION_EMAIL_CTA, href: homeUrl, solid: true, vmlWidth: 170 },
     { label: VERSION_EMAIL_SHARE_CTA, href: shareHref, solid: false, vmlWidth: 186 },
   ])}
   </div>
