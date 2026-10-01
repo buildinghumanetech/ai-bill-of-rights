@@ -3,8 +3,6 @@
 import { FormEvent, useState, useTransition } from "react";
 import { adminAddSignerAction } from "@/server/actions/admin";
 
-const VERSION = "0.1.0";
-
 type NameDisplayFormat = "initials" | "first-initial" | "full";
 
 function formatNamePreview(
@@ -25,7 +23,7 @@ function formatNamePreview(
   return `${maskedFirst} ${maskedLast}`.trim();
 }
 
-export default function AdminAddSignerForm() {
+export default function AdminAddSignerForm({ version: VERSION }: { version: string }) {
   const [open, setOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");

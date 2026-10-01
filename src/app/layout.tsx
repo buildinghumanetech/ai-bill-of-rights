@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { MyAccountButton } from "@/components/MyAccountButton";
-import { getSignatureCount } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureCount } from "@/lib/db/queries";
 import { getViewerSignature } from "@/lib/viewer/signature";
 import { SiteAnalytics } from "@/lib/analytics/SiteAnalytics";
 import { buildRootMetadata } from "@/lib/site-metadata";
@@ -33,6 +33,14 @@ export default async function RootLayout({
   } catch (err) {
     console.error("[layout] getSignatureCount failed; starting at 0:", err);
   }
+  // The version people sign. Client code must never hardcode it (a stale
+  // literal blocked all signing after the v0.1.1 publish).
+  let currentVersion = "";
+  try {
+    currentVersion = (await getCurrentVersion())?.version ?? "";
+  } catch (err) {
+    console.error("[layout] getCurrentVersion failed:", err);
+  }
   // Never throws: a signer who can't be recognized just sees the stranger's view.
   const initialViewer = await getViewerSignature();
 
@@ -49,6 +57,7 @@ export default async function RootLayout({
           <LiveSignersProvider
             initialCount={initialCount}
             initialViewer={initialViewer}
+            currentVersion={currentVersion}
           >
             <MyAccountButton />
             <LiveSignerBanner />
