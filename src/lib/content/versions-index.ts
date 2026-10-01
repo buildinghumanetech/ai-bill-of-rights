@@ -8,9 +8,23 @@ import path from "node:path";
  */
 export const CONTENT_ROOT = path.join(process.cwd(), "content/bill-of-rights");
 
+/**
+ * How big a change a version is, for the version emails
+ * (src/lib/email/version-policy.ts). Major: an article added, removed or
+ * substantively rewritten. Minor: wording fixes and clarifications.
+ */
+export type VersionLevel = "major" | "minor";
+
 export interface VersionsIndexEntry {
   version: string;
   published_at: string;
+  /**
+   * Optional to the reader so older fixtures still parse; every real entry in
+   * content/bill-of-rights/versions.json has one (see the content test), and
+   * the send script refuses a version without one.
+   */
+  level?: VersionLevel;
+  changelog?: string | null;
 }
 
 export interface VersionsIndex {
@@ -69,6 +83,12 @@ export function readVersionsIndex(root: string = CONTENT_ROOT): VersionsIndex {
     if (typeof (entry as VersionsIndexEntry)?.version !== "string") {
       throw new Error(
         `${indexPath}: history[${i}] must be an object with a string "version"`,
+      );
+    }
+    const level = (entry as VersionsIndexEntry).level;
+    if (level !== undefined && level !== "major" && level !== "minor") {
+      throw new Error(
+        `${indexPath}: history[${i}].level must be "major" or "minor", not ${JSON.stringify(level)}`,
       );
     }
   });
