@@ -41,13 +41,18 @@ interface Props {
    * well have signed already.
    */
   startInSignIn?: boolean;
+  /**
+   * Override for the current published version. Normally omitted: the root
+   * layout seeds it into LiveSignersProvider from the DB's is_current row.
+   * NEVER hardcode a version literal here: recordSignature refuses archived
+   * versions, so a stale literal means nobody can sign after a publish.
+   */
+  version?: string;
 }
 
 type Step = "form" | "otp" | "done";
 type Method = "email" | "phone";
 type Flow = "signUp" | "signIn";
-
-const VERSION = "0.1.0";
 
 /** Every state in which the person has signed some version of the Bill. */
 function isSignedStatus(
@@ -276,6 +281,7 @@ export default function SignModal({
   onClose,
   mode: modeProp = "sign",
   startInSignIn = false,
+  version: versionProp,
 }: Props) {
   const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } =
     useSignUp();
@@ -323,6 +329,9 @@ export default function SignModal({
   // optional "v0.1.0 is out. See what changed." line on the share view.
   const [newVersion, setNewVersion] = useState<string | null>(null);
   const liveSigners = useOptionalLiveSigners();
+  // "" (no prop, no provider) fails loudly server-side ("Unknown version")
+  // instead of silently signing against a stale literal.
+  const VERSION = versionProp ?? liveSigners?.currentVersion ?? "";
   const [signerName, setSignerName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   // "Why I signed" lives on the post-signature step only — the pre-signature

@@ -9,7 +9,7 @@ import {
   type SignerSignatureStatus,
 } from "@/lib/db/signature-status";
 import { reaffirmSignature } from "@/lib/db/reaffirm";
-import { getSignatureNumber } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureNumber } from "@/lib/db/queries";
 import { getOrCreateShareSlug } from "@/lib/share/short-links";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
@@ -37,12 +37,14 @@ export type SignatureStatus =
  * /v/<current>, never in the modal.
  */
 export async function getMySignatureStatus(
-  versionString = "0.1.0",
+  requestedVersion?: string,
 ): Promise<SignatureStatus> {
   const { userId } = await auth();
   if (!userId) return { state: "anonymous" };
 
   const db = getDb();
+  const versionString =
+    requestedVersion || (await getCurrentVersion(db))?.version || "";
   // Only the columns resolveSignatureStatus reads. A bare select() names every
   // column in schema.ts, so one unapplied migration (0007 in production) made
   // this throw — and SignModal could no longer tell a signer from anyone else.

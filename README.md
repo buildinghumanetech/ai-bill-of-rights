@@ -63,6 +63,8 @@ A new version is a PR that adds:
 
 Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database.
 
+**After every publish, prove signing works on production before you call it done.** Open theaibill.org in a private window, click Sign, enter a real phone or email, and get through the code step. The failure we hit after v0.1.1 ("Version 0.1.0 is no longer open for signing") only appears at that last step, so nothing short of submitting the code catches it. Also check `/propose` and `/signers`. Never hardcode a version string in the signing path: `tests/lib/no-hardcoded-signing-version.test.ts` fails the build if you do.
+
 ### Editing a version's text after a deploy has synced it
 
 `syncVersions` hashes each version's markdown and **throws if an already-synced version's text changes** — published documents are immutable. The build fails with:
@@ -131,15 +133,7 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-**Pending:** `0015_repoint_comments_to_v0_1_1.sql`, for the 0.1.1 publish (Article 12). Run it **after** the deploy, once `sync-versions` has created the 0.1.1 row, from a fresh `pg_dump` backup, in one transaction:
-
-```bash
-docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
-  sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 \
-    -f /m/0015_repoint_comments_to_v0_1_1.sql'
-```
-
-0015 only moves `comments.base_version_id` and `proposed_edits.base_version_id` from 0.1.0 to 0.1.1. Article 12 was appended, so no anchor changes. Signatures stay on 0.1.0 and nobody is asked to sign again: public counts are version-agnostic, and `resolveSignatureStatus` shows earlier signers as `signed-earlier` with an optional re-affirm. The backup tables are `comment_version_backup_0015` and `proposed_edit_version_backup_0015`; the rollback SQL is in the migration header. Remove this entry once applied.
+**Pending:** none. `0015_repoint_comments_to_v0_1_1.sql` was applied to production on 2026-09-30 for the 0.1.1 publish (it moved `comments.base_version_id` and `proposed_edits.base_version_id` from 0.1.0 to 0.1.1; backup tables `comment_version_backup_0015` and `proposed_edit_version_backup_0015`, rollback SQL in the migration header).
 
 0013 and 0014 were applied to production on 2026-09-24 (09:45 PT), before `feat/post-sign-share` merged, after a fresh `pg_dump` backup, in one `psql` transaction:
 

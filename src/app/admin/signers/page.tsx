@@ -4,6 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { signatures, signers, versions } from "@/lib/db/schema";
 import { getCurrentAdmin } from "@/lib/admin/check";
+import { getCurrentVersion } from "@/lib/db/queries";
 import AdminRowActions from "./AdminRowActions";
 import AdminAddSignerForm from "./AdminAddSignerForm";
 import AdminAddNonSignerForm from "./AdminAddNonSignerForm";
@@ -97,7 +98,7 @@ export default async function AdminSignersPage() {
       </header>
 
       <div className="mb-8 flex flex-wrap items-start gap-4">
-        <AdminAddSignerForm />
+        <AdminAddSignerForm version={(await getCurrentVersion())?.version ?? ""} />
         <AdminAddNonSignerForm />
       </div>
 

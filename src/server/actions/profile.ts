@@ -1,5 +1,6 @@
 "use server";
 
+import { getCurrentVersion } from "@/lib/db/queries";
 import { redirect } from "next/navigation";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { upsertSignerProfile } from "@/server/profile/upsert";
@@ -23,7 +24,7 @@ export async function submitProfileAction(formData: FormData): Promise<void> {
   }
   const affiliation = (formData.get("affiliation")?.toString() ?? "").trim() || null;
   const locationText = (formData.get("location")?.toString() ?? "").trim() || null;
-  const version = String(formData.get("version") ?? "0.1.0");
+  const version = String(formData.get("version") || (await getCurrentVersion())?.version || "");
   // Derive verificationMethod from the real Clerk user object (I-1 fix).
   // Session claims do not carry a reliable primary_verification key, so we
   // fetch the user and check which identifier is primary.

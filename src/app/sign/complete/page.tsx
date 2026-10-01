@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getCurrentVersion } from "@/lib/db/queries";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ export default async function CompletePage({
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/");
-  const { version = "0.1.0" } = await searchParams;
+  const { version = (await getCurrentVersion())?.version ?? "" } = await searchParams;
   const rows = await db
     .select()
     .from(signers)
