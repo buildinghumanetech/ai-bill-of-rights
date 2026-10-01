@@ -437,7 +437,7 @@ export default function SignModal({
     return () => {
       cancelled = true;
     };
-  }, [open, isSignedIn]);
+  }, [open, isSignedIn, VERSION]);
 
   /**
    * Anyone who has signed ANY version lands on their share view — their card,
