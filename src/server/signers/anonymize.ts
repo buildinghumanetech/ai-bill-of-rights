@@ -26,6 +26,7 @@ import {
 import { deleteSelfieBlobsByUrls } from "@/lib/storage/blob";
 import type { SelfieBlobBackend } from "@/lib/storage/blob";
 import { getSignatureNumber } from "@/lib/db/queries";
+import type { Db } from "@/lib/db/types";
 
 /**
  * Anonymizes a signer in place, honoring the promise in
@@ -60,7 +61,7 @@ import { getSignatureNumber } from "@/lib/db/queries";
  * CALLER MUST AUTHORISE — see the module docstring.
  */
 export async function anonymizeSigner(
-  db: any,
+  db: Db,
   signerId: string,
   blobBackend?: SelfieBlobBackend,
 ): Promise<void> {

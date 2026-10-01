@@ -33,6 +33,8 @@ import {
   type SelfieBlobBackend,
 } from "@/lib/storage/blob";
 import { countUnresolvedReports } from "@/lib/selfie/queries";
+import type { Db } from "@/lib/db/types";
+import { errorText, errorCode } from "@/lib/errors";
 
 // =====================================================================
 // submit
@@ -47,7 +49,7 @@ export interface SubmitSelfieInput {
 }
 
 export async function submitSelfie(
-  db: any,
+  db: Db,
   input: SubmitSelfieInput,
 ): Promise<{ selfieId: string }> {
   const policy = validateSelfieInput({
@@ -131,7 +133,7 @@ export interface ApproveSelfieInput {
 }
 
 export async function approveSelfie(
-  db: any,
+  db: Db,
   input: ApproveSelfieInput,
 ): Promise<void> {
   const rows = await db
@@ -185,7 +187,7 @@ export interface RejectSelfieInput {
 }
 
 export async function rejectSelfie(
-  db: any,
+  db: Db,
   input: RejectSelfieInput,
 ): Promise<void> {
   if (!(REJECTION_REASONS as readonly string[]).includes(input.reason)) {
@@ -233,7 +235,7 @@ export interface ReportSelfieInput {
 }
 
 export async function reportSelfie(
-  db: any,
+  db: Db,
   input: ReportSelfieInput,
 ): Promise<void> {
   // Idempotent insert — if the same reporter already reported this selfie,
@@ -244,9 +246,9 @@ export async function reportSelfie(
       reporterSignerId: input.reporterSignerId,
       reason: input.reason ?? null,
     });
-  } catch (err: any) {
-    const msg = String(err?.message ?? err?.cause?.message ?? "");
-    if (msg.includes("unique") || String(err?.code ?? "") === "23505") return;
+  } catch (err: unknown) {
+    const msg = errorText(err);
+    if (msg.includes("unique") || errorCode(err) === "23505") return;
     throw err;
   }
 
@@ -276,7 +278,7 @@ export interface ResolveSelfieReportsInput {
 }
 
 export async function resolveSelfieReports(
-  db: any,
+  db: Db,
   input: ResolveSelfieReportsInput,
 ): Promise<void> {
   await db
@@ -340,7 +342,7 @@ export interface RemoveMySelfieInput {
 }
 
 export async function removeMySelfie(
-  db: any,
+  db: Db,
   input: RemoveMySelfieInput,
 ): Promise<void> {
   const rows = await db

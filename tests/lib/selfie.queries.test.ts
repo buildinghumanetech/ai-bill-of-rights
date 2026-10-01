@@ -12,8 +12,9 @@ import {
   getPendingSelfies,
   getRejectedSelfies,
 } from "@/lib/selfie/queries";
+import type { Db } from "@/lib/db/types";
 
-async function makeSigner(db: any, clerkId: string) {
+async function makeSigner(db: Db, clerkId: string) {
   const [row] = await db
     .insert(signers)
     .values({
@@ -26,7 +27,11 @@ async function makeSigner(db: any, clerkId: string) {
   return row.id as string;
 }
 
-async function insertSelfie(db: any, signerId: string, overrides: any = {}) {
+async function insertSelfie(
+  db: Db,
+  signerId: string,
+  overrides: Partial<typeof selfies.$inferInsert> = {},
+) {
   const [row] = await db
     .insert(selfies)
     .values({

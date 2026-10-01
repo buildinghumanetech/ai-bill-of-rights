@@ -16,6 +16,7 @@ import { signers } from "@/lib/db/schema";
 import { resolveReferrerId } from "@/lib/referral/attribution";
 
 export type NotificationPreference = "major" | "minor" | "none";
+import type { Db } from "@/lib/db/types";
 
 export interface ProfileInput {
   clerkUserId: string;
@@ -48,7 +49,7 @@ export interface UpsertSignerProfileResult {
 }
 
 export async function upsertSignerProfile(
-  db: any,
+  db: Db,
   input: ProfileInput,
 ): Promise<UpsertSignerProfileResult> {
   const existing = await db

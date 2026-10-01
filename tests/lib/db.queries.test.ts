@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "../_helpers/pglite-db";
 import { syncVersions } from "@/lib/db/sync";
-import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, getSignerById, listRecentSignersSince } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureCount, getSignatureNumber, listSignatures, listRecentSignersSince } from "@/lib/db/queries";
 import { signers, consentRecords, signatures, versions } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
+import { capturedFields as makeCapturedFields } from "../_helpers/captured-fields";
 
 const sample = (version: string, isCurrent: boolean) => ({
   version,
@@ -109,7 +111,7 @@ describe("db queries", () => {
 describe("listRecentSignersSince", () => {
   /** Seed a signer who has signed the one seeded version, at `signedAt`. */
   async function seedSignerWithSignature(
-    db: any,
+    db: Db,
     {
       name,
       signedAt,
@@ -133,7 +135,7 @@ describe("listRecentSignersSince", () => {
       .values({
         signerId: signer.id,
         consentTextHash: "a".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       })
       .returning({ id: consentRecords.id });
     const [versionRow] = await db.select().from(versions).limit(1);
@@ -267,7 +269,7 @@ describe("listRecentSignersSince", () => {
 });
 
 describe("getSignatureNumber", () => {
-  async function addSigner(db: any, i: number, signedAt: Date) {
+  async function addSigner(db: Db, i: number, signedAt: Date) {
     const [signer] = await db
       .insert(signers)
       .values({
@@ -282,7 +284,7 @@ describe("getSignatureNumber", () => {
       .values({
         signerId: signer.id,
         consentTextHash: "a".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       })
       .returning({ id: consentRecords.id });
     const [v] = await db.select().from(versions).limit(1);
@@ -343,7 +345,7 @@ describe("signer list queries", () => {
       .values({
         signerId: signerRow.id,
         consentTextHash: "a".repeat(64),
-        capturedFields: {} as any,
+        capturedFields: makeCapturedFields(),
       })
       .returning({ id: consentRecords.id });
     const versionRow = await db.select().from(versions).limit(1);
