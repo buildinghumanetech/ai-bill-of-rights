@@ -17,7 +17,7 @@
  *
  * The dry run and --send read addresses from Clerk, so they need the real
  * CLERK_SECRET_KEY (`vercel env pull` redacts it; pass it in a second --env
- * file). Needs migration 0015 (email_sends) applied before --send. Each
+ * file). Needs migration 0016 (email_sends) applied before --send. Each
  * signer gets each campaign at most once, however many times this runs.
  */
 
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
   console.log(
     tableExists
       ? `Already sent this campaign: ${alreadySent}`
-      : "email_sends table is missing: apply drizzle/0015_email_sends.sql before --send.",
+      : "email_sends table is missing: apply drizzle/0016_email_sends.sql before --send.",
   );
 
   if (!args.includes("--send")) {
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!tableExists) throw new Error("Apply drizzle/0015_email_sends.sql before sending.");
+  if (!tableExists) throw new Error("Apply drizzle/0016_email_sends.sql before sending.");
   const confirm = Number(flag("confirm"));
   if (confirm !== report.recipients.total) {
     throw new Error(

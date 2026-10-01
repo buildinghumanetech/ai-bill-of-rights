@@ -19,7 +19,7 @@ import { LICENSE_FIELD, PROPOSAL_LICENSE } from "@/lib/proposals/license";
  *
  * The four fields mirror the shape every article in v0.1.0 already has — a
  * name, the rule itself, an optional closing line — plus the one thing the
- * document cannot supply: why the existing eleven do not already cover this.
+ * document cannot supply: why the existing twelve do not already cover this.
  * That last field is the whole point of the form. Nearly every proposal is a
  * restatement of Article 4 or Article 9, and asking for the distinction up
  * front is cheaper than asking for it in the comments afterwards.
@@ -317,7 +317,7 @@ export function ProposeRightForm({
 
       <Field
         label="Name of the right"
-        hint="Plain second person, like the other eleven. No number — that's assigned when it's published."
+        hint="Plain second person, like the other twelve. No number — that's assigned when it's published."
         error={errors.title}
         count={`${title.length}/${TITLE_MAX}`}
       >
@@ -348,7 +348,7 @@ export function ProposeRightForm({
       </Field>
 
       <Field
-        label="Why the existing eleven don't already cover this"
+        label="Why the existing twelve don't already cover this"
         hint="Be specific about the nearest article and how yours differs. Proposals that skip this get rejected in the comments."
         error={errors.rationale}
         count={`${rationale.length}/${RATIONALE_MAX}`}

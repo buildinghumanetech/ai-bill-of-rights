@@ -48,7 +48,7 @@ export async function generateMetadata({
   // Names the site in prose via SITE_NAME, so nothing is appended. This used to
   // hardcode "AI Bill of Rights" — one word off the canonical name, and exactly
   // the drift buildPageMetadata exists to stop.
-  const title = `${entry.company} — ${SITE_NAME} Scorecard`;
+  const title = `${entry.company} | ${SITE_NAME} Scorecard`;
   const description = entry.fictional
     ? `${entry.company} is a fictional example used to demonstrate the scorecard format.`
     : `${n} of ${total} commitments assessed, each traced to a public source. Last reviewed ${entry.lastReviewed}.`;
@@ -160,7 +160,7 @@ export default async function ScorecardCompanyPage({
   const total = listPrinciples().length;
   const assessed = assessedCount(entry);
   const shareUrl = `${SITE_URL}/scorecard/${entry.slug}`;
-  const shareText = `${entry.company} against the eleven commitments in the AI Bill of Rights`;
+  const shareText = `${entry.company} against the twelve commitments in the AI Bill of Rights`;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-16 sm:py-24">

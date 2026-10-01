@@ -68,7 +68,7 @@ export function validateNewArticle(input: NewArticleInput): ValidationResult {
   }
 
   if (rationale.length < RATIONALE_MIN) {
-    errors.rationale = `Say in at least ${RATIONALE_MIN} characters why the existing eleven don't already cover this.`;
+    errors.rationale = `Say in at least ${RATIONALE_MIN} characters why the existing twelve don't already cover this.`;
   } else if (rationale.length > RATIONALE_MAX) {
     errors.rationale = `Keep the rationale under ${RATIONALE_MAX} characters.`;
   }

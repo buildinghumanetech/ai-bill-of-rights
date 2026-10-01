@@ -1,5 +1,25 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-10-01 15:15 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Brought the branch up to date with main (13 commits, including the v0.1.1 publish) so it can merge. Renamed this branch's migration from 0015 to 0016 because main already has `0015_repoint_comments_to_v0_1_1.sql` (applied to production 2026-09-30), and gave v0.1.1 the `level` this branch requires. Nothing has been sent to signers.
+
+### Detail of changes made:
+- Merged `origin/main` into this branch (merge commit, no force push). Only conflict was README "Post-deploy steps"; resolved to: Pending is 0016 `email_sends`, 0015 recorded as applied.
+- `drizzle/0015_email_sends.sql` renamed to `drizzle/0016_email_sends.sql` (content unchanged). References updated in `scripts/send-version-email.ts` and this log.
+- `content/bill-of-rights/versions.json`: v0.1.1 gets `"level": "major"` (an article was added, which is the definition of major here). Without it `content.version-levels.test.ts` fails.
+- Checks: `tsc` clean; 90 tests pass across content, version policy, email templates, unsubscribe and the campaign. Lint is not on this branch yet (PR #91 adds it).
+
+### Potential concerns to address:
+- 0016 must be applied to production BEFORE the first real send (see README Pending). Merging and deploying does not need it.
+- Anyone who copied the old `0015_email_sends.sql` command must use 0016.
+- If #91 (lint) merges first, this branch will need main merged again and a lint pass.
+- The relaunch copy and recipient count still need Erika's review before any `--send`.
+
+---
+
 ## Progress Update as of 2026-09-26 14:15 Pacific
 *(Most recent updates at top)*
 
@@ -137,7 +157,7 @@ First commit, and Part 2 of the returning-signers work (Part 1 is PR #95). This 
 - `src/lib/email/send.ts`: `EmailMessage` gains `from`, `replyTo` and `headers`. New `sendEmailBatch` (Resend batch, at most 100) throws on error, unlike `sendEmail`.
 - `src/server/email/campaign.ts` (a plain module): `buildAudience` (read-only; reports each exclusion reason), `renderMessage` (adds the List-Unsubscribe and List-Unsubscribe-Post headers), `sendCampaign` (claims each (campaign, signer) row before sending, releases a failed batch, stops above 2% failures), and `unsubscribeByToken`. `src/server/email/contacts.ts`: Clerk primary email, or for admin-added signers (`admin-added-*`) the consent record's `contact_value` when the admin recorded an email.
 - Unsubscribe: `POST /api/unsubscribe/[token]` (RFC 8058 one-click returns 200; the no-JS form gets a 303 back to the page). `/unsubscribe/[token]` POSTs as it loads, then confirms. The GET never unsubscribes, because inbox link scanners fetch links.
-- `drizzle/0015_email_sends.sql` plus `emailSends` in `schema.ts`: UNIQUE (campaign, signer_id), UNIQUE unsubscribe_token, and signer FK ON DELETE CASCADE. Idempotent. Listed as pending in the README "Post-deploy steps".
+- `drizzle/0016_email_sends.sql` plus `emailSends` in `schema.ts`: UNIQUE (campaign, signer_id), UNIQUE unsubscribe_token, and signer FK ON DELETE CASCADE. Idempotent. Listed as pending in the README "Post-deploy steps".
 - `scripts/send-version-email.ts`: `relaunch` or `version <x.y.z>`. Dry run by default. `--test-to` sends one email, records nothing and looks up no addresses. `--send` needs `--confirm <exact recipient count>` and 0015 applied. `--env` accepts a comma-separated list.
 - Production, read-only, 2026-09-24: 91 signers with a signature. For the relaunch, 1 already signed v0.1.0 and 4 chose "none". That leaves 86 before address lookup (78 "major", 8 "minor"), 3 of them admin-added. One test email went to erika@buildinghumanetech.com.
 - 1,164 tests pass; `tsc` and ESLint are clean.

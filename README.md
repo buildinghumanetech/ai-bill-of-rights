@@ -63,6 +63,8 @@ A new version is a PR that adds:
 
 Merging to `main` triggers Vercel to redeploy. The postbuild hook (`scripts/sync-versions.ts`) syncs the new version into the database.
 
+**After every publish, prove signing works on production before you call it done.** Open theaibill.org in a private window, click Sign, enter a real phone or email, and get through the code step. The failure we hit after v0.1.1 ("Version 0.1.0 is no longer open for signing") only appears at that last step, so nothing short of submitting the code catches it. Also check `/propose` and `/signers`. Never hardcode a version string in the signing path: `tests/lib/no-hardcoded-signing-version.test.ts` fails the build if you do.
+
 ### Editing a version's text after a deploy has synced it
 
 `syncVersions` hashes each version's markdown and **throws if an already-synced version's text changes** — published documents are immutable. The build fails with:
@@ -133,15 +135,17 @@ Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.t
 
 **Pending:**
 
-- **0015 `email_sends`**, before the first real version email (not needed for the deploy itself: only the send script and `/api/unsubscribe` read it). Back up, then:
+- **0016 `email_sends`**, before the first real version email (not needed for the deploy itself: only the send script and `/api/unsubscribe` read it). Back up, then:
 
   ```bash
   docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
-    sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 -f /m/0015_email_sends.sql'
+    sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 -f /m/0016_email_sends.sql'
   docker run --rm -e PGURL postgres:17 psql "$PGURL" -X -c "SELECT to_regclass('public.email_sends');"
   ```
 
   One row per (campaign, signer) ever emailed, claimed before sending, so no signer gets a campaign twice; `unsubscribe_token` backs the one-click unsubscribe link. No addresses are stored. Idempotent, no `DO $$` block.
+
+0015 `repoint_comments_to_v0_1_1` is applied (2026-09-30, for the 0.1.1 publish; it moved `comments.base_version_id` and `proposed_edits.base_version_id` from 0.1.0 to 0.1.1; backup tables `comment_version_backup_0015` and `proposed_edit_version_backup_0015`, rollback SQL in the migration header).
 
 ### Sending a version email
 
@@ -162,7 +166,7 @@ docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
 
 0007 and 0008 were applied to production on 2026-09-24 with `psql --single-transaction -v ON_ERROR_STOP=1 -f … -f …`, not with `apply-migration.ts`: they contain `DO $$ … $$` blocks and no `--> statement-breakpoint` markers, and the script's fallback splits on every end-of-line `;`, including the ones inside those blocks (tracked in beads `ai-bill-of-rights-bpq`). Until that is fixed, apply any migration containing a `DO $$` block with `psql`, or add breakpoints around the block.
 
-0007 through 0014 have all been applied to production; 0015 is pending (above). When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
+0007 through 0015 have all been applied to production; 0016 is pending (above). When a new migration ships, add its command here — and if the code that ships with it reads or writes the new schema, apply it **before** that deploy, not after.
 
 0012 records the licence each `/propose` submission was made under (`proposed_edits.license`, `proposed_edits.license_granted_at`). It deliberately has no default and no backfill — `NULL` means no grant was recorded, and rows filed before the notice must stay that way. To count those, read-only: `pnpm tsx scripts/count-unlicensed-proposals.ts`.
 

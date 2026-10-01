@@ -92,10 +92,10 @@ describe("current version document", () => {
     expect(parsed.frontmatter.version).toBe(versionsIndex.current);
   });
 
-  it("has a preamble followed by 11 sequentially numbered articles", () => {
+  it("has a preamble followed by 12 sequentially numbered articles", () => {
     expect(parsed.articles[0].id).toBe("preamble");
     expect(documentArticles.map((a) => a.id)).toEqual(
-      Array.from({ length: 11 }, (_, i) => `article-${i + 1}`),
+      Array.from({ length: 12 }, (_, i) => `article-${i + 1}`),
     );
   });
 
@@ -271,7 +271,7 @@ describe("current version spec.json", () => {
 
   it("has one principle per article, numbered 1-11", () => {
     expect(spec.principles.map((p: { id: number }) => p.id)).toEqual(
-      Array.from({ length: 11 }, (_, i) => i + 1),
+      Array.from({ length: 12 }, (_, i) => i + 1),
     );
   });
 
@@ -297,7 +297,7 @@ describe("homepage articles array", () => {
 
   it("numbers articles 01-11 in order", () => {
     expect(homepageArticles.map((a) => a.number)).toEqual(
-      Array.from({ length: 11 }, (_, i) => String(i + 1).padStart(2, "0")),
+      Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")),
     );
   });
 

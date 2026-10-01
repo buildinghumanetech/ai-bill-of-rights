@@ -1,3 +1,4 @@
+import { getCurrentVersion } from "@/lib/db/queries";
 import { auth } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -17,7 +18,7 @@ export default async function ConsentPage({
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/");
-  const { version = "0.1.0" } = await searchParams;
+  const { version = (await getCurrentVersion())?.version ?? "" } = await searchParams;
 
   const rows = await db
     .select()

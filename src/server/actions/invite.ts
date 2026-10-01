@@ -169,6 +169,7 @@ export async function sendInvitationsAction(
     inviterName: inviter.displayName,
     inviterPageUrl: signerShareLink(siteUrl, inviter.id, inviterSlug, "invite"),
     readItUrl: homeShareUrl(siteUrl, inviter.id, "invite"),
+    logoUrl: `${new URL(siteUrl).origin}/images/email/torch-gold.png`,
   });
 
   const signed = await alreadySignedEmails(db, cleaned);
@@ -200,7 +201,12 @@ export async function sendInvitationsAction(
       }
 
       try {
-        await sendEmail({ to, subject: tpl.subject, text: tpl.text });
+        await sendEmail({
+          to,
+          subject: tpl.subject,
+          text: tpl.text,
+          html: tpl.html,
+        });
         return { kind: "sent" };
       } catch (err) {
         console.error("[invite] send failed", err);

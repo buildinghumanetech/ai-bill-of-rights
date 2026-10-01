@@ -250,18 +250,57 @@ export function signInvitation(opts: {
   inviterPageUrl: string;
   /** The "read it for yourself" homepage link, attribution-tagged. */
   readItUrl: string;
-}): { subject: string; text: string } {
-  return {
-    subject: `${opts.inviterName} invited you to sign the AI Bill of Rights`,
-    text: `${opts.inviterName} just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company — and thought you'd want to add your name too.
+  /**
+   * Absolute URL of the gold torch PNG (Gmail and Outlook do not render SVG, and
+   * relative URLs do not resolve in a mail client). Build it from the site
+   * origin: `${siteUrl}/images/email/torch-gold.png`. Omitted, the HTML part
+   * simply has no logo.
+   */
+  logoUrl?: string;
+}): { subject: string; text: string; html: string } {
+  const name = "The People's AI Bill of Rights";
+  const esc = escapeHtml;
+  const subject = `${opts.inviterName} invited you to sign ${name}`;
+  const text = `${opts.inviterName} just signed ${name} — twelve commitments we're demanding from every AI company — and thought you'd want to add your name too.
 
 Read it and decide for yourself: ${opts.readItUrl}
 
 ${opts.inviterName}'s signature: ${opts.inviterPageUrl}
 
-— The AI Bill of Rights project
-`,
-  };
+— ${name} project
+`;
+  const logoBlock = opts.logoUrl
+    ? `
+  <div style="padding:28px 28px 8px;text-align:center;">
+    <img src="${esc(opts.logoUrl)}" width="48" alt="" style="display:inline-block;border:0;height:auto;max-width:48px;">
+  </div>
+`
+    : "";
+  const html = `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:system-ui,-apple-system,sans-serif;">
+<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;">
+${logoBlock}
+  <div style="padding:16px 28px 8px;">
+    <p style="margin:0;font-size:16px;line-height:1.55;color:#111827;">${esc(opts.inviterName)} just signed ${esc(name)} &mdash; twelve commitments we're demanding from every AI company &mdash; and thought you'd want to add your name too.</p>
+  </div>
+
+  <div style="padding:16px 28px;text-align:center;">
+    <a href="${esc(opts.readItUrl)}" style="display:inline-block;padding:12px 32px;background:#059669;border-radius:6px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;">Read it and decide for yourself</a>
+  </div>
+
+  <div style="padding:0 28px 8px;">
+    <p style="margin:0;font-size:14px;line-height:1.55;color:#374151;">${esc(opts.inviterName)}'s signature: <a href="${esc(opts.inviterPageUrl)}" style="color:#059669;">${esc(opts.inviterPageUrl)}</a></p>
+  </div>
+
+  <div style="padding:16px 28px 24px;">
+    <p style="margin:0;font-size:13px;color:#9ca3af;">&mdash; ${esc(name)} project</p>
+  </div>
+
+</div>
+</body>
+</html>`;
+  return { subject, text, html };
 }
 
 export function selfieSubmittedAdminNotification(opts: {

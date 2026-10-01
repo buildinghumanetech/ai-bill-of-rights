@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 import { getSignerById, getSignatureNumber } from "@/lib/db/queries";
 import { getActiveSelfieForSigner } from "@/lib/selfie/queries";
 import { QUOTE_WIDTH, signerCardQuote } from "@/lib/og/signer-quote";
+import { OG_COLORS as C, OG_TAG, loadGeist } from "../../style";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,7 @@ export async function GET(
   // shrinking it would just leave a differently-shaped hole.
   const avatarSize = quote ? 176 : 200;
   const nameSize = quote ? 40 : 48;
+  const fonts = await loadGeist();
 
   return new ImageResponse(
     (
@@ -46,57 +48,48 @@ export async function GET(
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          fontFamily: "sans-serif",
+          fontFamily: "Geist",
           position: "relative",
         }}
       >
-        {/* Emerald green banner — top ~40% */}
+        {/* Light gray band: the site's tag, then "I signed." and their number. */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background: "#059669",
-            height: 260,
-            padding: "36px 60px 56px",
+            background: C.band,
+            borderBottom: `1px solid ${C.bandBorder}`,
+            // Tag and headline sit centered in a ~190px band.
+            height: 190,
+            padding: "0 60px",
           }}
         >
           <div
             style={{
               fontSize: 20,
-              color: "rgba(255,255,255,0.8)",
+              fontWeight: 600,
+              color: C.tag,
               letterSpacing: 4,
               textTransform: "uppercase",
             }}
           >
-            Signer of the
+            {OG_TAG}
           </div>
-          <div
-            style={{
-              fontSize: 48,
-              fontWeight: 700,
-              color: "#fff",
-              marginTop: 4,
-            }}
-          >
-            AI Bill of Rights
-          </div>
-          {/* Signer number badge — white pill */}
           <div
             style={{
               display: "flex",
-              marginTop: 14,
-              padding: "6px 24px",
-              background: "rgba(255,255,255,0.2)",
-              borderRadius: 9999,
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#fff",
-              letterSpacing: 1,
+              fontSize: 56,
+              fontWeight: 600,
+              letterSpacing: -1,
+              marginTop: 12,
             }}
           >
-            {`Signer #${sigNum.toLocaleString()}`}
+            <span style={{ color: C.ink }}>I signed.</span>
+            <span style={{ color: C.blue, marginLeft: 16 }}>
+              {`Signer #${sigNum.toLocaleString()}`}
+            </span>
           </div>
         </div>
 
@@ -105,17 +98,18 @@ export async function GET(
           style={{
             display: "flex",
             flex: 1,
-            background: "#fff",
-            padding: quote ? "0 56px 30px" : "0 60px 36px",
+            background: C.white,
+            // Symmetric, so alignItems:center puts the avatar and name in the
+            // vertical middle of the white area, quote or no quote.
+            padding: quote ? "0 56px" : "0 60px",
             alignItems: "center",
             gap: quote ? 32 : 40,
           }}
         >
-          {/* Avatar — positioned to overlap the banner/white boundary */}
+          {/* Avatar, centered in the white area */}
           <div
             style={{
               display: "flex",
-              marginTop: quote ? -52 : -60,
               flexShrink: 0,
             }}
           >
@@ -131,7 +125,7 @@ export async function GET(
                   height: avatarSize,
                   borderRadius: avatarSize / 2,
                   objectFit: "cover",
-                  border: "4px solid #fff",
+                  border: `4px solid ${C.white}`,
                 }}
               />
             ) : (
@@ -140,14 +134,14 @@ export async function GET(
                   width: avatarSize,
                   height: avatarSize,
                   borderRadius: avatarSize / 2,
-                  background: "#d1fae5",
+                  background: C.blueTint,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: Math.round(avatarSize * 0.4),
-                  fontWeight: 700,
-                  color: "#059669",
-                  border: "4px solid #fff",
+                  fontWeight: 600,
+                  color: C.blue,
+                  border: `4px solid ${C.white}`,
                 }}
               >
                 {initial}
@@ -162,14 +156,13 @@ export async function GET(
               flexDirection: "column",
               flex: 1,
               minWidth: 0,
-              marginTop: quote ? -14 : -20,
             }}
           >
             <div
               style={{
                 fontSize: nameSize,
-                fontWeight: 700,
-                color: "#111827",
+                fontWeight: 600,
+                color: C.ink,
                 lineHeight: 1.15,
               }}
             >
@@ -179,7 +172,7 @@ export async function GET(
               <div
                 style={{
                   fontSize: quote ? 20 : 22,
-                  color: "#6b7280",
+                  color: C.muted,
                   marginTop: 6,
                 }}
               >
@@ -197,18 +190,17 @@ export async function GET(
                 justifyContent: "center",
                 width: QUOTE_WIDTH,
                 flexShrink: 0,
-                borderLeft: "5px solid #059669",
+                borderLeft: `5px solid ${C.blue}`,
                 padding: "6px 0 6px 24px",
-                marginTop: -14,
               }}
             >
               <div
                 style={{
                   fontSize: 15,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   letterSpacing: 2,
                   textTransform: "uppercase",
-                  color: "#059669",
+                  color: C.blue,
                   marginBottom: 10,
                 }}
               >
@@ -218,7 +210,7 @@ export async function GET(
                 style={{
                   fontSize: quoteFontSize,
                   lineHeight: quoteLineHeight,
-                  color: "#1f2937",
+                  color: C.body,
                 }}
               >
                 {`“${quote}”`}
@@ -227,14 +219,14 @@ export async function GET(
           ) : null}
         </div>
 
-        {/* Amber accent bar at the bottom */}
+        {/* Call to action, in the same light gray as the top band */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#fffbeb",
-            borderTop: "2px solid #fde68a",
+            background: C.band,
+            borderTop: `1px solid ${C.bandBorder}`,
             padding: "14px 60px",
           }}
         >
@@ -242,14 +234,14 @@ export async function GET(
             style={{
               fontSize: 18,
               fontWeight: 600,
-              color: "#92400e",
+              color: C.tag,
             }}
           >
-            Join them — sign the AI Bill of Rights
+            Join them. Sign at theaibill.org
           </div>
         </div>
       </div>
     ),
-    { width: 1200, height: 630 },
+    { width: 1200, height: 630, fonts },
   );
 }

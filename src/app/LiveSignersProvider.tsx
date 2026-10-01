@@ -29,6 +29,8 @@ type ContextValue = {
    * the page recognizes them before the refresh lands.
    */
   viewer: ViewerSignature | null;
+  /** The current published version string, seeded by the root layout from the DB. */
+  currentVersion: string;
   setViewer: (viewer: ViewerSignature | null) => void;
 };
 
@@ -70,10 +72,12 @@ function isValidPollResponse(json: unknown): json is PollResponse {
 export function LiveSignersProvider({
   initialCount,
   initialViewer = null,
+  currentVersion = "",
   children,
 }: {
   initialCount: number;
   initialViewer?: ViewerSignature | null;
+  currentVersion?: string;
   children: React.ReactNode;
 }) {
   const [state, dispatch] = useReducer(
@@ -88,7 +92,7 @@ export function LiveSignersProvider({
   // every render, and an identity check would undo setViewer() each time.
   const [viewer, setViewer] = useState<ViewerSignature | null>(initialViewer);
   const initialViewerKey = initialViewer
-    ? `${initialViewer.signerId}:${initialViewer.signerNumber}`
+    ? `${initialViewer.signerId}:${initialViewer.signerNumber}:${initialViewer.newVersion ?? ""}`
     : "";
   const [seenViewerKey, setSeenViewerKey] = useState(initialViewerKey);
   if (initialViewerKey !== seenViewerKey) {
@@ -188,6 +192,7 @@ export function LiveSignersProvider({
         currentEvent: state.currentEvent,
         onEventFinished,
         viewer,
+        currentVersion,
         setViewer,
       }}
     >

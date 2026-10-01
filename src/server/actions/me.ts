@@ -9,7 +9,7 @@ import {
   type SignerSignatureStatus,
 } from "@/lib/db/signature-status";
 import { reaffirmSignature } from "@/lib/db/reaffirm";
-import { getSignatureNumber } from "@/lib/db/queries";
+import { getCurrentVersion, getSignatureNumber } from "@/lib/db/queries";
 import { getOrCreateShareSlug } from "@/lib/share/short-links";
 import { extractCapturedFields } from "@/lib/fingerprint/extract";
 import { renderConsentText, CURRENT_CONSENT_VERSION } from "@/lib/consent/render";
@@ -28,20 +28,23 @@ export type SignatureStatus =
 /**
  * Returns the signed-in Clerk user's relationship to a given version
  * (defaulting to the current published version). Used by SignModal to choose
- * between the sign form, the "already signed" view, and the re-affirm view.
+ * between the sign form and the share view.
  *
  * Someone who signed an earlier version reads as "signed-earlier", NOT
  * "not-signed" — see the note on SignedEarlierStatus. Their signature is
- * intact and still counted everywhere; what they are offered is a chance to
- * re-affirm the new text, not a blank form.
+ * intact and still counted everywhere, so they land on the same share view as
+ * a signer of this version. Re-signing is offered only at the bottom of
+ * /v/<current>, never in the modal.
  */
 export async function getMySignatureStatus(
-  versionString = "0.1.0",
+  requestedVersion?: string,
 ): Promise<SignatureStatus> {
   const { userId } = await auth();
   if (!userId) return { state: "anonymous" };
 
   const db = getDb();
+  const versionString =
+    requestedVersion || (await getCurrentVersion(db))?.version || "";
   // Only the columns resolveSignatureStatus reads. A bare select() names every
   // column in schema.ts, so one unapplied migration (0007 in production) made
   // this throw — and SignModal could no longer tell a signer from anyone else.
@@ -59,8 +62,8 @@ export async function getMySignatureStatus(
   const signer = signerRows[0];
 
   const status = await resolveSignatureStatus(db, signer, versionString);
-  if (status.state !== "signed") return status;
-  // A signer of this version opens the modal on their share view, which needs
+  if (status.state === "not-signed") return status;
+  // A signer of any version opens the modal on their share view, which needs
   // who they are and where they fall — not just that they signed.
   return {
     ...status,
