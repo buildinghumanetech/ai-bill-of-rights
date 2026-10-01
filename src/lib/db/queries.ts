@@ -1,15 +1,16 @@
-import { eq, count, countDistinct, desc, gt, lt, or, and, isNull, isNotNull, asc, sum, sql, notExists, inArray, aliasedTable } from "drizzle-orm";
+import { eq, count, countDistinct, desc, gt, lt, or, and, isNull, isNotNull, asc, sql, notExists, inArray, aliasedTable } from "drizzle-orm";
 import { versions, signatures, signers, comments, attestations, commentVotes, commentReports, commentMentions } from "./schema";
+import type { Db } from "./types";
 
 // Lazily resolve the production db so that importing this module in tests
 // (which always pass an explicit `db`) does not trigger the DATABASE_URL guard
 // inside src/lib/db/index.ts at module-evaluation time.
-function getDefaultDb() {
+function getDefaultDb(): Db {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("./index").db;
+  return (require("./index") as { db: Db }).db;
 }
 
-export async function getCurrentVersion(db: any = getDefaultDb()) {
+export async function getCurrentVersion(db: Db = getDefaultDb()) {
   const rows = await db
     .select()
     .from(versions)
@@ -18,7 +19,7 @@ export async function getCurrentVersion(db: any = getDefaultDb()) {
   return rows[0] ?? null;
 }
 
-export async function getVersionByString(versionString: string, db: any = getDefaultDb()) {
+export async function getVersionByString(versionString: string, db: Db = getDefaultDb()) {
   const rows = await db
     .select()
     .from(versions)
@@ -35,7 +36,7 @@ export async function getVersionByString(versionString: string, db: any = getDef
  * produces two rows. This number is rendered as "N signatures" and "N other
  * real people", so it has to count humans.
  */
-export async function getSignatureCount(db: any = getDefaultDb()): Promise<number> {
+export async function getSignatureCount(db: Db = getDefaultDb()): Promise<number> {
   const rows = await db
     .select({ value: countDistinct(signatures.signerId) })
     .from(signatures);
@@ -44,7 +45,7 @@ export async function getSignatureCount(db: any = getDefaultDb()): Promise<numbe
 
 export async function getSignatureNumber(
   signerId: string,
-  db: any = getDefaultDb(),
+  db: Db = getDefaultDb(),
 ): Promise<number> {
   // Count signatures at-or-before this signer's first signature. The comparison
   // stays ENTIRELY in SQL on purpose: reading the timestamp into JS first
@@ -80,7 +81,7 @@ export async function getSignatureNumber(
  * anything. Public "how many people signed" surfaces want getSignatureCount().
  * Kept for admin/reporting use; it has no callers in the app today.
  */
-export async function getSignerCount(db: any = getDefaultDb()): Promise<number> {
+export async function getSignerCount(db: Db = getDefaultDb()): Promise<number> {
   const rows = await db.select({ value: count() }).from(signers);
   return Number(rows[0]?.value ?? 0);
 }
@@ -110,7 +111,7 @@ export interface SignerListItem {
  * the newest-first ordering and the page window are applied in an outer query.
  */
 export async function listSignatures(
-  db: any = null,
+  db: Db | null = null,
   opts: { limit: number; offset: number },
 ): Promise<SignerListItem[]> {
   const client = db ?? getDefaultDb();
@@ -155,7 +156,7 @@ export async function listSignatures(
   return rows as SignerListItem[];
 }
 
-export async function getSignerById(signerId: string, db: any = null) {
+export async function getSignerById(signerId: string, db: Db | null = null) {
   const client = db ?? getDefaultDb();
   const rows = await client
     .select()
@@ -167,7 +168,7 @@ export async function getSignerById(signerId: string, db: any = null) {
 
 export async function listSignaturesForSigner(
   signerId: string,
-  db: any = null,
+  db: Db | null = null,
 ) {
   const client = db ?? getDefaultDb();
   const rows = await client
@@ -189,7 +190,7 @@ export async function listSignaturesForSigner(
 /** How many people arrived through this signer's share links and signed up. */
 export async function countReferralsBySigner(
   signerId: string,
-  db: any = null,
+  db: Db | null = null,
 ): Promise<number> {
   const client = db ?? getDefaultDb();
   const rows = await client
@@ -214,7 +215,7 @@ export interface ReferredSigner {
  */
 export async function listReferralsBySigner(
   signerId: string,
-  db: any = null,
+  db: Db | null = null,
   opts: { limit?: number; offset?: number } = {},
 ): Promise<ReferredSigner[]> {
   const client = db ?? getDefaultDb();
@@ -231,7 +232,12 @@ export async function listReferralsBySigner(
     .leftJoin(signatures, eq(signatures.signerId, signers.id))
     .where(eq(signers.referredBySignerId, signerId))
     .groupBy(signers.id, signers.displayName, signers.createdAt)
-    .orderBy(desc(signers.createdAt));
+    .orderBy(desc(signers.createdAt))
+    // $dynamic() is drizzle's opt-in for building a query up conditionally: without
+    // it each builder method returns a type with that method removed, so the
+    // reassignments below don't typecheck. This was invisible while `client` was
+    // `any`.
+    .$dynamic();
 
   if (opts.limit !== undefined) q = q.limit(opts.limit);
   if (opts.offset !== undefined) q = q.offset(opts.offset);
@@ -260,7 +266,7 @@ const SIXTY_MINUTES_MS = 60 * 60 * 1000;
  */
 export async function listRecentSignersSince(
   since: Date | null,
-  db: any = null,
+  db: Db | null = null,
 ): Promise<RecentSignerEvent[]> {
   const client = db ?? getDefaultDb();
   const cutoff = since ?? new Date(Date.now() - SIXTY_MINUTES_MS);
@@ -320,7 +326,7 @@ export interface CommentRow {
 }
 
 export async function countCommentsByAnchor(
-  db: any,
+  db: Db,
   baseVersionId: string,
 ): Promise<Record<string, number>> {
   const rows = await db
@@ -343,7 +349,7 @@ export async function countCommentsByAnchor(
 }
 
 export async function listCommentsForAnchor(
-  db: any,
+  db: Db,
   baseVersionId: string,
   anchorId: string,
 ): Promise<CommentRow[]> {
@@ -381,7 +387,7 @@ export interface CommentWithSelection {
 }
 
 export async function listCommentsForVersion(
-  db: any,
+  db: Db,
   baseVersionId: string,
 ): Promise<CommentWithSelection[]> {
   const rows = await db
@@ -408,7 +414,7 @@ export async function listCommentsForVersion(
 }
 
 export async function listCommentsByAnchorForVersion(
-  db: any,
+  db: Db,
   baseVersionId: string,
 ): Promise<Record<string, CommentWithSelection[]>> {
   const all = await listCommentsForVersion(db, baseVersionId);
@@ -496,7 +502,7 @@ function buildTree(
 }
 
 export async function listThreadedCommentsForVersion(
-  db: any,
+  db: Db,
   baseVersionId: string,
   viewerSignerId: string | null,
 ): Promise<ThreadedComment[]> {
@@ -573,7 +579,7 @@ export async function listThreadedCommentsForVersion(
   }
 
   // 6. Build tree
-  const flat: Omit<ThreadedComment, "replies">[] = commentRows.map((r: any) => ({
+  const flat: Omit<ThreadedComment, "replies">[] = commentRows.map((r) => ({
     id: r.id,
     body: r.body,
     signerId: r.signerId,
@@ -601,7 +607,7 @@ export interface SignerForAdminPostAs {
  * Sorted alphabetically by display_name.
  */
 export async function listSignersForAdminPostAs(
-  db: any,
+  db: Db,
 ): Promise<SignerForAdminPostAs[]> {
   const rows = await db
     .select({ id: signers.id, displayName: signers.displayName })
@@ -622,7 +628,7 @@ export interface SignerForMention {
  * Sorted alphabetically by display_name.
  */
 export async function listSignersForMention(
-  db: any,
+  db: Db,
 ): Promise<SignerForMention[]> {
   const rows = await db
     .select({ id: signers.id, displayName: signers.displayName })
@@ -633,7 +639,7 @@ export async function listSignersForMention(
 }
 
 export async function findThreadedCommentTree(
-  db: any,
+  db: Db,
   rootCommentId: string,
   viewerSignerId: string | null,
 ): Promise<ThreadedComment | null> {
@@ -677,7 +683,7 @@ export function flattenTree(tree: ThreadedComment[]): ThreadedComment[] {
 }
 
 export async function listPublishedAttestations(
-  db: any = null,
+  db: Db | null = null,
   opts: { limit: number; offset: number; versionString?: string },
 ): Promise<AttestationListItem[]> {
   const client = db ?? getDefaultDb();
@@ -725,7 +731,7 @@ export interface AdminAttestationListItem {
 }
 
 export async function listAllAttestationsForAdmin(
-  db: any = null,
+  db: Db | null = null,
 ): Promise<AdminAttestationListItem[]> {
   const client = db ?? getDefaultDb();
   const rows = await client
@@ -746,7 +752,7 @@ export async function listAllAttestationsForAdmin(
     .innerJoin(versions, eq(versions.id, attestations.versionId))
     .orderBy(desc(attestations.claimedAt));
 
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     orgName: r.orgName,
     productName: r.productName,
@@ -763,7 +769,7 @@ export async function listAllAttestationsForAdmin(
   }));
 }
 
-export async function listPendingReviewAttestations(db: any = null) {
+export async function listPendingReviewAttestations(db: Db | null = null) {
   const client = db ?? getDefaultDb();
   return client
     .select({

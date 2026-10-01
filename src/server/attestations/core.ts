@@ -29,6 +29,7 @@ import { eq } from "drizzle-orm";
 import { attestations, versions } from "@/lib/db/schema";
 import { needsManualReview } from "@/lib/attestations/allowlist";
 import { generateVerificationToken } from "@/lib/attestations/token";
+import type { Db } from "@/lib/db/types";
 
 export interface CreateAttestationInput {
   orgName: string;
@@ -39,7 +40,7 @@ export interface CreateAttestationInput {
 }
 
 export async function createAttestation(
-  db: any,
+  db: Db,
   input: CreateAttestationInput,
 ): Promise<{
   id: string;
@@ -76,7 +77,7 @@ export async function createAttestation(
 }
 
 export async function verifyAttestationToken(
-  db: any,
+  db: Db,
   token: string,
 ): Promise<{ id: string; published: boolean; needsManualReview: boolean }> {
   const rows = await db
@@ -105,7 +106,7 @@ export async function verifyAttestationToken(
 
 /** Admin-only. The caller must have established that — there is no check here. */
 export async function approveAttestation(
-  db: any,
+  db: Db,
   attestationId: string,
 ): Promise<void> {
   await db
@@ -120,7 +121,7 @@ export async function approveAttestation(
 
 /** Admin-only. The caller must have established that — there is no check here. */
 export async function hideAttestation(
-  db: any,
+  db: Db,
   attestationId: string,
   _reason: string,
 ): Promise<void> {

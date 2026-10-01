@@ -85,10 +85,20 @@ export function MentionTextarea({
         .slice(0, MAX_SUGGESTIONS)
     : [];
 
-  // Reset selected index when the suggestion list changes
-  useEffect(() => {
+  // Reset the highlighted row whenever the suggestion list changes identity.
+  //
+  // This is React's documented "adjusting state when a prop changes" pattern —
+  // compare against the previous value DURING render and set immediately —
+  // rather than an effect. An effect would paint one frame with a stale index
+  // first (briefly highlighting row 3 of a list that just became two rows long)
+  // and then re-render; doing it here means the list and its highlight are never
+  // shown disagreeing.
+  const listKey = `${mentionQuery?.query ?? ""}:${suggestions.length}`;
+  const [prevListKey, setPrevListKey] = useState(listKey);
+  if (prevListKey !== listKey) {
+    setPrevListKey(listKey);
     setSelectedIdx(0);
-  }, [suggestions.length, mentionQuery?.query]);
+  }
 
   // A pick belongs to the body it was made in. When the parent replaces `value`
   // wholesale — `setBody("")` after a successful submit, while this component

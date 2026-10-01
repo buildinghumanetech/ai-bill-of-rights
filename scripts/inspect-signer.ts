@@ -17,11 +17,11 @@ async function main() {
      FROM signers WHERE id = $1`,
     [id],
   );
-  if ((rows as any[]).length === 0) {
+  if ((rows as Array<Record<string, unknown>>).length === 0) {
     console.log(`No signer with id ${id}`);
     return;
   }
-  const r = (rows as any[])[0];
+  const r = (rows as Array<Record<string, unknown>>)[0];
   console.log("Signer row:");
   console.log(`  id:               ${r.id}`);
   console.log(`  display_name:     ${JSON.stringify(r.display_name)}`);
@@ -36,8 +36,11 @@ async function main() {
      ORDER BY consented_at DESC LIMIT 1`,
     [id],
   );
-  if ((cr as any[])[0]?.captured_fields) {
-    const f = (cr as any[])[0].captured_fields;
+  const captured = (cr as Array<Record<string, unknown>>)[0]?.captured_fields;
+  // jsonb comes back as `unknown`; narrow to an object before indexing it rather
+  // than asserting a shape this script cannot know.
+  if (captured && typeof captured === "object") {
+    const f = captured as Record<string, unknown>;
     console.log("\nMost recent consent_records.captured_fields (interesting bits):");
     const interesting = ["nameDisplayFormat", "firstName", "lastName", "raw_display_name"];
     for (const k of interesting) {

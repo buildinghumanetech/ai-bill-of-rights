@@ -1,3 +1,4 @@
+import type { Db } from "@/lib/db/types";
 import { describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../_helpers/pglite-db";
@@ -309,7 +310,9 @@ describe("resolveReferrerId", () => {
       },
     };
     await expect(
-      resolveReferrerId(brokenDb, { ref: NONEXISTENT }),
+      // A deliberate partial double: only `select` exists, because that is the
+      // only call this path makes before throwing. Cast rather than widen `Db`.
+      resolveReferrerId(brokenDb as unknown as Db, { ref: NONEXISTENT }),
     ).resolves.toBeNull();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();

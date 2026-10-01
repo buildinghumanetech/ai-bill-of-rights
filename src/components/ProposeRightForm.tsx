@@ -146,6 +146,10 @@ export function ProposeRightForm({
   useEffect(() => {
     const d = readDraft();
     if (d) {
+      // Intentional, and the comment above says why: localStorage does not exist during
+      // server render, so a draft can only be restored after mount. Putting it in the
+      // useState initialiser would make the first client render differ from the server's.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(d.title);
       setBody(d.body);
       setRationale(d.rationale);

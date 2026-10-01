@@ -1,5 +1,20 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-10-01 15:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Merged main again after PR #91 (lint to zero, now in CI) and the SignModal lint fix landed. No code changes on this branch: ESLint with `--max-warnings 0`, `tsc`, and 96 related tests all pass on the merged result. Nothing has been sent to signers.
+
+### Detail of changes made:
+- Merge commit only (no force push). No conflicts.
+
+### Potential concerns to address:
+- **Relaunch copy is stale.** `RELAUNCH_SUMMARY` in `scripts/send-version-email.ts` describes v0.1.0 (Articles 10 and 11, wording revisions), but the relaunch uses `index.current`, which is now 0.1.1. The email would read "We've created v0.1.1, which adds Freedom From Algorithmic Discrimination..." Wrong. Erika must decide the summary before any `--send`. The relaunch also skips anyone who signed 0.1.1.
+- 0016 `email_sends` still must be applied before the first real send.
+
+---
+
 ## Progress Update as of 2026-10-01 15:15 Pacific
 *(Most recent updates at top)*
 

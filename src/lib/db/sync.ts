@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { versions } from "./schema";
 import { parseDocument } from "@/lib/markdown/parse";
+import type { Db } from "./types";
 
 export interface VersionInput {
   version: string;
@@ -18,7 +19,7 @@ function sha256Hex(s: string): string {
 }
 
 export async function syncVersions(
-  db: any,
+  db: Db,
   inputs: VersionInput[],
 ): Promise<void> {
   type VersionRow = typeof versions.$inferSelect;

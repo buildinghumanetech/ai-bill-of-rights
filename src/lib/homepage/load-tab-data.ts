@@ -12,6 +12,7 @@ import {
   type SignerForMention,
 } from "@/lib/db/queries";
 import { signers } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/types";
 
 export interface HomepageTabData {
   currentVersion: string;
@@ -54,7 +55,7 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
     const { userId } = await auth();
     if (userId && baseVersionId) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { db } = require("@/lib/db") as { db: any };
+      const { db } = require("@/lib/db") as { db: Db };
       const me = await db
         .select({ id: signers.id, isAdmin: signers.isAdmin })
         .from(signers)
@@ -78,8 +79,8 @@ export async function loadHomepageTabData(): Promise<HomepageTabData> {
   if (baseVersionId) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { db } = require("@/lib/db") as { db: any };
-      const tasks: Promise<any>[] = [
+      const { db } = require("@/lib/db") as { db: Db };
+      const tasks: Promise<unknown>[] = [
         listCommentsByAnchorForVersion(db, baseVersionId),
         listThreadedCommentsForVersion(db, baseVersionId, viewerSignerId),
         // Load signers for mention for all signed-in users (needed for @mention typeahead)
