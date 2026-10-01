@@ -1,5 +1,21 @@
 # Branch Progress: feat/version-emails
 
+## Progress Update as of 2026-10-01 15:45 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Fixed the stale relaunch summary (it described v0.1.0 while the relaunch now announces v0.1.1). Erika approved the new line. Nothing has been sent to signers.
+
+### Detail of changes made:
+- `scripts/send-version-email.ts` `RELAUNCH_SUMMARY`: now "adds three articles: Freedom From Algorithmic Discrimination, A Right to Safe, Tested Systems, and Communities Help Define the Standard, and revises the wording of Articles 1, 4, 5 and 7." Rendered: "We've created v0.1.1, which adds three articles: ..."
+- Recipient rule, verified in code: everyone with `notification_preference` of "major" or "minor" gets the relaunch (it counts as major); "none" does not. The column defaults to "major" (migration 0001 backfilled existing signers; the sign form preselects "Major revisions"), so this is opt-out, not opt-in. People who signed 0.1.1 are skipped.
+
+### Potential concerns to address:
+- The email says "You asked to hear about updates." That is true for people who saw and kept the preselected sign-form choice, but older signers were defaulted by the 0001 backfill and may never have been asked. Erika has seen this and kept the copy.
+- 0016 must still be applied before the first real send. Dry run first; `--send --confirm <count>` only with her go-ahead.
+
+---
+
 ## Progress Update as of 2026-10-01 15:30 Pacific
 *(Most recent updates at top)*
 

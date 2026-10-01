@@ -36,9 +36,11 @@ for (const p of (flag("env") ?? ".env.local").split(",")) {
   config({ path: p.trim().replace(/^~/, os.homedir()), override: true, quiet: true });
 }
 
-// Follows "We've created v0.1.0, which".
+// Follows "We've created v<current>, which". The relaunch goes to people who
+// signed 0.0.1 or 0.1.0, so it covers everything since 0.0.1. Update this
+// whenever `current` in versions.json moves before the relaunch is sent.
 const RELAUNCH_SUMMARY =
-  "adds Freedom From Algorithmic Discrimination and A Right to Safe, Tested Systems, and revises the wording of Articles 1, 4, 5 and 7.";
+  "adds three articles: Freedom From Algorithmic Discrimination, A Right to Safe, Tested Systems, and Communities Help Define the Standard, and revises the wording of Articles 1, 4, 5 and 7.";
 
 async function main(): Promise<void> {
   const [mode, versionArg] = args;
