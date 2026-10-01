@@ -1,5 +1,5 @@
 {
-  "current": "0.1.0",
+  "current": "0.1.1",
   "history": [
     {
       "version": "0.0.1",
@@ -12,6 +12,12 @@
       "published_at": "2026-07-24",
       "release_notes_pr": null,
       "changelog": "Adds Article 10 (Freedom From Algorithmic Discrimination) and Article 11 (A Right to Safe, Tested Systems), and revises the wording of Articles 1, 4, 5 and 7. Every article now closes with its pull quote, so the canonical text and the homepage say the same thing. Articles 5, 7 and 11 gained sentences; no article lost any."
+    },
+    {
+      "version": "0.1.1",
+      "published_at": "2026-09-30",
+      "release_notes_pr": null,
+      "changelog": "Adds Article 12 (Communities Help Define the Standard), so the communities an AI system is deployed in help define what wellbeing means there, see the evidence, and can challenge the results, with representative public panels doing the same for systems that reach everyone. Articles 1 through 11 are unchanged, word for word."
     }
   ]
 }

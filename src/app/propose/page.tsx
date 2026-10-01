@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Propose a new right — The AI Bill of Rights",
   description:
-    "The document has eleven articles. If one is missing, propose it here and let the signers decide.",
+    "The document has twelve articles. If one is missing, propose it here and let the signers decide.",
 };
 
 /**
@@ -103,7 +103,7 @@ export default async function ProposePage() {
           Propose a new right
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-zinc-700">
-          The document has eleven articles. Eleven is not a sacred number — it
+          The document has twelve articles. Twelve is not a sacred number — it
           is where the drafting stopped. If a right is missing, write it here.
           Signers endorse the ones that hold up, and those go into the next
           version.
@@ -124,7 +124,7 @@ export default async function ProposePage() {
         <p className="mt-2 text-base leading-relaxed text-zinc-600">
           Read the{" "}
           <Link href="/" className="text-blue-600 underline underline-offset-4">
-            eleven
+            twelve
           </Link>{" "}
           first. Most proposals turn out to be Article 4 or Article 9 in
           different words, and the fastest way to get yours taken seriously is

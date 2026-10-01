@@ -131,7 +131,15 @@ Several things are scoped to a specific version row, so bumping `current` change
 
 Migrations in this repo are applied by hand (`pnpm tsx scripts/apply-migration.ts <file>`) — the drizzle journal is not the source of truth here (see `AGENTS.md`). **This list is the single source of truth for what is still pending; remove entries once they have been applied.**
 
-**Pending:** none.
+**Pending:** `0015_repoint_comments_to_v0_1_1.sql`, for the 0.1.1 publish (Article 12). Run it **after** the deploy, once `sync-versions` has created the 0.1.1 row, from a fresh `pg_dump` backup, in one transaction:
+
+```bash
+docker run --rm -e PGURL -v "$PWD/drizzle":/m:ro postgres:17 \
+  sh -c 'psql "$PGURL" -X --single-transaction -v ON_ERROR_STOP=1 \
+    -f /m/0015_repoint_comments_to_v0_1_1.sql'
+```
+
+0015 only moves `comments.base_version_id` and `proposed_edits.base_version_id` from 0.1.0 to 0.1.1. Article 12 was appended, so no anchor changes. Signatures stay on 0.1.0 and nobody is asked to sign again: public counts are version-agnostic, and `resolveSignatureStatus` shows earlier signers as `signed-earlier` with an optional re-affirm. The backup tables are `comment_version_backup_0015` and `proposed_edit_version_backup_0015`; the rollback SQL is in the migration header. Remove this entry once applied.
 
 0013 and 0014 were applied to production on 2026-09-24 (09:45 PT), before `feat/post-sign-share` merged, after a fresh `pg_dump` backup, in one `psql` transaction:
 
