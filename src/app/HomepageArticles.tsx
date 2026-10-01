@@ -374,6 +374,22 @@ connects: [
       },
     ],
   },
+  {
+    number: "12",
+    title: "Communities Help Define the Standard",
+    body: "Where an AI system is deployed in a community, that community helps define what wellbeing means there, sees the evidence, and can challenge the results. For systems that reach everyone, representative public panels do the same. Companies fund it and answer in public.",
+    pullQuote: "Define it with us, then measure it.",
+    connects: [
+      {
+        title: "HumaneBench as measurement infrastructure",
+        slug: "humanebench-as-measurement-infrastructure",
+      },
+      {
+        title: "Algorithmic audit proposals",
+        slug: "algorithmic-audit-proposals",
+      },
+    ],
+  },
 ];
 
 /**

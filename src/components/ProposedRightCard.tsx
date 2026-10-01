@@ -161,7 +161,7 @@ export function ProposedRightCard({
           {proposal.rationale && expanded && (
             <div className="mt-5 rounded border-l-2 border-zinc-300 bg-zinc-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Why the existing eleven don&apos;t cover it
+                Why the existing twelve don&apos;t cover it
               </p>
               <p className="mt-2 text-pretty text-sm leading-relaxed text-zinc-700">
                 {proposal.rationale}

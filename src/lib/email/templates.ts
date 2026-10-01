@@ -253,7 +253,7 @@ export function signInvitation(opts: {
 }): { subject: string; text: string } {
   return {
     subject: `${opts.inviterName} invited you to sign the AI Bill of Rights`,
-    text: `${opts.inviterName} just signed the AI Bill of Rights — eleven commitments we're demanding from every AI company — and thought you'd want to add your name too.
+    text: `${opts.inviterName} just signed the AI Bill of Rights — twelve commitments we're demanding from every AI company — and thought you'd want to add your name too.
 
 Read it and decide for yourself: ${opts.readItUrl}
 

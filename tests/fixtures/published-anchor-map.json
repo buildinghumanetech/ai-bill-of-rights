@@ -99,5 +99,13 @@
   "article-11-connect-humanebench-principle-protect-dignity-and-safety": "HumaneBench Principle — Protect Dignity and Safety",
   "article-11-connect-white-house-ai-bill-of-rights-2022": "White House AI Bill of Rights — Safe and Effective Systems (2022)",
   "article-11-connect-eu-ai-act-conformity-assessments": "EU AI Act — risk management & conformity assessment (Articles 9, 43)",
-  "article-11-connect-nist-ai-risk-management-framework": "NIST AI Risk Management Framework"
+  "article-11-connect-nist-ai-risk-management-framework": "NIST AI Risk Management Framework",
+  "article-12-title": "Communities Help Define the Standard",
+  "article-12-s-1": "Where an AI system is deployed in a community, that community helps define what wellbeing means there, sees the evidence, and can challenge the results.",
+  "article-12-s-2": "For systems that reach everyone, representative public panels do the same.",
+  "article-12-s-3": "Companies fund it and answer in public.",
+  "article-12-pullquote": "Define it with us, then measure it.",
+  "article-12-connects-label": "Connects to",
+  "article-12-connect-humanebench-as-measurement-infrastructure": "HumaneBench as measurement infrastructure",
+  "article-12-connect-algorithmic-audit-proposals": "Algorithmic audit proposals"
 }

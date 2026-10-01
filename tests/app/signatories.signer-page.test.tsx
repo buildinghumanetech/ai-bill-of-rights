@@ -160,7 +160,7 @@ describe("signer page as a landing page for a stranger", () => {
     expect(getOrCreateShareSlug).not.toHaveBeenCalled();
   });
 
-  it("shows the sign CTA and the eleven commitments to a non-owner", async () => {
+  it("shows the sign CTA and the twelve commitments to a non-owner", async () => {
     mockSigner();
     viewerIs(null);
     const html = await renderPage();
@@ -205,7 +205,7 @@ describe("signer page as a landing page for a stranger", () => {
   // Rights", so a bare `toContain("Add your name")` is satisfied without the
   // second CTA existing at all. These assertions pin the button that sits
   // *below* the commitments list — the one there to catch a reader who has
-  // just finished the eleven articles — so deleting it turns the suite red.
+  // just finished the twelve articles — so deleting it turns the suite red.
   // Counting `>Add your name</` matches the button's whole text node only:
   // the heading renders as `Add your name to the <a`, so rewording that
   // heading (copy this test has no opinion about) cannot fail this test.
@@ -217,7 +217,7 @@ describe("signer page as a landing page for a stranger", () => {
     expect(occurrences).toBe(1);
     const commitmentsAt = html.indexOf("What they signed");
     expect(commitmentsAt).toBeGreaterThan(-1);
-    // The last occurrence is the standalone button, after the eleven articles.
+    // The last occurrence is the standalone button, after the twelve articles.
     expect(html.lastIndexOf("Add your name")).toBeGreaterThan(commitmentsAt);
     // ...and after the final article's title, not tucked between them.
     const lastArticleTitle = articles[articles.length - 1].title.replace(
