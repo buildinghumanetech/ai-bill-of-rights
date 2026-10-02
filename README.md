@@ -52,6 +52,15 @@ Never commit live keys. They go in Vercel env (Production scope) and nowhere els
 
 `pnpm test` runs the Vitest suite against an in-memory pglite Postgres. No external services required.
 
+## SMS codes: which countries work
+
+Clerk only texts countries enabled on its SMS allowlist (Clerk Dashboard > SMS > Settings; **by default only the US and Canada**). A number in any other country is rejected, however valid it is. Two places must agree:
+
+1. **Clerk dashboard:** enable the countries you want. Each enabled country can cost money per text, and open allowlists attract SMS-pumping fraud, so enable the ones you actually expect.
+2. **Vercel env `NEXT_PUBLIC_SMS_COUNTRIES`**, e.g. `US,CA,GB,AU` (ISO codes, comma separated; needs a redeploy since it is baked in at build). The sign modal lists only these for phone sign-in and sends everyone else to email. Unset means every country is offered, which is the old behavior and will fail for countries Clerk has not enabled.
+
+Clerk checks the calling code, so enabling the US also covers other `+1` numbers. Numbers are normalised with `libphonenumber-js` (`src/lib/phone.ts`): a UK "07700 900123" becomes `+447700900123`, and a pasted `+44...` works whatever country is selected.
+
 ## Publishing a new version of the Bill of Rights
 
 A new version is a PR that adds:

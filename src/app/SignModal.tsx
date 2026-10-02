@@ -17,6 +17,14 @@ import {
 } from "@/server/actions/me";
 import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { useOptionalLiveSigners } from "./LiveSignersProvider";
+import {
+  PHONE_COUNTRIES,
+  countryOfInternational,
+  formatInternational,
+  isSmsSupported,
+  smsCountries,
+  toE164,
+} from "@/lib/phone";
 import { NewVersionLink } from "@/components/SignatureMomentum";
 import { SelfieCapture } from "@/components/SelfieCapture";
 import { MAX_WHY_I_SIGNED_LENGTH } from "@/lib/why-i-signed";
@@ -99,67 +107,6 @@ export function signerGreeting(
   const who = name ? `${name}, you're` : "You're";
   return `${who} signer #${signerNumber.toLocaleString("en-US")}.`;
 }
-
-interface Country {
-  id: string;
-  code: string;
-  flag: string;
-  name: string;
-}
-
-const COUNTRIES: ReadonlyArray<Country> = [
-  { id: "US", code: "+1", flag: "🇺🇸", name: "United States" },
-  { id: "CA", code: "+1", flag: "🇨🇦", name: "Canada" },
-  { id: "MX", code: "+52", flag: "🇲🇽", name: "Mexico" },
-  { id: "GB", code: "+44", flag: "🇬🇧", name: "United Kingdom" },
-  { id: "IE", code: "+353", flag: "🇮🇪", name: "Ireland" },
-  { id: "AU", code: "+61", flag: "🇦🇺", name: "Australia" },
-  { id: "NZ", code: "+64", flag: "🇳🇿", name: "New Zealand" },
-  { id: "DE", code: "+49", flag: "🇩🇪", name: "Germany" },
-  { id: "FR", code: "+33", flag: "🇫🇷", name: "France" },
-  { id: "ES", code: "+34", flag: "🇪🇸", name: "Spain" },
-  { id: "IT", code: "+39", flag: "🇮🇹", name: "Italy" },
-  { id: "PT", code: "+351", flag: "🇵🇹", name: "Portugal" },
-  { id: "NL", code: "+31", flag: "🇳🇱", name: "Netherlands" },
-  { id: "BE", code: "+32", flag: "🇧🇪", name: "Belgium" },
-  { id: "CH", code: "+41", flag: "🇨🇭", name: "Switzerland" },
-  { id: "AT", code: "+43", flag: "🇦🇹", name: "Austria" },
-  { id: "SE", code: "+46", flag: "🇸🇪", name: "Sweden" },
-  { id: "NO", code: "+47", flag: "🇳🇴", name: "Norway" },
-  { id: "DK", code: "+45", flag: "🇩🇰", name: "Denmark" },
-  { id: "FI", code: "+358", flag: "🇫🇮", name: "Finland" },
-  { id: "PL", code: "+48", flag: "🇵🇱", name: "Poland" },
-  { id: "GR", code: "+30", flag: "🇬🇷", name: "Greece" },
-  { id: "TR", code: "+90", flag: "🇹🇷", name: "Turkey" },
-  { id: "IL", code: "+972", flag: "🇮🇱", name: "Israel" },
-  { id: "AE", code: "+971", flag: "🇦🇪", name: "United Arab Emirates" },
-  { id: "SA", code: "+966", flag: "🇸🇦", name: "Saudi Arabia" },
-  { id: "EG", code: "+20", flag: "🇪🇬", name: "Egypt" },
-  { id: "ZA", code: "+27", flag: "🇿🇦", name: "South Africa" },
-  { id: "NG", code: "+234", flag: "🇳🇬", name: "Nigeria" },
-  { id: "KE", code: "+254", flag: "🇰🇪", name: "Kenya" },
-  { id: "IN", code: "+91", flag: "🇮🇳", name: "India" },
-  { id: "PK", code: "+92", flag: "🇵🇰", name: "Pakistan" },
-  { id: "BD", code: "+880", flag: "🇧🇩", name: "Bangladesh" },
-  { id: "ID", code: "+62", flag: "🇮🇩", name: "Indonesia" },
-  { id: "PH", code: "+63", flag: "🇵🇭", name: "Philippines" },
-  { id: "TH", code: "+66", flag: "🇹🇭", name: "Thailand" },
-  { id: "VN", code: "+84", flag: "🇻🇳", name: "Vietnam" },
-  { id: "MY", code: "+60", flag: "🇲🇾", name: "Malaysia" },
-  { id: "SG", code: "+65", flag: "🇸🇬", name: "Singapore" },
-  { id: "HK", code: "+852", flag: "🇭🇰", name: "Hong Kong" },
-  { id: "TW", code: "+886", flag: "🇹🇼", name: "Taiwan" },
-  { id: "JP", code: "+81", flag: "🇯🇵", name: "Japan" },
-  { id: "KR", code: "+82", flag: "🇰🇷", name: "South Korea" },
-  { id: "CN", code: "+86", flag: "🇨🇳", name: "China" },
-  { id: "BR", code: "+55", flag: "🇧🇷", name: "Brazil" },
-  { id: "AR", code: "+54", flag: "🇦🇷", name: "Argentina" },
-  { id: "CL", code: "+56", flag: "🇨🇱", name: "Chile" },
-  { id: "CO", code: "+57", flag: "🇨🇴", name: "Colombia" },
-  { id: "PE", code: "+51", flag: "🇵🇪", name: "Peru" },
-  { id: "RU", code: "+7", flag: "🇷🇺", name: "Russia" },
-  { id: "UA", code: "+380", flag: "🇺🇦", name: "Ukraine" },
-];
 
 function formatNamePreview(
   first: string,
@@ -752,7 +699,14 @@ export default function SignModal({
         }
       }
     } catch (err) {
-      setError(clerkErrorMessage(err));
+      const message = clerkErrorMessage(err);
+      // A phone that will not take a code (Clerk only texts countries enabled
+      // in its dashboard) should not be a dead end: point at the email option.
+      setError(
+        method === "phone"
+          ? `${message} If a code will not send to this number, use email instead.`
+          : message,
+      );
     } finally {
       setLoading(false);
     }
@@ -846,21 +800,31 @@ export default function SignModal({
     }
   }
 
+  // Only countries Clerk will actually text (see smsCountries in @/lib/phone).
+  const smsList = smsCountries(process.env.NEXT_PUBLIC_SMS_COUNTRIES);
+  const smsRestricted = smsList.length < PHONE_COUNTRIES.length;
   const selectedCountry =
-    COUNTRIES.find((c) => c.id === countryId) ?? COUNTRIES[0];
-  const identifier =
-    method === "email"
-      ? email.trim()
-      : `${selectedCountry.code}${phoneDigits.replace(/\D/g, "")}`;
+    smsList.find((c) => c.id === countryId) ?? smsList[0];
+  // E.164 from what was typed (drops a UK-style leading 0, accepts a pasted
+  // "+44..."). Empty until the number is a real one, so it never reaches Clerk
+  // half-formed.
+  const phoneE164 = method === "phone" ? toE164(phoneDigits, countryId) : null;
+  const identifier = method === "email" ? email.trim() : (phoneE164 ?? "");
   const friendlyIdentifier =
     method === "email"
       ? email.trim()
-      : `${selectedCountry.flag} ${selectedCountry.code} ${phoneDigits}`;
+      : phoneE164
+        ? `${selectedCountry.flag} ${formatInternational(phoneE164) ?? phoneE164}`
+        : `${selectedCountry.flag} ${selectedCountry.code} ${phoneDigits}`;
 
+  // A real number in a country we cannot text is not "valid" for sign-up: say
+  // so and offer email, rather than letting Clerk reject it after the fact.
+  const phoneUnsupported =
+    phoneE164 !== null && !isSmsSupported(phoneE164, smsList);
   const identifierValid =
     method === "email"
       ? email.trim().length > 0
-      : phoneDigits.replace(/\D/g, "").length >= 7;
+      : phoneE164 !== null && !phoneUnsupported;
   const isFormValid = signInOnly
     ? identifierValid
     : firstName.trim().length > 0 &&
@@ -1198,11 +1162,11 @@ export default function SignModal({
                       onChange={(e) => setCountryId(e.target.value)}
                       aria-label="Country"
                       title={selectedCountry.name}
-                      className="w-[5.75rem] appearance-none rounded-lg border border-zinc-300 bg-white py-2.5 pl-2.5 pr-7 text-sm text-zinc-950 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      className="w-[8.5rem] shrink-0 appearance-none truncate rounded-lg border border-zinc-300 bg-white py-2.5 pl-2.5 pr-7 text-sm text-zinc-950 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     >
-                      {COUNTRIES.map((c) => (
+                      {smsList.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.flag} {c.code}
+                          {c.flag} {c.name} ({c.code})
                         </option>
                       ))}
                     </select>
@@ -1229,13 +1193,46 @@ export default function SignModal({
                       autoComplete="tel"
                       placeholder="555 123 4567"
                       value={phoneDigits}
-                      onChange={(e) => setPhoneDigits(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setPhoneDigits(v);
+                        // A pasted "+44 ..." names its own country.
+                        const pasted = countryOfInternational(v, selectedCountry.code);
+                        if (pasted && smsList.some((c) => c.id === pasted)) {
+                          setCountryId(pasted);
+                        }
+                      }}
                       required
                       className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </label>
                 </div>
               )}
+              {method === "phone" && phoneUnsupported ? (
+                <p className="mt-2 text-sm text-amber-700" role="alert">
+                  We can&apos;t text codes to that country yet.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setMethod("email")}
+                    className="font-semibold underline"
+                  >
+                    Use email instead
+                  </button>
+                  .
+                </p>
+              ) : method === "phone" && smsRestricted ? (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Codes by text work in the countries listed. Anywhere else,{" "}
+                  <button
+                    type="button"
+                    onClick={() => setMethod("email")}
+                    className="underline"
+                  >
+                    use email
+                  </button>
+                  .
+                </p>
+              ) : null}
             </div>
 
             {!signInOnly ? (
