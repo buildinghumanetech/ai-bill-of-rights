@@ -1,5 +1,19 @@
 # Branch Progress: feat/international-sms
 
+## Progress Update as of 2026-10-02 07:30 Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Regenerated `pnpm-lock.yaml` with pnpm 11, the version CI pins, because the first push had a lockfile written by pnpm 10 (local default). That rewrote ~350 unrelated lines (dropped `libc` fields and `supports-color` suffixes) and risked CI's `pnpm install --frozen-lockfile`. The lockfile diff is now 11 lines, all `libphonenumber-js` plus three `deprecated:` notes pnpm 11 records.
+
+### Detail of changes made:
+- `pnpm-lock.yaml`: restored from main, then `npx pnpm@11 install --lockfile-only`. Use `npx -y pnpm@11` for any future dependency change; the repo's `pnpm-workspace.yaml` is pnpm 11 format.
+
+### Potential concerns to address:
+- A lockfile written by the wrong pnpm major is a quiet way to break CI; worth a `packageManager` field in package.json (not done here).
+
+---
+
 ## Progress Update as of 2026-10-02 07:15 Pacific
 *(Most recent updates at top)*
 
