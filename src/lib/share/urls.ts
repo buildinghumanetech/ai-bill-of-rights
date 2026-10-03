@@ -141,10 +141,13 @@ export function shareHrefs(opts: {
     twitterHref: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
       text("x"),
     )}&url=${encodeURIComponent(url("x"))}`,
-    // LinkedIn's share-offsite endpoint takes no text — the copy travels with
-    // the OG card, which is why the quote also renders into the image.
-    linkedinHref: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-      url("linkedin"),
+    // LinkedIn's post composer, pre-filled. We used `sharing/share-offsite/`,
+    // which takes only a url and no text, and it opened a blank page for
+    // signers. The composer takes `text`, so the signer's line and the link
+    // arrive together and LinkedIn unfurls the OG card from the link. Same
+    // `encodeURIComponent` rule as the mailto: no form-encoding `+`s.
+    linkedinHref: `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(
+      `${text("linkedin")} ${url("linkedin")}`,
     )}`,
     emailHref: `mailto:?subject=${encodeURIComponent(
       SHARE_EMAIL_SUBJECT,
