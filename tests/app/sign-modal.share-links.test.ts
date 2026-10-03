@@ -64,8 +64,8 @@ describe("buildPostSignShareLinks", () => {
   });
 
   it("tags the LinkedIn link with ref and via=linkedin", () => {
-    const url = decodeURIComponent(/\?url=([^&\s]+)$/.exec(links.linkedinHref)![1]);
-    expect(url).toBe(
+    const text = decodeURIComponent(/[?&]text=([^&\s]+)$/.exec(links.linkedinHref)![1]);
+    expect(text).toContain(
       `${SHARE}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`,
     );
   });

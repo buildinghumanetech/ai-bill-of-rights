@@ -18,7 +18,6 @@ import {
 import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { useOptionalLiveSigners } from "./LiveSignersProvider";
 import {
-  PHONE_COUNTRIES,
   countryOfInternational,
   formatInternational,
   isSmsSupported,
@@ -704,7 +703,7 @@ export default function SignModal({
       // in its dashboard) should not be a dead end: point at the email option.
       setError(
         method === "phone"
-          ? `${message} If a code will not send to this number, use email instead.`
+          ? `${message} Text codes aren't available in every country. If this number won't work, verify by email instead.`
           : message,
       );
     } finally {
@@ -802,7 +801,6 @@ export default function SignModal({
 
   // Only countries Clerk will actually text (see smsCountries in @/lib/phone).
   const smsList = smsCountries(process.env.NEXT_PUBLIC_SMS_COUNTRIES);
-  const smsRestricted = smsList.length < PHONE_COUNTRIES.length;
   const selectedCountry =
     smsList.find((c) => c.id === countryId) ?? smsList[0];
   // E.164 from what was typed (drops a UK-style leading 0, accepts a pasted
@@ -1220,15 +1218,16 @@ export default function SignModal({
                   </button>
                   .
                 </p>
-              ) : method === "phone" && smsRestricted ? (
+              ) : method === "phone" ? (
                 <p className="mt-2 text-xs text-zinc-500">
-                  Codes by text work in the countries listed. Anywhere else,{" "}
+                  Text codes aren&apos;t available in every country. If your
+                  code doesn&apos;t arrive,{" "}
                   <button
                     type="button"
                     onClick={() => setMethod("email")}
                     className="underline"
                   >
-                    use email
+                    verify by email instead
                   </button>
                   .
                 </p>

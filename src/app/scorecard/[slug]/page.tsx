@@ -302,7 +302,7 @@ export default async function ScorecardCompanyPage({
           </a>
           <a
             className="rounded-full bg-white px-4 py-2 text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100"
-            href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(withShareParams(shareUrl, { channel: "linkedin" }))}`}
+            href={`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareText} ${withShareParams(shareUrl, { channel: "linkedin" })}`)}`}
             target="_blank"
             rel="noopener noreferrer"
           >

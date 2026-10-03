@@ -236,8 +236,8 @@ describe("shareHrefs", () => {
       decodeURIComponent(/&url=(.+)$/.exec(hrefs.twitterHref)![1]),
     ).toBe(url("x"));
     expect(
-      decodeURIComponent(/\?url=(.+)$/.exec(hrefs.linkedinHref)![1]),
-    ).toBe(url("linkedin"));
+      decodeURIComponent(/[?&]text=([^&]+)/.exec(hrefs.linkedinHref)![1]),
+    ).toBe(`${text("linkedin")} ${url("linkedin")}`);
     expect(
       decodeURIComponent(/&body=(.+)$/.exec(hrefs.emailHref)![1]),
     ).toContain(url("email"));
