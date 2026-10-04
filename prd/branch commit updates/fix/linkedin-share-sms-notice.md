@@ -1,5 +1,21 @@
 # Branch Progress: fix/linkedin-share-sms-notice
 
+## Progress Update as of [2026-10-04 00:15 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Share copy on LinkedIn, X and email now says "The People's AI Bill of Rights" instead of "the AI Bill of Rights". Erika confirmed on the preview that the LinkedIn composer, X and email shares all work.
+
+### Detail of changes made:
+- `src/lib/share/share-text.ts`: `GENERIC_SHARE_TEXT`, `LONG_TAIL` and `COMPACT_TAIL` use the full name. X's character budget subtracts the tail length (`overhead`), so the quote is truncated slightly earlier on X automatically.
+- `src/lib/share/urls.ts`: `SHARE_EMAIL_SUBJECT` is now "Sign The People's AI Bill of Rights".
+- No test changes were needed; share, email and sign-modal suites pass (129 tests).
+
+### Potential concerns to address:
+- Other copy still says "the AI Bill of Rights" (confirmation email subject and body in `src/lib/email/templates.ts`, `/signers`, `/signatories/[id]`, `AccountClient`, `ProposedRightCard`, `sign-from-modal.ts`). Not changed here; ask Erika whether to sweep them.
+
+---
+
 ## Progress Update as of [2026-10-04 00:00 Pacific]
 *(Most recent updates at top)*
 

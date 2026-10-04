@@ -19,14 +19,14 @@ import type { ShareChannel } from "./urls";
 
 /** The pre-existing share line. Still the fallback when there's no statement. */
 export const GENERIC_SHARE_TEXT =
-  "I just signed the AI Bill of Rights — twelve commitments we're demanding from every AI company. Add your name too:";
+  "I just signed The People's AI Bill of Rights — twelve commitments we're demanding from every AI company. Add your name too:";
 
 /** Follows the quote everywhere except X. */
 const LONG_TAIL =
-  "That's why I signed the AI Bill of Rights — twelve commitments we're demanding from every AI company. Add your name too:";
+  "That's why I signed The People's AI Bill of Rights — twelve commitments we're demanding from every AI company. Add your name too:";
 
 /** Follows the quote on X, where every character is rationed. */
-const COMPACT_TAIL = "— why I signed the AI Bill of Rights. Add your name too:";
+const COMPACT_TAIL = "— why I signed The People's AI Bill of Rights. Add your name too:";
 
 /** X's post limit, in weighted units. */
 export const X_POST_LIMIT = 280;

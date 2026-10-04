@@ -106,7 +106,7 @@ export function withShareParams(url: string, params: ShareParams = {}): string {
 }
 
 /** The subject line on every `mailto:` share, so both surfaces say the same thing. */
-export const SHARE_EMAIL_SUBJECT = "Sign the AI Bill of Rights";
+export const SHARE_EMAIL_SUBJECT = "Sign The People's AI Bill of Rights";
 
 export interface ShareHrefs {
   twitterHref: string;
