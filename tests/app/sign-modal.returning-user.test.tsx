@@ -349,7 +349,7 @@ describe("the closing line after signing in", () => {
     await signInAsReturningVisitor();
     expect(text()).not.toMatch(/itself any time|from your account page/i);
 
-    await click(button("Sign the AI Bill of Rights"));
+    await click(button("Sign The People's AI Bill of Rights"));
     // Straight onto the signing form, no second page.
     expect(input("First name")).toBeTruthy();
   });

@@ -6,7 +6,7 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 export const metadata: Metadata = buildPageMetadata({
   title: "About",
   description:
-    "The AI Bill of Rights is a project of the Building Humane Technology community, founded by Erika Anderson.",
+    "The People's AI Bill of Rights is a project of the Building Humane Technology community, founded by Erika Anderson.",
 });
 
 export default function AboutPage() {
@@ -23,7 +23,7 @@ export default function AboutPage() {
         Who created this?
       </h1>
       <p className="mt-4 text-lg leading-relaxed text-zinc-700">
-        The AI Bill of Rights is a project of the{" "}
+        The People&apos;s AI Bill of Rights is a project of the{" "}
         <a
           href="https://buildinghumanetech.com/"
           target="_blank"
@@ -57,7 +57,7 @@ export default function AboutPage() {
           Building Humane Technology is an open-source community of
           founders, engineers, designers, researchers, and policy-makers
           working to make humane tech development easy, scalable, and
-          profitable. The AI Bill of Rights is one of several living
+          profitable. The People&apos;s AI Bill of Rights is one of several living
           documents the community maintains as a public commitment to
           human-centered AI.
         </p>
@@ -90,7 +90,7 @@ export default function AboutPage() {
         </div>
         <p className="mt-4 text-base leading-relaxed text-zinc-700">
           Erika Anderson is the founder of Building Humane Technology and
-          the originator of the AI Bill of Rights. She co-leads HumaneBench
+          the originator of The People&apos;s AI Bill of Rights. She co-leads HumaneBench
           — the open-source measurement and observability infrastructure
           that turns the principles in this document into testable scores
           against real AI systems — and convenes the community that drafts,

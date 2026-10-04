@@ -13,7 +13,7 @@ export default async function ProposedPage() {
     <div className="flex-1">
       <section className="bg-white px-6 pt-14 pb-10 text-center sm:pt-20 sm:pb-14">
         <h1 className="text-balance text-5xl font-semibold tracking-tight text-zinc-950 sm:text-7xl">
-          The AI Bill of Rights
+          The People&apos;s AI Bill of Rights
         </h1>
         <p className="mx-auto mt-6 max-w-none text-pretty text-xl leading-8 text-zinc-700 sm:text-2xl">
           <strong className="font-semibold text-zinc-950 sm:whitespace-nowrap">
@@ -47,7 +47,7 @@ export default async function ProposedPage() {
           >
             <SignatureCount /> other real people
           </Link>{" "}
-          who have signed this AI Bill of Rights
+          who have signed The People&apos;s AI Bill of Rights
         </p>
         <p className="mx-auto mb-10 mt-3 max-w-5xl text-center text-base leading-relaxed text-zinc-600 sm:mb-14">
           <Link

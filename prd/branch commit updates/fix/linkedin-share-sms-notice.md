@@ -1,5 +1,24 @@
 # Branch Progress: fix/linkedin-share-sms-notice
 
+## Progress Update as of [2026-10-04 00:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Swept the remaining user-facing "the AI Bill of Rights" to "The People's AI Bill of Rights": all transactional emails, sign buttons, signer and signatories pages, account page, about page, scorecard, proposed pages, and server error strings.
+
+### Detail of changes made:
+- `src/lib/email/templates.ts`: every subject, body and sign-off ("— The People's AI Bill of Rights project").
+- UI: `SignModal.tsx`, `FloatingSignButton.tsx` (now "Sign/Share The People's AI Bill of Rights", no leading "the"), `signatories/[id]/page.tsx`, `signers/page.tsx`, `account/AccountClient.tsx`, `about/page.tsx`, `scorecard/page.tsx` (+ share text), `proposed/page.tsx`, `ProposedRightCard.tsx`, `CommitmentsSummary.tsx`, `SignatureMomentum.tsx`. JSX text uses `&apos;` (react/no-unescaped-entities).
+- Server strings: `sign-from-modal.ts`, `proposals.ts`.
+- Tests updated to match (note the signatories test asserts on rendered HTML, where `'` is `&#x27;`).
+- Left alone on purpose: comments, `src/lib/site-metadata.ts` (explains why the full name exists), "White House AI Bill of Rights" citations, and the "← AI Bill of Rights" back-link labels.
+
+### Potential concerns to address:
+- The about page still says "Building Humane Technology" in places; Erika's style is "Building Humane Tech". Not touched.
+- The full test suite hangs locally; I ran every test file that mentions "Bill of Rights" (201 tests) plus tsc and eslint. CI is the first full run.
+
+---
+
 ## Progress Update as of [2026-10-04 00:15 Pacific]
 *(Most recent updates at top)*
 

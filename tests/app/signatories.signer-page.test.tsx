@@ -164,7 +164,7 @@ describe("signer page as a landing page for a stranger", () => {
     mockSigner();
     viewerIs(null);
     const html = await renderPage();
-    expect(html).toContain("Sign the AI Bill of Rights");
+    expect(html).toContain("Sign The People&#x27;s AI Bill of Rights");
     expect(html).toContain("Add your name");
     expect(html).toContain("What they signed");
     for (const article of articles) {
@@ -193,7 +193,7 @@ describe("signer page as a landing page for a stranger", () => {
     mockSigner();
     viewerIs(null);
     const html = await renderPage();
-    const ctaAt = html.indexOf("Sign the AI Bill of Rights");
+    const ctaAt = html.indexOf("Sign The People&#x27;s AI Bill of Rights");
     const commitmentsAt = html.indexOf("What they signed");
     const recordAt = html.indexOf("Signature record");
     expect(ctaAt).toBeGreaterThan(-1);
@@ -243,7 +243,7 @@ describe("signer page as a landing page for a stranger", () => {
     expect(html).toContain("<blockquote");
     // The quote leads — it comes before the ask.
     expect(html.indexOf("Because my kids")).toBeLessThan(
-      html.indexOf("Sign the AI Bill of Rights"),
+      html.indexOf("Sign The People&#x27;s AI Bill of Rights"),
     );
   });
 
@@ -279,7 +279,7 @@ describe("signer page as a landing page for a stranger", () => {
     expect(html).not.toContain("on why they signed");
     expect(html).not.toContain("<blockquote");
     expect(html).toContain("Ada Lovelace");
-    expect(html).toContain("Sign the AI Bill of Rights");
+    expect(html).toContain("Sign The People&#x27;s AI Bill of Rights");
   });
 
   it("treats a whitespace-only why-I-signed as absent", async () => {

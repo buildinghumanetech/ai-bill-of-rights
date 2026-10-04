@@ -293,7 +293,7 @@ export function SignatureMomentumPanel({
           >
             {fmt(framing.count)} other real people
           </Link>{" "}
-          who have signed this AI Bill of Rights
+          who have signed The People&apos;s AI Bill of Rights
         </p>
       </div>
     );

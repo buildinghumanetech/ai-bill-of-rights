@@ -213,7 +213,7 @@ describe("SignatureMomentumPanel", () => {
     );
 
     expect(copy).toContain("Join 6,000 other real people");
-    expect(copy).toContain("who have signed this AI Bill of Rights");
+    expect(copy).toContain("who have signed The People's AI Bill of Rights");
 
     expect(html).not.toContain('role="progressbar"');
     expect(copy).not.toContain("of our first");

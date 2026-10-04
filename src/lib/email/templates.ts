@@ -13,14 +13,14 @@ export function commentAccountCreated(opts: {
   accountUrl: string;
 }): { subject: string; text: string } {
   return {
-    subject: `Welcome to the AI Bill of Rights discussion`,
+    subject: `Welcome to The People's AI Bill of Rights discussion`,
     text: `Hi ${opts.displayName},
 
-You created an account to comment on the AI Bill of Rights working draft.
+You created an account to comment on The People's AI Bill of Rights working draft.
 
 You can also sign the bill itself any time from your account page: ${opts.accountUrl}
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `,
   };
 }
@@ -111,7 +111,7 @@ export function signConfirmation(opts: {
     text: shareTextFor,
   });
 
-  const subject = `You signed the AI Bill of Rights v${opts.version}`;
+  const subject = `You signed The People's AI Bill of Rights v${opts.version}`;
 
   // LinkedIn's share dialog carries no text, so this is the block people
   // actually paste. It gets their sentence too.
@@ -124,7 +124,7 @@ export function signConfirmation(opts: {
 
   const text = `${firstName ? `Hi ${firstName},` : "Hi,"}
 
-Thank you for signing the AI Bill of Rights (v${opts.version}) and helping ensure a future with AI that supports human flourishing.
+Thank you for signing The People's AI Bill of Rights (v${opts.version}) and helping ensure a future with AI that supports human flourishing.
 ${numberLine ? `\n${numberLine}\n` : ""}
 Bring Two Friends.
 Who else should be on this list?
@@ -141,7 +141,7 @@ View your public signature page: ${ownPageUrl}
 Your data, your choice — you can revoke any time:
 ${opts.revokeUrl}
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `;
 
   const esc = escapeHtml;
@@ -209,7 +209,7 @@ ${numberBlock}
   <!-- Footer -->
   <div style="padding:16px 28px;">
     <p style="margin:0;font-size:13px;color:#9ca3af;">Your data, your choice &mdash; <a href="${esc(opts.revokeUrl)}" style="color:#6b7280;text-decoration:underline;">revoke any time</a>.</p>
-    <p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">&mdash; The AI Bill of Rights project</p>
+    <p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">&mdash; The People's AI Bill of Rights project</p>
   </div>
 
 </div>
@@ -224,8 +224,8 @@ export function signerNotification(opts: {
   signerPageUrl: string;
 }): { subject: string; text: string } {
   return {
-    subject: `${opts.displayName} just signed the AI Bill of Rights`,
-    text: `Horray! ${opts.displayName} just signed the AI Bill of Rights!
+    subject: `${opts.displayName} just signed The People's AI Bill of Rights`,
+    text: `Horray! ${opts.displayName} just signed The People's AI Bill of Rights!
 
 Here's their unique signatory URL: ${opts.signerPageUrl}
 (You can share this URL publicly with others)
@@ -326,7 +326,7 @@ export function selfieApproved(opts: {
   accountUrl: string;
 }): { subject: string; text: string } {
   return {
-    subject: "Your photo is live on the AI Bill of Rights",
+    subject: "Your photo is live on The People's AI Bill of Rights",
     text: `Hi ${opts.displayName},
 
 Your photo has been approved and is now showing on your public signer page.
@@ -336,7 +336,7 @@ See it: ${opts.signerPageUrl}
 Manage your photo (replace or remove) anytime:
 ${opts.accountUrl}
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `,
   };
 }
@@ -355,7 +355,7 @@ We weren't able to publish the photo you submitted: ${opts.reasonText}
 You can try again with a different photo from your account page:
 ${opts.accountUrl}
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `,
   };
 }
@@ -372,7 +372,7 @@ Other signers reported your photo. As a safety measure we've hidden it from publ
 
 ${opts.appealUrl}
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `,
   };
 }
@@ -388,30 +388,30 @@ export function mentionEmail(opts: {
   commentUrl: string;
   selectedText: string | null;
 }): { subject: string; text: string; html: string } {
-  const subject = `${opts.mentioningDisplayName} mentioned you on the AI Bill of Rights`;
+  const subject = `${opts.mentioningDisplayName} mentioned you on The People's AI Bill of Rights`;
   const quoteLine = opts.selectedText
     ? `\n  Re: "${opts.selectedText}"\n`
     : "";
   const text = `Hi ${opts.mentionedDisplayName},
 
-${opts.mentioningDisplayName} mentioned you in a comment on the AI Bill of Rights:
+${opts.mentioningDisplayName} mentioned you in a comment on The People's AI Bill of Rights:
 ${quoteLine}
   ${opts.body}
 
 View and reply: ${opts.commentUrl}
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `;
   const safeBody = escapeHtml(opts.body);
   const safeSelectedText = opts.selectedText ? escapeHtml(opts.selectedText) : null;
   const safeMentionedName = escapeHtml(opts.mentionedDisplayName);
   const safeMentioningName = escapeHtml(opts.mentioningDisplayName);
   const html = `<p>Hi ${safeMentionedName},</p>
-<p><strong>${safeMentioningName}</strong> mentioned you in a comment on the AI Bill of Rights:</p>
+<p><strong>${safeMentioningName}</strong> mentioned you in a comment on The People's AI Bill of Rights:</p>
 ${safeSelectedText ? `<blockquote style="border-left: 3px solid #06b6d4; padding-left: 1em; color: #555;">${safeSelectedText}</blockquote>` : ""}
 <p>${safeBody.replace(/\n/g, "<br>")}</p>
 <p><a href="${opts.commentUrl}">View and reply →</a></p>
-<p style="color: #888; font-size: 0.875em;">— The AI Bill of Rights project</p>`;
+<p style="color: #888; font-size: 0.875em;">— The People's AI Bill of Rights project</p>`;
   return { subject, text, html };
 }
 
@@ -463,7 +463,7 @@ STEP 2 — APPROVE ONLY WHEN READY
 Not sure? Skip this email. Unpublished attestations stay in the
 queue — you can approve or hide them any time from the admin dashboard.
 
-— The AI Bill of Rights project
+— The People's AI Bill of Rights project
 `;
 
   const esc = escapeHtml;

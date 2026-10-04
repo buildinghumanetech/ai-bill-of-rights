@@ -86,12 +86,12 @@ export default async function SignerProfile({
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16 pb-32 sm:py-24">
       <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-        A signer of the{" "}
+        A signer of{" "}
         <Link
           href="/"
           className="text-zinc-700 underline-offset-4 hover:text-zinc-900 hover:underline"
         >
-          AI Bill of Rights
+          The People&apos;s AI Bill of Rights
         </Link>
       </p>
 
@@ -164,12 +164,12 @@ export default async function SignerProfile({
       ) : (
         <section className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-7 text-center">
           <h2 className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
-            Add your name to the{" "}
+            Add your name to{" "}
             <Link
               href="/"
               className="underline underline-offset-4 hover:text-zinc-700"
             >
-              AI Bill of Rights
+              The People&apos;s AI Bill of Rights
             </Link>
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700">
@@ -178,7 +178,7 @@ export default async function SignerProfile({
           </p>
           <div className="mt-6">
             <SignTrigger className="inline-block rounded-full bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 sm:text-base">
-              Sign the AI Bill of Rights
+              Sign The People&apos;s AI Bill of Rights
             </SignTrigger>
           </div>
         </section>

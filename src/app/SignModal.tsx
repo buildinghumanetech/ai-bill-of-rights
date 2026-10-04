@@ -1032,7 +1032,7 @@ export default function SignModal({
                 ? "Sign in"
                 : mode === "comment-only"
                   ? "Create an account to comment"
-                  : "Sign the AI Bill of Rights"}
+                  : "Sign The People's AI Bill of Rights"}
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
               {signInOnly
@@ -1296,7 +1296,7 @@ export default function SignModal({
             {/* Alert me when updated */}
             <fieldset className="mt-5">
               <legend className="text-sm font-bold text-zinc-900">
-                Alert me when the AI Bill of Rights is updated
+                Alert me when The People&apos;s AI Bill of Rights is updated
               </legend>
               <div
                 className="mt-2 flex flex-col gap-1.5"
@@ -1549,7 +1549,7 @@ export default function SignModal({
                       }}
                       className="font-semibold text-blue-700 underline underline-offset-4 hover:no-underline"
                     >
-                      Sign the AI Bill of Rights
+                      Sign The People&apos;s AI Bill of Rights
                     </button>
                   </p>
                 ) : null}

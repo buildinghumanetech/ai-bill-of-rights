@@ -14,7 +14,7 @@ import { STATUS_CLASSES } from "./status-style";
 // Already names the site in prose, so `buildPageMetadata` must not append it.
 const TITLE = `${SITE_NAME} Scorecard`;
 const DESCRIPTION =
-  "Where AI companies stand against the twelve commitments in the AI Bill of Rights. Every assessment is traced to a public source, with the date it was checked.";
+  "Where AI companies stand against the twelve commitments in The People's AI Bill of Rights. Every assessment is traced to a public source, with the date it was checked.";
 
 // Via getSiteUrl(), not a local `?? "https://ai-for-people.org"`: that copy of
 // the fallback ignored VERCEL_URL, so preview deploys advertised production.
@@ -186,7 +186,7 @@ export default function ScorecardIndexPage() {
                 href="/"
                 className="text-emerald-700 underline underline-offset-4 hover:text-emerald-900"
               >
-                the AI Bill of Rights
+                The People&apos;s AI Bill of Rights
               </Link>
               .
             </p>
