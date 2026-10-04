@@ -36,7 +36,7 @@ vi.mock("@/server/actions/me", () => ({
 vi.mock("@/server/actions/why-i-signed", () => ({ saveWhyISigned: vi.fn() }));
 vi.mock("@/components/SelfieCapture", () => ({ SelfieCapture: () => null }));
 
-import { buildPostSignShareLinks } from "@/app/SignModal";
+import { buildPostSignShareLinks, phoneStartErrorMessage } from "@/app/SignModal";
 
 const SIGNER_ID = "eeeb0d40-7bee-4bc9-8808-fecb955a8db0";
 const ORIGIN = "https://ai-for-people.org";
@@ -64,8 +64,8 @@ describe("buildPostSignShareLinks", () => {
   });
 
   it("tags the LinkedIn link with ref and via=linkedin", () => {
-    const url = decodeURIComponent(/\?url=([^&\s]+)$/.exec(links.linkedinHref)![1]);
-    expect(url).toBe(
+    const text = decodeURIComponent(/[?&]text=([^&\s]+)$/.exec(links.linkedinHref)![1]);
+    expect(text).toContain(
       `${SHARE}/signatories/${SIGNER_ID}?ref=${SIGNER_ID}&via=linkedin`,
     );
   });
@@ -108,5 +108,27 @@ describe("buildPostSignShareLinks", () => {
     });
     expect(none.shareUrl).toBe("");
     expect(none.twitterHref).toBe("#");
+  });
+});
+
+describe("phoneStartErrorMessage", () => {
+  const clerkError = (code: string, message: string) => ({
+    errors: [{ code, message }],
+  });
+
+  it("replaces Clerk's fragment with a message that says what to do", () => {
+    const msg = phoneStartErrorMessage(
+      clerkError("form_param_format_invalid", "is invalid"),
+    );
+    expect(msg).not.toMatch(/^is invalid/);
+    expect(msg).toContain("country and number");
+    expect(msg).toContain("verify by email instead");
+  });
+
+  it("keeps Clerk's own wording for a rate limit, where it is the useful part", () => {
+    const msg = phoneStartErrorMessage(
+      clerkError("too_many_requests", "Too many requests. Try again in a minute."),
+    );
+    expect(msg).toBe("Too many requests. Try again in a minute.");
   });
 });

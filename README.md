@@ -57,7 +57,7 @@ Never commit live keys. They go in Vercel env (Production scope) and nowhere els
 Clerk only texts countries enabled on its SMS allowlist (Clerk Dashboard > SMS > Settings; **by default only the US and Canada**). A number in any other country is rejected, however valid it is. Two places must agree:
 
 1. **Clerk dashboard:** enable the countries you want. Each enabled country can cost money per text, and open allowlists attract SMS-pumping fraud, so enable the ones you actually expect.
-2. **Vercel env `NEXT_PUBLIC_SMS_COUNTRIES`**, e.g. `US,CA,GB,AU` (ISO codes, comma separated; needs a redeploy since it is baked in at build). The sign modal lists only these for phone sign-in and sends everyone else to email. Unset means every country is offered, which is the old behavior and will fail for countries Clerk has not enabled.
+2. **`SMS_COUNTRY_IDS` in `src/lib/phone.ts`:** the ISO codes the sign modal offers for phone sign-in. Everyone else is sent to email. It is a code constant, not an env var, so it deploys with the code and cannot drift from a forgotten Vercel setting. When you enable a country in Clerk, add its code here and ship it.
 
 Clerk checks the calling code, so enabling the US also covers other `+1` numbers. Numbers are normalised with `libphonenumber-js` (`src/lib/phone.ts`): a UK "07700 900123" becomes `+447700900123`, and a pasted `+44...` works whatever country is selected.
 

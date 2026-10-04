@@ -9,7 +9,7 @@ describe("signerNotification template", () => {
 
   it("subject names the signer and the document", () => {
     expect(sample.subject).toBe(
-      "Daniel Odio just signed the AI Bill of Rights",
+      "Daniel Odio just signed The People's AI Bill of Rights",
     );
   });
 

@@ -108,7 +108,7 @@ describe("a signer of the current version", () => {
   it("gets Share instead of Sign, captioned with their number", async () => {
     await render(ME);
     const button = container.querySelector("button")!;
-    expect(button.textContent).toContain("Share the AI Bill of Rights");
+    expect(button.textContent).toContain("Share The People's AI Bill of Rights");
     expect(text()).toContain("You're signer #92");
     expect(text()).not.toContain("You'd be signer");
   });
@@ -150,7 +150,7 @@ describe("a signer of an earlier version only", () => {
     );
     expect(link?.getAttribute("href")).toBe("/v/0.1.0#what-changed");
     expect(container.querySelector("button")!.textContent).toContain(
-      "Share the AI Bill of Rights",
+      "Share The People's AI Bill of Rights",
     );
   });
 
@@ -169,7 +169,7 @@ describe("anyone else", () => {
     expect(text()).toContain("Be signer #92");
     expect(text()).toContain("9 more to reach 100.");
     expect(container.querySelector("button")!.textContent).toContain(
-      "Sign the AI Bill of Rights",
+      "Sign The People's AI Bill of Rights",
     );
     expect(text()).toContain("You'd be signer #92");
   });

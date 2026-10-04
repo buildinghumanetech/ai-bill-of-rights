@@ -81,11 +81,11 @@ describe("commentAccountCreated email template", () => {
       accountUrl: "https://ai-for-people.org/account",
     });
 
-    expect(tpl.subject).toBe("Welcome to the AI Bill of Rights discussion");
+    expect(tpl.subject).toBe("Welcome to The People's AI Bill of Rights discussion");
     expect(tpl.text).toContain("Jane D***");
     expect(tpl.text).toContain("https://ai-for-people.org/account");
     // Must NOT mention "signed" (this is not a signature confirmation).
-    expect(tpl.text).not.toContain("signed the AI Bill of Rights");
+    expect(tpl.text).not.toContain("signed The People's AI Bill of Rights");
   });
 
   it("does not include sign-confirmation language (wrong template guard)", () => {

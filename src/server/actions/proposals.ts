@@ -35,7 +35,7 @@ type GateCode = "not_signed_in" | "not_signer";
 type Gate = { ok: true; me: Me } | { ok: false; error: string; code?: GateCode };
 
 const NOT_SIGNER_ERROR =
-  "Only people who have signed the AI Bill of Rights can file or endorse proposals.";
+  "Only people who have signed The People's AI Bill of Rights can file or endorse proposals.";
 
 /**
  * Signed in, with an account row, not suspended. Enough for acting on your own

@@ -59,7 +59,7 @@ describe("signConfirmation share attribution", () => {
 
   it("tags the LinkedIn share link with ref and via", () => {
     const target = decodeURIComponent(
-      /linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/.exec(tpl.text)![1],
+      /linkedin\.com\/feed\/\?shareActive=true&text=([^\s"]+)/.exec(tpl.text)![1],
     );
     expect(target).toContain(`${REF_PARAM}=${SIGNER_ID}`);
     expect(target).toContain(`${CHANNEL_PARAM}=linkedin`);
@@ -104,7 +104,7 @@ describe("signConfirmation share attribution", () => {
     // which is the whole viral loop.
     for (const [pattern, channel] of [
       [/twitter\.com\/intent\/tweet\?text=[^&\s]*&url=([^\s"]+)/, "x"],
-      [/linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/, "linkedin"],
+      [/linkedin\.com\/feed\/\?shareActive=true&text=([^\s"]+)/, "linkedin"],
       [/mailto:\?subject=[^&\s]*&body=([^\s"]+)/, "email"],
     ] as const) {
       const target = decodeURIComponent(pattern.exec(tpl.text)![1]);
@@ -158,7 +158,7 @@ describe("signConfirmation short share links", () => {
   it("uses the short link, with via, for every share button", () => {
     for (const [pattern, channel] of [
       [/twitter\.com\/intent\/tweet\?text=[^&\s]*&url=([^\s"]+)/, "x"],
-      [/linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/, "linkedin"],
+      [/linkedin\.com\/feed\/\?shareActive=true&text=([^\s"]+)/, "linkedin"],
       [/mailto:\?subject=[^&\s]*&body=([^\s"]+)/, "email"],
     ] as const) {
       const target = decodeURIComponent(pattern.exec(tpl.text)![1]);
@@ -186,9 +186,9 @@ describe("signConfirmation short share links", () => {
   it("falls back to the long ref-tagged link when there is no slug", () => {
     const long = render();
     const target = decodeURIComponent(
-      /linkedin\.com\/sharing\/share-offsite\/\?url=([^\s"]+)/.exec(long.text)![1],
+      /linkedin\.com\/feed\/\?shareActive=true&text=([^\s"]+)/.exec(long.text)![1],
     );
-    expect(target).toBe(signerShareUrl(SIGNER_PAGE, SIGNER_ID, "linkedin"));
+    expect(target).toContain(signerShareUrl(SIGNER_PAGE, SIGNER_ID, "linkedin"));
     expect(target).not.toContain("/s/");
   });
 });

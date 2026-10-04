@@ -18,7 +18,6 @@ import {
 import { saveWhyISigned } from "@/server/actions/why-i-signed";
 import { useOptionalLiveSigners } from "./LiveSignersProvider";
 import {
-  PHONE_COUNTRIES,
   countryOfInternational,
   formatInternational,
   isSmsSupported,
@@ -221,6 +220,21 @@ function clerkErrorMessage(err: unknown): string {
   }
   if (err instanceof Error) return err.message;
   return "Something went wrong. Please try again.";
+}
+
+/**
+ * What a signer sees when Clerk refuses a phone number. Clerk's own text for
+ * this is a fragment ("is invalid") that read as gibberish once we added to it.
+ * Per Wix's error-message guidance: say what happened, how to fix it, keep it
+ * short, and don't blame the person. The exception is a rate limit, where
+ * Clerk's wording ("try again in a minute") is the useful part.
+ */
+export function phoneStartErrorMessage(err: unknown): string {
+  const code = clerkErrorCode(err);
+  if (code === "too_many_requests" || code === "form_rate_limited") {
+    return clerkErrorMessage(err);
+  }
+  return "We couldn't send a text to that number. Check the country and number, or verify by email instead.";
 }
 
 export default function SignModal({
@@ -699,13 +713,10 @@ export default function SignModal({
         }
       }
     } catch (err) {
-      const message = clerkErrorMessage(err);
       // A phone that will not take a code (Clerk only texts countries enabled
       // in its dashboard) should not be a dead end: point at the email option.
       setError(
-        method === "phone"
-          ? `${message} If a code will not send to this number, use email instead.`
-          : message,
+        method === "phone" ? phoneStartErrorMessage(err) : clerkErrorMessage(err),
       );
     } finally {
       setLoading(false);
@@ -801,8 +812,7 @@ export default function SignModal({
   }
 
   // Only countries Clerk will actually text (see smsCountries in @/lib/phone).
-  const smsList = smsCountries(process.env.NEXT_PUBLIC_SMS_COUNTRIES);
-  const smsRestricted = smsList.length < PHONE_COUNTRIES.length;
+  const smsList = smsCountries();
   const selectedCountry =
     smsList.find((c) => c.id === countryId) ?? smsList[0];
   // E.164 from what was typed (drops a UK-style leading 0, accepts a pasted
@@ -1022,7 +1032,7 @@ export default function SignModal({
                 ? "Sign in"
                 : mode === "comment-only"
                   ? "Create an account to comment"
-                  : "Sign the AI Bill of Rights"}
+                  : "Sign The People's AI Bill of Rights"}
             </h2>
             <p className="mt-1.5 text-sm text-zinc-600">
               {signInOnly
@@ -1220,15 +1230,16 @@ export default function SignModal({
                   </button>
                   .
                 </p>
-              ) : method === "phone" && smsRestricted ? (
+              ) : method === "phone" ? (
                 <p className="mt-2 text-xs text-zinc-500">
-                  Codes by text work in the countries listed. Anywhere else,{" "}
+                  Text codes aren&apos;t available in every country. If your
+                  code doesn&apos;t arrive,{" "}
                   <button
                     type="button"
                     onClick={() => setMethod("email")}
                     className="underline"
                   >
-                    use email
+                    verify by email instead
                   </button>
                   .
                 </p>
@@ -1285,7 +1296,7 @@ export default function SignModal({
             {/* Alert me when updated */}
             <fieldset className="mt-5">
               <legend className="text-sm font-bold text-zinc-900">
-                Alert me when the AI Bill of Rights is updated
+                Alert me when The People&apos;s AI Bill of Rights is updated
               </legend>
               <div
                 className="mt-2 flex flex-col gap-1.5"
@@ -1338,7 +1349,13 @@ export default function SignModal({
             <div id="clerk-captcha" className="mt-4" />
 
             {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                <span aria-hidden="true" className="mr-1.5 font-bold">
+                  !
+                </span>
                 {error}
               </p>
             ) : null}
@@ -1411,7 +1428,13 @@ export default function SignModal({
             />
 
             {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                <span aria-hidden="true" className="mr-1.5 font-bold">
+                  !
+                </span>
                 {error}
               </p>
             ) : null}
@@ -1526,7 +1549,7 @@ export default function SignModal({
                       }}
                       className="font-semibold text-blue-700 underline underline-offset-4 hover:no-underline"
                     >
-                      Sign the AI Bill of Rights
+                      Sign The People&apos;s AI Bill of Rights
                     </button>
                   </p>
                 ) : null}

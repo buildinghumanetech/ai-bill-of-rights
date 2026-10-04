@@ -57,7 +57,7 @@ describe("ProposedRightCard endorse refusal", () => {
     });
 
     expect(screen.getByText(/only people who have signed/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /sign the ai bill of rights/i }));
+    fireEvent.click(screen.getByRole("button", { name: /sign the people's ai bill of rights/i }));
     expect(opened).toEqual([{ mode: "sign" }]);
     window.removeEventListener("open-sign-modal", onOpen);
   });

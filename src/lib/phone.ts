@@ -98,24 +98,33 @@ export function formatInternational(e164: string): string | null {
 }
 
 /**
- * The countries we offer SMS codes to. Clerk only texts countries enabled in
- * its dashboard (SMS > Settings; by default only the US and Canada), so this
- * list must match that setting. It is configured, not guessed:
- * NEXT_PUBLIC_SMS_COUNTRIES="US,CA,GB" (ISO codes, comma separated). Unset
- * means "offer every country", which is the old behavior; set it as soon as
- * the Clerk allowlist is known, so nobody picks a country that cannot receive
- * a code.
+ * The countries Clerk will text, as enabled in its dashboard (SMS > Settings;
+ * the default is only the US and Canada). The dropdown offers exactly these,
+ * so nobody picks a country that cannot receive a code. Keep this in step with
+ * the dashboard: when you enable a country there, add its ISO code here.
+ * (Last synced with the dashboard on 2026-10-04.)
  */
-export function smsCountries(
-  spec: string | undefined,
-): ReadonlyArray<PhoneCountry> {
-  const wanted = (spec ?? "")
-    .split(",")
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
-  if (wanted.length === 0) return PHONE_COUNTRIES;
-  const list = PHONE_COUNTRIES.filter((c) => wanted.includes(c.id));
-  return list.length > 0 ? list : PHONE_COUNTRIES;
+export const SMS_COUNTRY_IDS: ReadonlyArray<string> = [
+  "US",
+  "CA",
+  "GB",
+  "IM",
+  "IE",
+  "FR",
+  "DE",
+  "AT",
+  "BE",
+  "NL",
+  "CH",
+  "IT",
+  "ES",
+  "PT",
+  "IS",
+  "NO",
+];
+
+export function smsCountries(): ReadonlyArray<PhoneCountry> {
+  return PHONE_COUNTRIES.filter((c) => SMS_COUNTRY_IDS.includes(c.id));
 }
 
 /**

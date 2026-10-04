@@ -45,7 +45,7 @@ export function CommitmentsSummary({
         {heading}
       </h2>
       <p className="mt-3 text-lg leading-snug text-zinc-900 sm:text-xl">
-        The AI Bill of Rights is twelve commitments we&apos;re demanding from
+        The People&apos;s AI Bill of Rights is twelve commitments we&apos;re demanding from
         every AI company.
       </p>
       <ol className="mt-6 flex flex-col gap-4">

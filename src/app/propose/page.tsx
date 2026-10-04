@@ -13,7 +13,7 @@ import SignModalClient from "./SignModalClient";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Propose a new right — The AI Bill of Rights",
+  title: "Propose a new right — The People's AI Bill of Rights",
   description:
     "The document has twelve articles. If one is missing, propose it here and let the signers decide.",
 };

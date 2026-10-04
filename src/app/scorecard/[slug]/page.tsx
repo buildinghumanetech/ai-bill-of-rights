@@ -160,7 +160,7 @@ export default async function ScorecardCompanyPage({
   const total = listPrinciples().length;
   const assessed = assessedCount(entry);
   const shareUrl = `${SITE_URL}/scorecard/${entry.slug}`;
-  const shareText = `${entry.company} against the twelve commitments in the AI Bill of Rights`;
+  const shareText = `${entry.company} against the twelve commitments in The People's AI Bill of Rights`;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-16 sm:py-24">
@@ -302,7 +302,7 @@ export default async function ScorecardCompanyPage({
           </a>
           <a
             className="rounded-full bg-white px-4 py-2 text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100"
-            href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(withShareParams(shareUrl, { channel: "linkedin" }))}`}
+            href={`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareText} ${withShareParams(shareUrl, { channel: "linkedin" })}`)}`}
             target="_blank"
             rel="noopener noreferrer"
           >

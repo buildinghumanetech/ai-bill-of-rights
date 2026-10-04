@@ -201,7 +201,7 @@ export function ProposedRightCard({
                     }
                     className="font-semibold underline underline-offset-4"
                   >
-                    Sign the AI Bill of Rights
+                    Sign The People&apos;s AI Bill of Rights
                   </button>
                 </>
               )}

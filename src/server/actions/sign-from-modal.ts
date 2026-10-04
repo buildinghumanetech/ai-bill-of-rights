@@ -124,7 +124,7 @@ export async function recordSignatureFromModal(
       return {
         success: false,
         alreadySigned: true,
-        error: "You've already signed the AI Bill of Rights.",
+        error: "You've already signed The People's AI Bill of Rights.",
       };
     }
 

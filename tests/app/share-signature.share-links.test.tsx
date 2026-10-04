@@ -104,10 +104,10 @@ describe("ShareSignature share hrefs", () => {
 
   it("tags the LinkedIn href with ref and via=linkedin", () => {
     const linkedin = hrefStartingWith(
-      "https://www.linkedin.com/sharing/share-offsite/",
+      "https://www.linkedin.com/feed/",
     );
-    const url = decodeURIComponent(/[?&]url=([^&]+)/.exec(linkedin)![1]);
-    expect(url).toBe(
+    const text = decodeURIComponent(/[?&]text=([^&]+)/.exec(linkedin)![1]);
+    expect(text).toContain(
       `${SIGNER_PAGE}?${REF_PARAM}=${SIGNER_ID}&${CHANNEL_PARAM}=linkedin`,
     );
   });
