@@ -3,6 +3,7 @@ import {
   PHONE_COUNTRIES,
   countryOfInternational,
   isSmsSupported,
+  SMS_COUNTRY_IDS,
   smsCountries,
   toE164,
 } from "@/lib/phone";
@@ -44,20 +45,27 @@ describe("countries", () => {
 });
 
 describe("SMS allowlist", () => {
-  it("unset means every country", () => {
-    expect(smsCountries(undefined)).toHaveLength(PHONE_COUNTRIES.length);
-    expect(smsCountries("")).toHaveLength(PHONE_COUNTRIES.length);
+  const list = smsCountries();
+  const ids = list.map((c) => c.id);
+
+  it("offers exactly the countries enabled in Clerk, US and Canada included", () => {
+    expect(ids).toContain("US");
+    expect(ids).toContain("CA");
+    expect(ids).toContain("GB");
+    expect(ids).toContain("FR");
+    expect(ids).toContain("IE");
+    expect(ids).not.toContain("AU");
+    expect(ids).not.toContain("IN");
+    expect(list).toHaveLength(SMS_COUNTRY_IDS.length);
   });
-  it("restricts to the configured countries, case-insensitively", () => {
-    expect(smsCountries("us, ca").map((c) => c.id).sort()).toEqual(["CA", "US"]);
-  });
-  it("falls back to everything if the config names no real country", () => {
-    expect(smsCountries("ZZZ")).toHaveLength(PHONE_COUNTRIES.length);
+  it("every configured code is a real country in the picker", () => {
+    for (const id of SMS_COUNTRY_IDS) expect(ids).toContain(id);
   });
   it("compares calling codes, as Clerk does", () => {
-    const us = smsCountries("US");
+    const us = list.filter((c) => c.id === "US");
     expect(isSmsSupported("+14155552671", us)).toBe(true);
     expect(isSmsSupported("+12425551234", us)).toBe(true); // Bahamas shares +1
     expect(isSmsSupported("+447700900123", us)).toBe(false);
+    expect(isSmsSupported("+61412345678", list)).toBe(false); // Australia not enabled
   });
 });

@@ -4,6 +4,25 @@
 *(Most recent updates at top)*
 
 ### Summary of changes since last update
+The phone country dropdown now lists only the countries Erika enabled in Clerk, and "Building Humane Technology" became "Building Humane Tech" in all source copy.
+
+### Detail of changes made:
+- `src/lib/phone.ts`: new `SMS_COUNTRY_IDS` constant (US, CA, GB, IM, IE, FR, DE, AT, BE, NL, CH, IT, ES, PT, IS, NO), read off Erika's Clerk dashboard screenshots on 2026-10-04. `smsCountries()` takes no argument and returns those. The `NEXT_PUBLIC_SMS_COUNTRIES` env var is gone, on purpose: a code constant deploys with the code and cannot drift from a stale Vercel setting. `SignModal.tsx` calls `smsCountries()`.
+- `tests/lib/phone.test.ts`: allowlist tests rewritten (US/CA/GB/FR/IE present, AU/IN absent, every configured code exists in the picker).
+- `README.md` "SMS codes" section rewritten to say: enable in Clerk, then add the ISO code to `SMS_COUNTRY_IDS`.
+- `src/**`: "Building Humane Technology" to "Building Humane Tech" (about page, admin form placeholders).
+
+### Potential concerns to address:
+- The list came from screenshots that did not show Tier A, the top of Tier B, or Tier D after Belgium. If more countries are checked there, add them to `SMS_COUNTRY_IDS`.
+- Guernsey and Jersey are unchecked in Clerk. They share +44 with the UK and Isle of Man, and Clerk matches on calling code, so their numbers will likely work if typed, but they are not offered in the dropdown.
+- `NEXT_PUBLIC_SMS_COUNTRIES` can be deleted from Vercel; nothing reads it now.
+
+---
+
+## Progress Update as of [2026-10-04 00:30 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
 Swept the remaining user-facing "the AI Bill of Rights" to "The People's AI Bill of Rights": all transactional emails, sign buttons, signer and signatories pages, account page, about page, scorecard, proposed pages, and server error strings.
 
 ### Detail of changes made:

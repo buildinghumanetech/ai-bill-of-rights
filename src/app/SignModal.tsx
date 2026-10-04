@@ -812,7 +812,7 @@ export default function SignModal({
   }
 
   // Only countries Clerk will actually text (see smsCountries in @/lib/phone).
-  const smsList = smsCountries(process.env.NEXT_PUBLIC_SMS_COUNTRIES);
+  const smsList = smsCountries();
   const selectedCountry =
     smsList.find((c) => c.id === countryId) ?? smsList[0];
   // E.164 from what was typed (drops a UK-style leading 0, accepts a pasted
