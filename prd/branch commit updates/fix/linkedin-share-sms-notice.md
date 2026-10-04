@@ -1,5 +1,22 @@
 # Branch Progress: fix/linkedin-share-sms-notice
 
+## Progress Update as of [2026-10-04 00:00 Pacific]
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Rewrote the phone sign-in error per Wix's error-message guidance (what happened, how to fix it, short, no blame). Clerk's raw "is invalid" was being shown with our sentence glued on, which read as gibberish.
+
+### Detail of changes made:
+- `src/app/SignModal.tsx`: new exported `phoneStartErrorMessage(err)`. Any phone start failure shows "We couldn't send a text to that number. Check the country and number, or verify by email instead." Rate limits (`too_many_requests`, `form_rate_limited`) keep Clerk's own wording. The always-visible hint under the number field still carries "Text codes aren't available in every country".
+- Both inline error boxes (form step, code step) now have `role="alert"`, a border and a leading "!" so the error is not signalled by color alone.
+- `tests/app/sign-modal.share-links.test.ts`: two tests for `phoneStartErrorMessage`.
+
+### Potential concerns to address:
+- Other Clerk messages on the phone path (wrong code, expired code) are not covered by this helper; the code step still shows Clerk's text.
+- The country select truncates long names ("Anguilla (+1264)" shows as "Anguilla (…") on narrow screens.
+
+---
+
 ## Progress Update as of [2026-10-03 02:30 Pacific]
 *(Most recent updates at top)*
 

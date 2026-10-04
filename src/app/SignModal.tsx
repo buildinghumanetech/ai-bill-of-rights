@@ -222,6 +222,21 @@ function clerkErrorMessage(err: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
+/**
+ * What a signer sees when Clerk refuses a phone number. Clerk's own text for
+ * this is a fragment ("is invalid") that read as gibberish once we added to it.
+ * Per Wix's error-message guidance: say what happened, how to fix it, keep it
+ * short, and don't blame the person. The exception is a rate limit, where
+ * Clerk's wording ("try again in a minute") is the useful part.
+ */
+export function phoneStartErrorMessage(err: unknown): string {
+  const code = clerkErrorCode(err);
+  if (code === "too_many_requests" || code === "form_rate_limited") {
+    return clerkErrorMessage(err);
+  }
+  return "We couldn't send a text to that number. Check the country and number, or verify by email instead.";
+}
+
 export default function SignModal({
   open,
   onClose,
@@ -698,13 +713,10 @@ export default function SignModal({
         }
       }
     } catch (err) {
-      const message = clerkErrorMessage(err);
       // A phone that will not take a code (Clerk only texts countries enabled
       // in its dashboard) should not be a dead end: point at the email option.
       setError(
-        method === "phone"
-          ? `${message} Text codes aren't available in every country. If this number won't work, verify by email instead.`
-          : message,
+        method === "phone" ? phoneStartErrorMessage(err) : clerkErrorMessage(err),
       );
     } finally {
       setLoading(false);
@@ -1337,7 +1349,13 @@ export default function SignModal({
             <div id="clerk-captcha" className="mt-4" />
 
             {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                <span aria-hidden="true" className="mr-1.5 font-bold">
+                  !
+                </span>
                 {error}
               </p>
             ) : null}
@@ -1410,7 +1428,13 @@ export default function SignModal({
             />
 
             {error ? (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                <span aria-hidden="true" className="mr-1.5 font-bold">
+                  !
+                </span>
                 {error}
               </p>
             ) : null}
