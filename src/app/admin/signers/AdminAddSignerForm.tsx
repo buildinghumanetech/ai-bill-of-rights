@@ -249,7 +249,7 @@ export default function AdminAddSignerForm({ version: VERSION }: { version: stri
             type="text"
             value={affiliation}
             onChange={(e) => setAffiliation(e.target.value)}
-            placeholder="Building Humane Technology"
+            placeholder="Building Humane Tech"
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </label>
