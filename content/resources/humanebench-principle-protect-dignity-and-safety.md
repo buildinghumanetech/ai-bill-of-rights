@@ -4,7 +4,7 @@ subtitle: Technology should protect human dignity, privacy, and safety.
 sourceUrl: https://humanebench.ai/principles
 ---
 
-One of the eight Humane Technology Principles that HumaneBench scores models against. The principle as stated by Building Humane Technology: technology should protect human dignity, privacy, and safety.
+One of the eight Humane Technology Principles that HumaneBench scores models against. The principle as stated by Building Humane Tech: technology should protect human dignity, privacy, and safety.
 
 Applied to training data, it is the difference between a person and a resource. Conversations, images, and behavioral records are extensions of the self, not raw material that becomes available the moment someone clicks through a flow they did not read. Dignity-aligned AI asks before it takes, in language a person can actually act on, and lets them withdraw without friction.
 

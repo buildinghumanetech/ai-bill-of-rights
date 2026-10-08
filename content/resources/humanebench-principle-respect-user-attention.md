@@ -4,7 +4,7 @@ subtitle: Technology should respect user attention as a finite, precious resourc
 sourceUrl: https://humanebench.ai/principles
 ---
 
-One of the eight Humane Technology Principles that HumaneBench scores models against. The principle as stated by Building Humane Technology: technology should respect user attention as a finite, precious resource.
+One of the eight Humane Technology Principles that HumaneBench scores models against. The principle as stated by Building Humane Tech: technology should respect user attention as a finite, precious resource.
 
 Finite is the operative word. Attention spent is not recoverable, which makes an extended session a cost to the person even when it reads as success to the platform. A system aligned with this principle serves what someone actually came to do and then lets them leave.
 
